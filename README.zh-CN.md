@@ -2,14 +2,14 @@
 
 查看本机 Codex Token 消耗、ChatGPT / Codex 官方账号剩余额度，用一个置顶悬浮窗陪伴日常工作。Codex Pulse 是 Windows x64 桌面用量监控工具（Codex Usage Monitor / Token Tracker），提供 **清爽 Clear** 与 **刻度 Meter** 两种可切换主题。
 
-**[English](README.md)** · **[下载 v0.2.0](https://github.com/zhulongqihan/codex-pulse/releases/tag/v0.2.0)** · [在线演示](https://zhulongqihan.github.io/codex-pulse/) · [截图图集](https://zhulongqihan.github.io/codex-pulse/gallery.html) · [路线图](docs/ROADMAP.md) · [全部版本](https://github.com/zhulongqihan/codex-pulse/releases) · [反馈问题](https://github.com/zhulongqihan/codex-pulse/issues)
+**[English](README.en.md)** · **[下载 v0.2.0](https://github.com/zhulongqihan/codex-pulse/releases/tag/v0.2.0)** · [在线演示](https://zhulongqihan.github.io/codex-pulse/) · [截图图集](https://zhulongqihan.github.io/codex-pulse/gallery.html) · [全部版本](https://github.com/zhulongqihan/codex-pulse/releases) · [反馈问题](https://github.com/zhulongqihan/codex-pulse/issues)
 
 > 本项目独立开发，不隶属于 OpenAI，也不代表 OpenAI 官方产品。截图与网页演示均使用合成数据；网页演示无法读取你的本机日志或账号。
 
 ## v0.2.0 能做什么
 
 - **两种主题，共用工作状态**：清爽强调留白与轻量阅读；刻度强化图表对比和数字层级。切换主题保留当前页面、日期、筛选、搜索、排序与选择。
-- **六个主视图**：仪表盘、会话、模型、按日、按月、项目，另设独立设置页。按月按自然月汇总。
+- **六个主视图**：仪表盘、会话、模型、按日、按月、项目，另设独立设置页。按月将当前所选范围内的用量按月份分组。
 - **本机 Token 历史**：从保留的 Codex 会话日志整理输入、缓存输入、输出和总 Token，按模型、项目、会话查看分布。
 - **官方账号额度**：通过官方本地 app-server 复用现有 Codex 登录，读取实际返回的使用窗口、剩余比例和重置时间。
 - **桌面悬浮窗**：置顶查看剩余额度和今日活动，需要详情时打开完整看板。
@@ -63,13 +63,13 @@
 
 Pulse 不要求复制 `auth.json` 或输入账号凭据，认证及令牌刷新由官方 Codex 客户端处理。查询账号额度时，该客户端会连接 OpenAI；Pulse 不上传本机用量统计。公开反馈请仅提供合成或充分脱敏的诊断资料，私人报告方式见 [SECURITY.md](SECURITY.md)。
 
-## 当前边界与后续计划
+## 当前功能范围
 
 v0.2.0 将两种主题接入桌面程序，并提供六个主视图。目前支持用量分析和会话元数据，**尚不提供完整对话与工具调用回放**，也不宣称已与其他 Codex 用量应用实现全部功能对等。
 
 本机历史取决于这台电脑实际保留的文件，不能恢复已删除的日志，也不覆盖全部云端任务、其他设备历史、所有旧日志格式或 WSL 自动发现。账号字段以已安装 Codex 客户端与服务实际返回的内容为准。
 
-后续计划包括更完整的对话与工具回放、会话及代理导航、更多导出格式和更广的数据来源兼容。Credits 与重置次数明细、重置预测、完整模型价格目录和应用内自动更新尚未提供；完整范围见[路线图](docs/ROADMAP.md)，计划不代表确定的发布日期。
+当前版本尚不支持 Credits 与重置次数明细、重置预测、完整模型价格目录、XLSX 导出和应用内自动更新。会话页显示用量与元数据，完整消息、工具活动及代理树回放尚未提供。
 
 ## 从源码运行
 
