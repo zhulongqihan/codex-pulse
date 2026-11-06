@@ -4,6 +4,8 @@
 
 This page distinguishes the v0.2.0 desktop app from future work. New themes and navigation do not imply full feature parity with other Codex usage applications. Planned items have no promised release date.
 
+The [46-group audit](FEATURE_PARITY.zh-CN.md) records the exact v0.2.0 gaps. The [implementation and UI plan](PARITY_IMPLEMENTATION.zh-CN.md) and [acceptance ledger](parity/acceptance-matrix.json) define the full-parity work; planned groups are not marked delivered.
+
 ## Delivered in v0.2.0
 
 - **Clear and Meter themes in the desktop app.** Switching themes preserves the current page, date selection, filters, search, sorting, and selected items.
