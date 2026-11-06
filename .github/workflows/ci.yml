@@ -20,8 +20,8 @@ jobs:
     timeout-minutes: 25
     env:
       CI: "true"
-      npm_config_cache: ${{ runner.temp }}/npm-cache
-      ELECTRON_CACHE: ${{ runner.temp }}/electron-cache
+      npm_config_cache: ${{ github.workspace }}/.local/cache/npm
+      ELECTRON_CACHE: ${{ github.workspace }}/.local/cache/electron
     steps:
       - name: Check out source
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1

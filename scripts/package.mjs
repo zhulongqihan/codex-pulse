@@ -48,7 +48,14 @@ info.outputToResourceEntries(resources.entries); resources.outputResource(exe);
 fs.writeFileSync(executable, Buffer.from(exe.generate()));
 fs.writeFileSync(path.join(target, 'Start-Codex-Pulse.cmd'), '@echo off\r\nstart "" "%~dp0CodexPulse.exe"\r\n');
 for (const entry of ['README.zh-CN.md', 'LICENSE', 'THIRD_PARTY_NOTICES.md', 'THIRD_PARTY_LICENSES.txt']) {
-  fs.copyFileSync(entry, path.join(target, entry === 'LICENSE' ? 'LICENSE.CodexPulse.txt' : entry));
+  if (entry === 'README.zh-CN.md') {
+    const readme = fs.readFileSync(entry, 'utf8').replace(/\]\((?!https?:\/\/|#)([^)]+)\)/g, (_, link) => {
+      if (link === 'LICENSE') return '](LICENSE.CodexPulse.txt)';
+      const base = link.startsWith('docs/screenshots/') ? 'https://raw.githubusercontent.com/zhulongqihan/codex-pulse/main/' : 'https://github.com/zhulongqihan/codex-pulse/blob/main/';
+      return '](' + base + link + ')';
+    });
+    fs.writeFileSync(path.join(target, entry), readme);
+  } else fs.copyFileSync(entry, path.join(target, entry === 'LICENSE' ? 'LICENSE.CodexPulse.txt' : entry));
 }
 const archive = path.join(release, `CodexPulse-${metadata.version}-windows-x64.zip`);
 const ps = path.join(process.env.SystemRoot || 'C:/Windows', 'System32/WindowsPowerShell/v1.0/powershell.exe');
