@@ -1,0 +1,63 @@
+name: Bug report / 问题反馈
+description: Report a reproducible problem without sharing private account or session data.
+title: "[Bug] "
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Do not upload auth.json, raw session logs, or unreviewed diagnostics.
+        请勿上传账号认证文件、原始会话日志或未经检查的诊断包。截图也请先检查邮箱、路径和项目名。
+        Security issues: read SECURITY.md before posting publicly.
+  - type: input
+    id: version
+    attributes:
+      label: App version / 应用版本
+      placeholder: e.g. 0.1.0
+    validations:
+      required: true
+  - type: input
+    id: operating_system
+    attributes:
+      label: Operating system / 操作系统
+      placeholder: e.g. Windows 11 x64
+    validations:
+      required: true
+  - type: dropdown
+    id: area
+    attributes:
+      label: Affected area / 涉及功能
+      options:
+        - Local usage history / 本机用量
+        - Account limits / 账号额度
+        - Widget / 悬浮窗
+        - Appearance or motion / 外观与动效
+        - Startup or packaging / 启动与打包
+        - Other / 其他
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Steps to reproduce / 复现步骤
+      description: Use synthetic data where a fixture is needed. Do not include credentials or conversation content.
+    validations:
+      required: true
+  - type: textarea
+    id: expected_and_actual
+    attributes:
+      label: Expected and actual behavior / 预期与实际表现
+    validations:
+      required: true
+  - type: textarea
+    id: additional_context
+    attributes:
+      label: Additional context / 补充信息
+      description: Optional sanitized screenshot or a minimal synthetic example.
+  - type: checkboxes
+    id: privacy
+    attributes:
+      label: Privacy check / 隐私检查
+      options:
+        - label: I reviewed this report and attachments for credentials, account details, and conversation content.
+          required: true

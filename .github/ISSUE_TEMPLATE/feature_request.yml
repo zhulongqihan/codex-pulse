@@ -1,0 +1,23 @@
+name: Feature request / 功能建议
+description: Explain the workflow you want to improve.
+title: "[Feature] "
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: What are you trying to do? / 你想完成什么？
+      description: Describe the workflow and the friction you encounter.
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed behavior / 希望的表现
+      description: Explain the outcome rather than only listing UI elements.
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives or references / 替代方案或参考
+      description: Use public links and demonstration data. Do not include private account information.

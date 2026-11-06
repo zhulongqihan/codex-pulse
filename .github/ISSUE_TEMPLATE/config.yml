@@ -1,0 +1,5 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Security and private data / 安全与私人信息
+    url: https://github.com/zhulongqihan/codex-pulse/blob/main/SECURITY.md
+    about: Read the reporting guidance before posting sensitive information.
