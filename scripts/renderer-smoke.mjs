@@ -11,6 +11,7 @@ const root = process.cwd(),
 fs.mkdirSync(out, { recursive: true });
 process.env.TEMP = path.resolve('.local/temp');
 process.env.TMP = process.env.TEMP;
+fs.mkdirSync(process.env.TEMP, { recursive: true });
 const contentTypes = {
   '.html': 'text/html',
   '.js': 'text/javascript',
