@@ -138,3 +138,33 @@ test('Node stdin ESM flags are not inherited by file-backed scanner workers', as
     assert.equal(JSON.parse(output).error, 'LOGS_NOT_FOUND');
   } finally { await cleanup(temporary); }
 });
+
+test('oversized-record precision warnings survive a restarted service and unchanged fingerprint-cache reuse', async () => {
+  const temporary = await scratch(); let service;
+  try {
+    const home = path.join(temporary, 'home'); const data = path.join(temporary, 'data');
+    const source = path.join(home, 'sessions', 'oversized.jsonl');
+    await fs.mkdir(path.dirname(source), { recursive: true });
+    const oversized = JSON.stringify({ type: 'response_item', payload: { text: 'x'.repeat(5 * 1024 * 1024) } });
+    const log = file('oversized', 'model-a', 'alpha', [count(100, 10, '2026-11-06T01:00:00Z')]);
+    await fs.writeFile(source, log + oversized + '\n' + JSON.stringify(count(120, 12, '2026-11-06T02:00:00Z')) + '\n');
+    const fixedTime = new Date('2026-11-06T03:00:00Z');
+    await fs.utimes(source, fixedTime, fixedTime);
+    const options = { dataDir: data, codexHome: home, importDatabase: null, pricingFile: null, timeZone: 'UTC', autoStart: false };
+    service = createUsageService(options);
+    await service.refresh({ quota: false });
+    assert.equal(service.getSnapshot().totals.totalTokens, 132, 'valid usage after an ignored oversized line still counts');
+    assert.match(service.getSnapshot().status.warnings.join(' '), /oversized log record/);
+    const first = JSON.parse(await fs.readFile(path.join(data, 'usage-files-v1.json'), 'utf8'));
+    assert.match(first.files[source].summary.warnings.join(' '), /oversized log record/, 'warning belongs to the affected file cache');
+    await service.close();
+    service = createUsageService(options);
+    await service.refresh({ quota: false });
+    const cached = service.getSnapshot();
+    const saved = JSON.parse(await fs.readFile(path.join(data, 'usage-snapshot-v1.json'), 'utf8'));
+    assert.equal(saved.data.parsedFiles, 0, 'second scan actually reused the file fingerprint rather than reading the warning again');
+    assert.equal(cached.totals.totalTokens, 132);
+    assert.match(cached.status.warnings.join(' '), /oversized log record/, 'warning remains visible after an actual warm refresh');
+    assert.doesNotMatch(JSON.stringify(cached), /xxxxx/, 'ignored oversized contents are never retained in renderer data');
+  } finally { await service?.close(); await cleanup(temporary); }
+});

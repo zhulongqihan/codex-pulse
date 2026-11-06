@@ -44,7 +44,7 @@ async function discover(root, archived) {
   return { accessible, entries: found };
 }
 
-async function* linesFrom(filePath, onBytes = () => {}) {
+async function* linesFrom(filePath, onBytes = () => {}, onWarning = () => {}) {
   const input = fs.createReadStream(filePath, { highWaterMark: 128 * 1024 });
   const compressed = /\.zst$/i.test(filePath);
   const stream = compressed ? input.pipe(createZstdDecompress()) : input;
@@ -69,9 +69,9 @@ async function* linesFrom(filePath, onBytes = () => {}) {
         const line = pending.slice(0, newline);
         pending = pending.slice(newline + 1);
         if (line.length <= maxLine) yield line;
-        else warnings.add('An oversized log record was ignored.');
+        else onWarning('An oversized log record was ignored.');
       }
-      if (pending.length > maxLine) { pending = ''; dropping = true; warnings.add('An oversized log record was ignored.'); }
+      if (pending.length > maxLine) { pending = ''; dropping = true; onWarning('An oversized log record was ignored.'); }
     }
     pending += decoder.end();
     // A complete final JSON record is valid without a trailing newline. An
@@ -115,9 +115,15 @@ async function run() {
     if (!force && prior?.fingerprint === fingerprint && prior.summary) summary = prior.summary;
     else {
       const parser = createLogParser({ fileKey: entry.logicalKey, timeZone });
+      const fileWarnings = new Set();
       try {
-        for await (const line of linesFrom(entry.path, read => progress(index, entries.length, { bytesDone: bytesDone + Math.min(entry.size, read), totalBytes }))) parser.pushLine(line);
+        for await (const line of linesFrom(entry.path,
+          read => progress(index, entries.length, { bytesDone: bytesDone + Math.min(entry.size, read), totalBytes }),
+          warning => fileWarnings.add(warning))) parser.pushLine(line);
         summary = parser.finish();
+        // A reused fingerprint skips the stream entirely. Preserve stream-level
+        // precision warnings alongside the statistics that skipped those lines.
+        summary.warnings = [...new Set([...(summary.warnings || []), ...fileWarnings])];
         parsedFiles++;
       } catch {
         warnings.add('A log could not be decoded; its last successful cached statistics were retained when available.');
