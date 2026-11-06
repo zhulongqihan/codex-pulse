@@ -157,7 +157,7 @@ export function createQuotaClient({ codexExecutable, dataDir, timeoutMs = 25000 
       });
       child.on('error', () => finish({ ok: false, errorCode: 'CODEX_UNAVAILABLE' }));
       child.on('exit', () => { if (!finished) finish({ ok: false, errorCode: initialized ? 'CODEX_DISCONNECTED' : 'CODEX_UNAVAILABLE' }); });
-      send('initialize', { clientInfo: { name: 'codex_pulse', title: 'Codex Pulse', version: '0.1.0' }, capabilities: { experimentalApi: true } }, 'initialize');
+      send('initialize', { clientInfo: { name: 'codex_pulse', title: 'Codex Pulse', version: '0.2.0' }, capabilities: { experimentalApi: true } }, 'initialize');
     });
   }
   return {

@@ -3,6 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createUsageService } from './usage-service.mjs';
+import { rangeCsv, rangeMarkdown } from '../renderer/analytics.js';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 const demo = process.argv.includes('--demo');
@@ -21,10 +22,10 @@ app.setAppUserModelId('io.github.zhulongqihan.codex-pulse');
 
 let mainWindow, widgetWindow, tray, service, refreshTimer;
 let quitting = false;
-const defaults = { theme: 'light', language: 'zh', widgetVisible: true, widgetExpanded: false, launchAtLogin: false, refreshSeconds: 60, motionLevel: 'gentle', reducedMotion: false, respectReducedMotion: true };
+const defaults = { skinId: 'meter', compactMode: false, theme: 'light', language: 'zh', widgetVisible: true, widgetExpanded: false, launchAtLogin: false, refreshSeconds: 60, motionLevel: 'gentle', reducedMotion: false, respectReducedMotion: true };
 const settingsFile = path.join(dataDir, 'settings.json');
-let settings = { ...defaults };
-try { settings = { ...defaults, ...JSON.parse(fs.readFileSync(settingsFile, 'utf8')) }; } catch {}
+let settingsNeedMigration = false;
+let settings = loadSettings();
 if (headlessCapture) settings.widgetVisible = false;
 const locked = demo || app.requestSingleInstanceLock();
 if (!locked) app.quit();
@@ -42,7 +43,9 @@ function parseRange(value) {
   if (typeof value !== 'object' || Array.isArray(value)) throw new Error('Invalid date range');
   const result = {};
   for (const key of ['from', 'to']) if (value[key] != null) {
-    if (typeof value[key] !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value[key])) throw new Error('Invalid date');
+    if (typeof value[key] !== 'string' || !/^(?!0000)\d{4}-\d{2}-\d{2}$/.test(value[key])) throw new Error('Invalid date');
+    const date = new Date(value[key] + 'T12:00:00Z');
+    if (!Number.isFinite(date.getTime()) || date.toISOString().slice(0, 10) !== value[key]) throw new Error('Invalid date');
     result[key] = value[key];
   }
   if (result.from && result.to && result.from > result.to) throw new Error('Date range is reversed');
@@ -66,7 +69,7 @@ function showDashboard() {
 }
 function createDashboard() {
   const area = screen.getPrimaryDisplay().workAreaSize;
-  mainWindow = new BrowserWindow({ width: Math.max(900, Math.min(1440, area.width - 40)), height: Math.max(660, Math.min(1040, area.height - 40)), minWidth: 900, minHeight: 660, show: false, backgroundColor: '#ffffff', title: 'Codex Pulse · 专注的回响', autoHideMenuBar: true, icon: path.join(root, 'assets', 'icon.png'), webPreferences: { preload: path.join(root, 'src/main/preload.cjs'), contextIsolation: true, sandbox: true, nodeIntegration: false, webSecurity: true, backgroundThrottling: !headlessCapture, spellcheck: false } });
+  mainWindow = new BrowserWindow({ width: Math.max(900, Math.min(1440, area.width - 40)), height: Math.max(660, Math.min(1040, area.height - 40)), minWidth: 900, minHeight: 660, show: false, backgroundColor: '#ffffff', title: 'Codex Pulse · 用量与额度', autoHideMenuBar: true, icon: path.join(root, 'assets', 'icon.png'), webPreferences: { preload: path.join(root, 'src/main/preload.cjs'), contextIsolation: true, sandbox: true, nodeIntegration: false, webSecurity: true, backgroundThrottling: !headlessCapture, spellcheck: false } });
   configureWindow(mainWindow); load(mainWindow, 'overview');
   mainWindow.once('ready-to-show', () => { if (!process.argv.includes('--background') && !headlessCapture) mainWindow.show(); });
   mainWindow.on('close', event => { if (!quitting) { event.preventDefault(); mainWindow.hide(); } });
@@ -84,7 +87,45 @@ function createWidget() {
   widgetWindow.on('close', () => { widgetWindow = null; });
   widgetWindow.webContents.on('context-menu', () => trayMenu().popup({ window: widgetWindow }));
 }
-function persist() { if (!demo) fs.writeFileSync(settingsFile, JSON.stringify(settings, null, 2)); }
+function persist(value = settings) { if (!demo) fs.writeFileSync(settingsFile, JSON.stringify(value, null, 2)); }
+function sanitizeSettings(patch, { persisted = false } = {}) {
+  if (!patch || typeof patch !== 'object' || Array.isArray(patch)) {
+    if (persisted) return {};
+    throw new Error('Invalid preferences');
+  }
+  const clean = {};
+  const own = key => Object.hasOwn(patch, key);
+  // An absent skin migrates to the default; an unrecognized saved or requested
+  // skin uses Clear so a future/removed skin cannot leave the surface unstyled.
+  if (own('skinId')) clean.skinId = ['clear', 'meter'].includes(patch.skinId) ? patch.skinId : 'clear';
+  for (const [key, allowed] of Object.entries({ theme: ['light', 'dark', 'system'], language: ['zh', 'en'], motionLevel: ['full', 'gentle', 'off'] })) if (own(key)) {
+    if (allowed.includes(patch[key])) clean[key] = patch[key];
+    else if (!persisted) throw new Error('Invalid preference');
+  }
+  for (const key of ['compactMode', 'widgetVisible', 'widgetExpanded', 'launchAtLogin', 'reducedMotion', 'respectReducedMotion']) if (own(key)) {
+    if (typeof patch[key] === 'boolean') clean[key] = patch[key];
+    else if (!persisted) throw new Error('Invalid switch');
+  }
+  if (own('refreshSeconds')) {
+    const seconds = ['number', 'string'].includes(typeof patch.refreshSeconds) ? Number(patch.refreshSeconds) : NaN;
+    if ([60, 120, 300, 600].includes(seconds)) clean.refreshSeconds = seconds;
+    else if (!persisted) throw new Error('Unsupported refresh interval');
+  }
+  // These values are written only by native actions, never by renderer patches.
+  if (persisted) {
+    if (typeof patch.codexExecutable === 'string' && patch.codexExecutable && !patch.codexExecutable.includes('\0')) clean.codexExecutable = patch.codexExecutable;
+    if (patch.widgetPosition && Number.isFinite(patch.widgetPosition.x) && Number.isFinite(patch.widgetPosition.y)) clean.widgetPosition = { x: patch.widgetPosition.x, y: patch.widgetPosition.y };
+  }
+  return clean;
+}
+function loadSettings() {
+  try {
+    const saved = JSON.parse(fs.readFileSync(settingsFile, 'utf8'));
+    const value = { ...defaults, ...sanitizeSettings(saved, { persisted: true }) };
+    settingsNeedMigration = JSON.stringify(saved) !== JSON.stringify(value);
+    return value;
+  } catch { return { ...defaults }; }
+}
 function timer() {
   clearInterval(refreshTimer);
   if (!demo) refreshTimer = setInterval(() => { service.refresh().catch(() => {}); }, settings.refreshSeconds * 1000);
@@ -99,31 +140,47 @@ function trayMenu() {
   ]);
 }
 async function updateSettings(patch) {
-  if (!patch || typeof patch !== 'object' || Array.isArray(patch)) throw new Error('Invalid preferences');
-  const clean = {};
-  for (const [key, allowed] of Object.entries({ theme: ['light', 'dark', 'system'], language: ['zh', 'en'], motionLevel: ['full', 'gentle', 'off'] })) if (key in patch) {
-    if (!allowed.includes(patch[key])) throw new Error('Invalid preference'); clean[key] = patch[key];
+  const clean = sanitizeSettings(patch);
+  const changed = new Set(Object.keys(clean).filter(key => settings[key] !== clean[key]));
+  if (!changed.size) return { ...settings };
+  const next = { ...settings, ...clean };
+  // Commit only after persistence succeeds, so a failed save can be retried
+  // without publishing an unsaved value or running native side effects early.
+  persist(next);
+  settings = next;
+  if (changed.has('theme')) nativeTheme.themeSource = settings.theme;
+  if (changed.has('launchAtLogin') && !demo) app.setLoginItemSettings({ openAtLogin: settings.launchAtLogin, path: process.execPath, args: ['--background'] });
+  if (changed.has('widgetVisible') || changed.has('widgetExpanded')) {
+    if (settings.widgetVisible) {
+      createWidget();
+      const bounds = widgetWindow.getBounds();
+      const area = screen.getDisplayMatching(bounds).workArea;
+      const height = settings.widgetExpanded ? 276 : 126;
+      widgetWindow.setBounds({ width: 340, height, x: Math.max(area.x, Math.min(bounds.x, area.x + area.width - 340)), y: Math.max(area.y, Math.min(bounds.y, area.y + area.height - height)) });
+    } else if (widgetWindow) widgetWindow.hide();
   }
-  for (const key of ['widgetVisible', 'widgetExpanded', 'launchAtLogin', 'reducedMotion', 'respectReducedMotion']) if (key in patch) {
-    if (typeof patch[key] !== 'boolean') throw new Error('Invalid switch'); clean[key] = patch[key];
-  }
-  if ('refreshSeconds' in patch) { if (![60, 120, 300, 600].includes(Number(patch.refreshSeconds))) throw new Error('Unsupported refresh interval'); clean.refreshSeconds = Number(patch.refreshSeconds); }
-  settings = { ...settings, ...clean };
-  nativeTheme.themeSource = settings.theme;
-  if ('launchAtLogin' in clean && !demo) app.setLoginItemSettings({ openAtLogin: settings.launchAtLogin, path: process.execPath, args: ['--background'] });
-  if (settings.widgetVisible) {
-    createWidget();
-    const bounds = widgetWindow.getBounds();
-    const area = screen.getDisplayMatching(bounds).workArea;
-    const height = settings.widgetExpanded ? 276 : 126;
-    widgetWindow.setBounds({ width: 340, height, x: Math.max(area.x, Math.min(bounds.x, area.x + area.width - 340)), y: Math.max(area.y, Math.min(bounds.y, area.y + area.height - height)) });
-  } else if (widgetWindow) widgetWindow.hide();
-  persist(); timer();
+  if (changed.has('refreshSeconds')) timer();
   for (const win of [mainWindow, widgetWindow]) if (win && !win.isDestroyed()) win.webContents.send('pulse:settings-update', { ...settings });
-  if (tray) tray.setContextMenu(trayMenu());
+  if (tray && changed.has('widgetVisible')) tray.setContextMenu(trayMenu());
   return { ...settings };
 }
-function csvCell(value) { const text = String(value ?? ''); return '"' + (/^[=+\-@\t\r]/.test(text) ? "'" + text : text).replaceAll('"', '""') + '"'; }
+async function exportData(format, range) {
+  const formats = { csv: { extension: 'csv', name: 'CSV', render: rangeCsv }, markdown: { extension: 'md', name: 'Markdown', render: rangeMarkdown } };
+  if (typeof format !== 'string' || !Object.hasOwn(formats, format)) throw new Error('Unsupported export format');
+  const selected = formats[format];
+  const snapshot = service.getSnapshot(range);
+  const content = selected.render(snapshot);
+  const directory = path.join(dataDir, 'exports');
+  fs.mkdirSync(directory, { recursive: true });
+  const result = await dialog.showSaveDialog(mainWindow, {
+    title: '导出范围统计',
+    defaultPath: path.join(directory, `pulse-${snapshot.range.from}-${snapshot.range.to}.${selected.extension}`),
+    filters: [{ name: selected.name, extensions: [selected.extension] }],
+  });
+  if (result.canceled || !result.filePath) return false;
+  fs.writeFileSync(result.filePath, content, 'utf8');
+  return true;
+}
 async function action(name) {
   switch (name) {
     case 'show-dashboard': showDashboard(); return true;
@@ -140,13 +197,7 @@ async function action(name) {
       if (!result.canceled && result.filePaths[0]) { settings.codexExecutable = result.filePaths[0]; persist(); if (!demo) await service.setCodexExecutable(settings.codexExecutable); }
       return { ...settings };
     }
-    case 'export-csv': {
-      const result = await dialog.showSaveDialog(mainWindow, { title: '导出每日统计', defaultPath: path.join(dataDir, 'codex-pulse-daily.csv'), filters: [{ name: 'CSV', extensions: ['csv'] }] });
-      if (result.canceled || !result.filePath) return false;
-      const rows = service.getSnapshot().daily;
-      const csv = '\ufeff' + [['Date', 'Total tokens', 'Input', 'Cached input (included in input)', 'Output', 'Sessions'], ...rows.map(r => [r.date, r.totalTokens, r.inputTokens, r.cachedTokens, r.outputTokens, r.sessions])].map(row => row.map(csvCell).join(',')).join('\r\n');
-      fs.writeFileSync(result.filePath, csv); return true;
-    }
+    case 'export-csv': return exportData('csv');
     default: throw new Error('Unsupported action');
   }
 }
@@ -154,10 +205,11 @@ async function action(name) {
 ipcMain.handle('pulse:snapshot', (event, range) => { trusted(event); return service.getSnapshot(parseRange(range)); });
 ipcMain.handle('pulse:settings', event => { trusted(event); return { ...settings }; });
 ipcMain.handle('pulse:save-settings', (event, value) => { trusted(event); return updateSettings(value); });
+ipcMain.handle('pulse:export', (event, format, range) => { trusted(event); return exportData(format, parseRange(range)); });
 ipcMain.handle('pulse:action', (event, name) => { trusted(event); if (typeof name !== 'string') throw new Error('Invalid action'); return action(name); });
 ipcMain.handle('pulse:refresh', async (event, value) => {
   trusted(event); const options = {};
-  for (const key of ['logs', 'quota']) if (value && key in value) { if (typeof value[key] !== 'boolean') throw new Error('Invalid refresh request'); options[key] = value[key]; }
+  for (const key of ['logs', 'quota', 'force']) if (value && key in value) { if (typeof value[key] !== 'boolean') throw new Error('Invalid refresh request'); options[key] = value[key]; }
   await service.refresh(options);
 });
 
@@ -167,6 +219,7 @@ app.on('window-all-closed', () => {});
 app.on('activate', showDashboard);
 
 if (locked) app.whenReady().then(async () => {
+  if (settingsNeedMigration && !headlessCapture) persist();
   if (demo) {
     const { getDemoSnapshot } = await import('../renderer/demo-data.js');
     service = { getSnapshot: getDemoSnapshot, refresh: async () => { sendSnapshot(); }, close() {} };

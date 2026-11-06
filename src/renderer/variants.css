@@ -1,0 +1,912 @@
+.week-chart {
+  display: contents;
+}
+.variant-quick {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  color: var(--muted);
+}
+.variant-quick select {
+  font-size: 12px;
+  color: var(--ink);
+  padding: 5px 20px 5px 4px;
+  background: transparent;
+}
+.variant-gallery {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 22px;
+  margin-top: 25px;
+}
+.variant-option {
+  text-align: left;
+  padding: 0;
+  color: var(--ink);
+}
+.variant-option > div:not(.style-preview) {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 14px;
+}
+.variant-option strong {
+  font-size: 14px;
+  font-weight: 600;
+}
+.variant-option > p {
+  font-size: 12px;
+  line-height: 1.8;
+  color: var(--muted);
+  margin-top: 6px;
+}
+.variant-option.chosen .style-preview {
+  outline: 2px solid var(--accent);
+  outline-offset: 4px;
+}
+.variant-option.chosen > div:not(.style-preview) {
+  color: var(--accent);
+}
+.style-preview {
+  height: 173px;
+  border-radius: 7px;
+  border: 1px solid var(--line);
+  background: #fff;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+.preview-chrome {
+  height: 20px;
+  background: #f4f6f8;
+  border-bottom: 1px solid #e5e9ef;
+  display: flex;
+  gap: 9px;
+  align-items: center;
+  padding: 0 10px;
+}
+.preview-chrome > span {
+  width: 21px;
+  height: 5px;
+  background: #3268c2;
+  border-radius: 1px;
+  margin-right: 14px;
+}
+.preview-chrome > i {
+  height: 3px;
+  width: 16px;
+  background: #a3acb9;
+}
+.preview-body {
+  flex: 1;
+  display: flex;
+  gap: 15px;
+  padding: 16px 14px;
+}
+.preview-main {
+  flex: 1;
+  min-width: 0;
+}
+.preview-totals {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  height: 18px;
+  margin-bottom: 14px;
+}
+.preview-totals strong {
+  font-family: Bahnschrift, sans-serif;
+  font-size: 15px;
+  color: #252b34;
+  font-weight: 500;
+}
+.preview-totals > i {
+  height: 4px;
+  flex: 1;
+  background: #cbd1d9;
+}
+.preview-chart {
+  height: 60px;
+  display: flex;
+  flex-direction: column;
+  align-items: start;
+  justify-content: space-between;
+  margin-right: 20px;
+}
+.preview-chart > span {
+  height: 3px;
+  background: #9bbbe8;
+  display: block;
+  border-radius: 1px;
+}
+.preview-chart > span > i {
+  display: none;
+}
+.preview-list {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  margin-top: 12px;
+}
+.preview-list > i {
+  height: 2px;
+  background: #e5e9ef;
+  display: block;
+  width: 90%;
+}
+.preview-aside {
+  width: 40px;
+  border-left: 1px solid #e5e9ef;
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  padding-left: 10px;
+}
+.preview-aside strong {
+  font-family: Bahnschrift, sans-serif;
+  color: #252b34;
+  font-size: 17px;
+  font-weight: 500;
+}
+.preview-aside strong > span {
+  font-size: 8px;
+}
+.preview-aside > i {
+  display: block;
+  height: 2px;
+  background: #bfc7d2;
+}
+.preview-meter {
+  background: #e9eeef;
+  padding: 6px;
+  border-color: #d9e1e3;
+}
+.preview-meter .preview-chrome {
+  height: 14px;
+  background: transparent;
+  border: 0;
+  padding: 0 4px;
+}
+.preview-meter .preview-chrome > span {
+  background: #326d79;
+}
+.preview-meter .preview-body {
+  background: white;
+  border-radius: 4px;
+  gap: 9px;
+  padding: 12px 10px;
+}
+.preview-meter .preview-totals {
+  margin-bottom: 9px;
+}
+.preview-meter .preview-totals strong {
+  font-size: 18px;
+  color: #20383e;
+}
+.preview-meter .preview-chart {
+  height: 70px;
+  flex-direction: row;
+  align-items: end;
+  gap: 7px;
+  background: #20383e;
+  border-radius: 4px;
+  margin-right: 0;
+  padding: 11px 13px 7px;
+}
+.preview-meter .preview-chart > span {
+  width: 10px;
+  display: flex;
+  flex-direction: column-reverse;
+  border-radius: 1px 1px 0 0;
+  overflow: hidden;
+}
+.preview-meter .preview-chart > span > i {
+  display: block;
+  width: 100%;
+  flex: 16;
+  background: #5798a7;
+}
+.preview-meter .preview-chart > span > i:nth-child(2) {
+  flex: 73;
+  background: #b3d3d9;
+}
+.preview-meter .preview-chart > span > i:nth-child(3) {
+  flex: 11;
+  background: #d9ad70;
+}
+.preview-meter .preview-list {
+  margin-top: 9px;
+}
+.preview-meter .preview-aside {
+  width: 35px;
+}
+.preview-meter .preview-aside strong {
+  color: #20383e;
+}
+
+:root[data-variant='meter'] {
+  --paper: #fff;
+  --chrome: #edf2f2;
+  --subtle: #f7f9f9;
+  --ink: #20383e;
+  --muted: #586e75;
+  --line: #dce4e5;
+  --accent: #326d79;
+  --selected: #e7f0f0;
+  --cache: #91b6be;
+  --uncached: #397b8a;
+  --output: #a17943;
+  --hover: #eef4f4;
+  --meter-shell: #e9eeef;
+  --plot: #20383e;
+  --plot-ink: #f0f7f6;
+  --plot-muted: #bfd0d3;
+  --plot-line: #60777e;
+}
+:root[data-variant='meter'][data-skin='dark'] {
+  --paper: #202e35;
+  --chrome: #293941;
+  --subtle: #24343b;
+  --ink: #e7f0f0;
+  --muted: #a8bec3;
+  --line: #3d515a;
+  --accent: #9ccdd2;
+  --selected: #304850;
+  --cache: #80aeb8;
+  --uncached: #a5cdd3;
+  --output: #d9ad70;
+  --hover: #2a3d45;
+  --meter-shell: #162229;
+  --plot: #14272e;
+  --plot-ink: #f0f7f6;
+  --plot-muted: #bfd0d3;
+  --plot-line: #4d6872;
+}
+:root[data-variant='meter'] .app {
+  background: var(--meter-shell);
+}
+:root[data-variant='meter'] .app-header {
+  height: 66px;
+  background: var(--meter-shell);
+  border-bottom: 0;
+  padding: 0 30px;
+}
+:root[data-variant='meter'] .brand {
+  letter-spacing: -0.03em;
+  font-weight: 650;
+}
+:root[data-variant='meter'] .app-header nav button[aria-current] {
+  background: var(--paper);
+  box-shadow: none;
+}
+:root[data-variant='meter'] .workbench {
+  margin: 8px 20px 20px;
+  gap: 18px;
+  min-height: calc(100vh - 125px);
+}
+:root[data-variant='meter'] .main-workspace {
+  background: var(--paper);
+  border-radius: 12px;
+  padding: 26px 28px 28px;
+}
+:root[data-variant='meter'] .account-sidebar:not([popover]) {
+  width: 242px;
+  background: var(--paper);
+  border-left: 0;
+  border-radius: 12px;
+  padding: 29px 22px 24px;
+}
+:root[data-variant='meter'] h1 {
+  font-size: 24px;
+  font-weight: 620;
+}
+:root[data-variant='meter'] .page-toolbar {
+  margin-bottom: 21px;
+}
+:root[data-variant='meter'] .range-toolbar {
+  padding-bottom: 17px;
+}
+:root[data-variant='meter'] .summary-strip {
+  grid-template-columns: 1.32fr 1fr 1fr 1fr 1.13fr;
+  padding: 22px 0 25px;
+  align-items: end;
+}
+:root[data-variant='meter'] .summary-strip > div {
+  gap: 7px 5px;
+}
+:root[data-variant='meter'] .summary-strip strong {
+  font-size: 26px;
+  font-weight: 450;
+}
+:root[data-variant='meter'] .summary-strip > div:first-child strong {
+  font-size: 40px;
+  font-weight: 500;
+  line-height: 1.05;
+}
+:root[data-variant='meter'] .summary-strip small {
+  font-size: 10px;
+}
+:root[data-variant='meter'] .overview-split {
+  grid-template-columns: minmax(0, 1.65fr) minmax(270px, 1fr);
+  padding-top: 25px;
+}
+:root[data-variant='meter'] .daily-comparison {
+  padding-right: 24px;
+}
+:root[data-variant='meter'] .week-chart {
+  display: block;
+  padding: 21px 20px 17px;
+  border-radius: 11px;
+  background: var(--plot);
+  color: var(--plot-ink);
+  --uncached: #5798a7;
+  --cache: #b3d3d9;
+  --output: #d9ad70;
+}
+:root[data-variant='meter'] .week-chart h2 {
+  font-size: 16px;
+  font-weight: 550;
+}
+:root[data-variant='meter'] .week-chart .text-tabs button {
+  color: var(--plot-muted);
+  font-size: 12px;
+}
+:root[data-variant='meter'] .week-chart .text-tabs button[aria-pressed='true'] {
+  color: var(--plot-ink);
+  text-decoration: underline;
+  text-underline-offset: 7px;
+  text-decoration-thickness: 1px;
+}
+:root[data-variant='meter'] .comparison-legend {
+  color: var(--plot-muted);
+  margin: 17px 0 19px;
+  font-size: 11px;
+  gap: 14px;
+}
+:root[data-variant='meter'] .comparison-foot {
+  font-size: 10px;
+  color: var(--plot-muted);
+  margin: 14px 0 0;
+  gap: 8px;
+}
+.meter-chart {
+  display: grid;
+  grid-template-columns: 34px minmax(0, 1fr);
+  gap: 9px;
+}
+.meter-scale {
+  height: 150px;
+  margin-top: 42px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  align-items: end;
+  font-family: Bahnschrift, 'Segoe UI', sans-serif;
+  font-size: 10px;
+  font-weight: 400;
+  color: var(--plot-muted);
+  font-variant-numeric: tabular-nums;
+}
+.meter-scale > span:first-child {
+  transform: translateY(-40%);
+}
+.meter-scale > span:last-child {
+  transform: translateY(40%);
+}
+.meter-tallies {
+  position: relative;
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+.meter-guides {
+  position: absolute;
+  left: 0;
+  top: 42px;
+  width: 100%;
+  height: 150px;
+  pointer-events: none;
+  overflow: visible;
+}
+.meter-guides path {
+  fill: none;
+  stroke: var(--plot-line);
+  stroke-width: 0.5;
+  vector-effect: non-scaling-stroke;
+  opacity: 0.65;
+}
+:root[data-variant='meter'] .meter-day {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  min-width: 0;
+  color: var(--plot-muted);
+  padding: 0;
+  border-radius: 5px;
+}
+.meter-value {
+  font-family: Bahnschrift, 'Segoe UI', sans-serif;
+  display: block;
+  text-align: center;
+  height: 30px;
+  line-height: 30px;
+  font-size: 20px;
+  font-weight: 400;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.meter-value small {
+  font-size: 11px;
+  margin-left: 2px;
+}
+.meter-bar {
+  height: 150px;
+  width: 100%;
+  margin-top: 12px;
+  display: flex;
+  justify-content: center;
+  align-items: end;
+}
+.meter-stack {
+  height: 100%;
+  width: 34px;
+  display: flex;
+  flex-direction: column-reverse;
+  justify-content: flex-start;
+}
+.meter-stack > i {
+  display: block;
+  width: 100%;
+  flex-shrink: 0;
+  border-top: 1px solid var(--plot);
+}
+.meter-stack > i:last-child {
+  border-radius: 3px 3px 0 0;
+}
+.meter-stack > .cost-column {
+  background: var(--cache);
+}
+.meter-date {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  margin-top: 10px;
+  padding: 6px 4px;
+  min-width: 47px;
+  border-radius: 4px;
+}
+.meter-date strong {
+  font-size: 11px;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+}
+.meter-date small {
+  font-size: 10px;
+}
+:root[data-variant='meter'] .meter-day[aria-pressed='true'] {
+  color: var(--plot-ink);
+}
+.meter-day[aria-pressed='true'] .meter-date {
+  color: #20383e;
+  background: #e2efee;
+}
+.meter-day[aria-pressed='true'] .meter-value {
+  font-weight: 550;
+}
+.meter-day:hover .meter-date {
+  outline: 1px solid var(--plot-muted);
+  outline-offset: -1px;
+}
+.meter-day:focus-visible {
+  outline: 2px solid #c3dfdf;
+  outline-offset: 4px;
+}
+:root[data-variant='meter'] .project-section {
+  margin-top: 25px;
+}
+:root[data-variant='meter'] .project-line {
+  padding-top: 15px;
+  padding-bottom: 15px;
+}
+:root[data-variant='meter'] .day-inspector {
+  padding-left: 24px;
+}
+:root[data-variant='meter'] .inspector-date {
+  padding-top: 4px;
+  padding-bottom: 24px;
+}
+:root[data-variant='meter'] .inspector-date > strong {
+  color: var(--accent);
+  font-size: 38px;
+  font-weight: 450;
+}
+:root[data-variant='meter'] .day-facts {
+  align-items: end;
+  gap: 21px 18px;
+  padding-bottom: 25px;
+}
+:root[data-variant='meter'] .day-facts > span:first-child strong {
+  font-family: Bahnschrift, 'Segoe UI', sans-serif;
+  font-size: 29px;
+  font-weight: 500;
+  line-height: 1.1;
+}
+:root[data-variant='meter'] .compact-sessions strong {
+  font-size: 14px;
+}
+:root[data-variant='meter'] .compact-sessions > button {
+  padding-top: 17px;
+  padding-bottom: 17px;
+}
+:root[data-variant='meter'] .quota-number {
+  font-size: 37px;
+}
+:root[data-variant='meter'] .quota-ticks {
+  height: 12px;
+  gap: 3px;
+}
+:root[data-variant='meter'] .session-pick {
+  padding: 15px 12px;
+  border-radius: 5px;
+}
+:root[data-variant='meter'] .session-pick.selected strong {
+  color: var(--accent);
+}
+:root[data-variant='meter'] .session-pick.selected > div > span {
+  color: var(--accent);
+}
+:root[data-variant='meter'] .replay-header h2 {
+  font-size: 20px;
+  font-weight: 600;
+}
+:root[data-variant='meter'] .replay-meta {
+  font-size: 12px;
+  margin-top: 15px;
+  margin-bottom: 22px;
+}
+:root[data-variant='meter'] .tool-disclosure {
+  border: 0;
+  border-top: 1px solid var(--line);
+  border-radius: 0;
+  margin-top: 18px;
+}
+:root[data-variant='meter'] .tool-disclosure summary {
+  padding: 13px 0;
+}
+:root[data-variant='meter'] .tool-disclosure pre {
+  padding-left: 10px;
+}
+:root[data-variant='meter'] .entity-total {
+  font-size: 38px;
+  font-weight: 450;
+}
+:root[data-variant='meter'] .entity-trend button > span {
+  background: var(--cache);
+  border-radius: 3px 3px 0 0;
+}
+:root[data-variant='meter'] .settings-page {
+  margin-top: 28px;
+  max-width: 780px;
+}
+:root[data-variant='meter'] .status-bar {
+  background: var(--meter-shell);
+  border-top: 0;
+  min-height: 30px;
+}
+
+@media (max-width: 760px) {
+  :root[data-variant='meter'] .meter-scale {
+    font-size: 10px;
+  }
+  :root[data-variant='meter'] .meter-date strong {
+    font-size: 11px;
+  }
+  :root[data-variant='meter'] .meter-date small {
+    font-size: 10px;
+  }
+  :root[data-variant='meter'] .week-chart .comparison-legend {
+    font-size: 11px;
+  }
+}
+
+@media (min-width: 1600px) {
+  :root[data-variant='meter'] .main-workspace {
+    padding: 32px 38px 36px;
+  }
+  :root[data-variant='meter'] .account-sidebar:not([popover]) {
+    width: 270px;
+    padding: 32px 27px;
+  }
+  :root[data-variant='meter'] .daily-comparison {
+    padding-right: 31px;
+  }
+  :root[data-variant='meter'] .day-inspector {
+    padding-left: 30px;
+  }
+  :root[data-variant='meter'] .week-chart {
+    padding: 23px 26px 21px;
+  }
+  .meter-stack {
+    width: 42px;
+  }
+  .meter-value {
+    font-size: 23px;
+  }
+}
+@media (max-width: 1250px) {
+  :root[data-variant='meter'] .workbench {
+    gap: 14px;
+    margin-right: 15px;
+    margin-left: 15px;
+  }
+  :root[data-variant='meter'] .main-workspace {
+    padding: 24px 22px;
+  }
+  :root[data-variant='meter'] .account-sidebar:not([popover]) {
+    width: 214px;
+    padding: 25px 18px;
+  }
+  :root[data-variant='meter'] .overview-split {
+    grid-template-columns: minmax(0, 1.6fr) minmax(235px, 1fr);
+  }
+  :root[data-variant='meter'] .daily-comparison {
+    padding-right: 18px;
+  }
+  :root[data-variant='meter'] .day-inspector {
+    padding-left: 18px;
+  }
+  :root[data-variant='meter'] .summary-strip small {
+    display: none;
+  }
+  :root[data-variant='meter'] .summary-strip strong {
+    font-size: 24px;
+  }
+  :root[data-variant='meter'] .summary-strip > div:first-child strong {
+    font-size: 36px;
+  }
+  :root[data-variant='meter'] .week-chart {
+    padding: 19px 12px 16px;
+  }
+  .meter-chart {
+    grid-template-columns: 29px minmax(0, 1fr);
+    gap: 6px;
+  }
+  .meter-tallies {
+    gap: 3px;
+  }
+  .meter-stack {
+    width: 30px;
+  }
+  .meter-value {
+    font-size: 17px;
+  }
+  .meter-value small {
+    font-size: 9px;
+  }
+  .meter-date {
+    min-width: 40px;
+  }
+  .meter-date strong {
+    font-size: 10px;
+  }
+}
+@media (max-width: 1080px) {
+  :root[data-variant='meter'] .workbench {
+    display: block;
+  }
+  :root[data-variant='meter'] .main-workspace {
+    min-height: calc(100vh - 130px);
+    padding: 25px 28px;
+  }
+  :root[data-variant='meter'] .overview-split {
+    grid-template-columns: minmax(0, 1.6fr) minmax(270px, 1fr);
+  }
+  :root[data-variant='meter'] .account-sidebar[popover]:popover-open {
+    background: var(--paper);
+  }
+  .variant-quick > svg {
+    display: none;
+  }
+}
+@media (max-width: 760px) {
+  .variant-quick {
+    gap: 0;
+  }
+  .variant-quick select {
+    padding-left: 0;
+    padding-right: 13px;
+    font-size: 11px;
+    max-width: 60px;
+  }
+  .header-tools {
+    gap: 4px;
+  }
+  .header-tools .icon-button {
+    width: 29px;
+  }
+  .range-actions {
+    flex-shrink: 0;
+  }
+  .range-actions .button {
+    white-space: nowrap;
+  }
+  .range-left {
+    min-width: 0;
+    flex: 1;
+  }
+  .variant-gallery {
+    gap: 17px;
+  }
+  .style-preview {
+    height: 133px;
+  }
+  .preview-body {
+    padding: 12px 8px;
+    gap: 6px;
+  }
+  .preview-aside {
+    width: 27px;
+    padding-left: 5px;
+  }
+  .preview-totals {
+    gap: 5px;
+  }
+  .preview-totals strong {
+    font-size: 12px;
+  }
+  .preview-chart {
+    height: 44px;
+    margin-right: 6px;
+  }
+  .preview-list {
+    margin-top: 9px;
+  }
+  .preview-meter {
+    padding: 4px;
+  }
+  .preview-meter .preview-body {
+    padding: 10px 6px;
+    gap: 5px;
+  }
+  .preview-meter .preview-chart {
+    height: 52px;
+    padding: 9px 7px 5px;
+    gap: 4px;
+  }
+  .preview-meter .preview-aside {
+    width: 24px;
+  }
+  .preview-meter .preview-totals strong {
+    font-size: 14px;
+  }
+  .preview-aside strong {
+    font-size: 13px;
+  }
+  .variant-option > p {
+    font-size: 11px;
+  }
+  .variant-option strong {
+    font-size: 13px;
+  }
+  :root[data-variant='meter'] .app-header {
+    height: auto;
+    min-height: 110px;
+    padding: 13px 16px 0;
+  }
+  :root[data-variant='meter'] .workbench {
+    margin: 8px 8px 12px;
+  }
+  :root[data-variant='meter'] .main-workspace {
+    padding: 21px 16px 26px;
+    border-radius: 9px;
+  }
+  :root[data-variant='meter'] h1 {
+    font-size: 23px;
+  }
+  :root[data-variant='meter'] .page-toolbar {
+    margin-bottom: 18px;
+  }
+  :root[data-variant='meter'] .summary-strip {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 20px 9px;
+    padding: 22px 0;
+  }
+  :root[data-variant='meter'] .summary-strip > div:first-child strong {
+    font-size: 30px;
+  }
+  :root[data-variant='meter'] .summary-strip strong {
+    font-size: 23px;
+  }
+  :root[data-variant='meter'] .overview-split {
+    grid-template-columns: 1fr;
+    gap: 27px;
+  }
+  :root[data-variant='meter'] .daily-comparison {
+    padding: 0;
+  }
+  :root[data-variant='meter'] .day-inspector {
+    padding: 24px 0 0;
+  }
+  :root[data-variant='meter'] .week-chart {
+    padding: 19px 11px 16px;
+    border-radius: 8px;
+  }
+  :root[data-variant='meter'] .week-chart h2 {
+    font-size: 15px;
+  }
+  :root[data-variant='meter'] .comparison-legend {
+    gap: 10px;
+    font-size: 10px;
+    margin-top: 16px;
+    margin-bottom: 20px;
+  }
+  :root[data-variant='meter'] .comparison-foot {
+    font-size: 10px;
+    line-height: 1.8;
+  }
+  .meter-chart {
+    grid-template-columns: 23px minmax(0, 1fr);
+    gap: 5px;
+  }
+  .meter-scale {
+    font-size: 9px;
+    height: 126px;
+    margin-top: 36px;
+  }
+  .meter-guides {
+    top: 36px;
+    height: 126px;
+  }
+  .meter-tallies {
+    gap: 2px;
+  }
+  .meter-value {
+    font-size: 12px;
+    height: 24px;
+    line-height: 24px;
+  }
+  .meter-value small {
+    font-size: 9px;
+    margin-left: 1px;
+  }
+  .meter-bar {
+    height: 126px;
+  }
+  .meter-stack {
+    width: 24px;
+  }
+  .meter-date {
+    min-width: 0;
+    width: 100%;
+    padding: 6px 1px;
+    gap: 4px;
+  }
+  .meter-date strong {
+    font-size: 9px;
+  }
+  .meter-date small {
+    font-size: 9px;
+  }
+  :root[data-variant='meter'] .compact-sessions > button {
+    padding-top: 17px;
+    padding-bottom: 17px;
+  }
+  :root[data-variant='meter'] .replay-header h2 {
+    font-size: 18px;
+  }
+  :root[data-variant='meter'] .replay-meta {
+    font-size: 11px;
+    gap: 11px;
+  }
+  :root[data-variant='meter'] .settings-page {
+    margin-top: 23px;
+  }
+  :root[data-variant='meter'] .entity-total {
+    font-size: 32px;
+  }
+}

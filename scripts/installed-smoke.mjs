@@ -213,6 +213,10 @@ try {
   page.on('pageerror', () => rendererFailures.add(true));
   await page.waitForFunction(() => typeof window.pulse?.getSnapshot === 'function', undefined, { timeout: 20000 });
   requireCheck('preloadReady', true);
+  await page.waitForSelector('.app .app-header nav button[data-route]', { timeout: 20000 });
+  requireCheck('liveRendererReady', await page.locator('.app-header nav button[data-route]').count() === 6);
+  const preferences = await page.evaluate(() => window.pulse.getSettings());
+  requireCheck('approvedNativeSkinLoaded', ['clear', 'meter'].includes(preferences.skinId));
   report.timingsMs.launchToPreload = Math.round(performance.now() - launchStarted);
   let snapshot = await readSnapshot();
   requireCheck('realCacheLoaded', snapshot.mode === 'live' && snapshot.source?.origin === 'pulse-scan' && snapshot.source.logsAvailable && snapshot.source.sessionFiles > 0);
@@ -233,6 +237,20 @@ try {
   const selected = snapshot.daily[Math.floor(snapshot.daily.length / 2)];
   const selectedSnapshot = await page.evaluate(date => window.pulse.getSnapshot({ from: date, to: date }), selected.date);
   requireCheck('selectedDayRangeAgrees', consistent(selectedSnapshot) && selectedSnapshot.daily.length === 1 && fields.every(field => selectedSnapshot.totals[field] === selected[field]));
+  const exportFile = path.resolve(privateDir, 'installed-range-check.csv');
+  if (!exportFile.startsWith(path.resolve(privateDir) + path.sep)) throw new SmokeFailure('EXPORT_PATH_INVALID');
+  await application.evaluate(({ dialog }, file) => {
+    globalThis.__pulseSmokeSaveDialog = dialog.showSaveDialog;
+    dialog.showSaveDialog = async () => ({ canceled: false, filePath: file });
+  }, exportFile);
+  try {
+    const exported = await page.evaluate(date => window.pulse.exportData('csv', { from: date, to: date }), selected.date);
+    const exportedRows = fs.readFileSync(exportFile, 'utf8').split(/\r?\n/).filter(line => /^"\d{4}-\d{2}-\d{2}",/.test(line));
+    requireCheck('packagedRangeExportWorks', exported && exportedRows.length === 1 && exportedRows[0].startsWith('"' + selected.date + '"'));
+  } finally {
+    await application.evaluate(({ dialog }) => { dialog.showSaveDialog = globalThis.__pulseSmokeSaveDialog; delete globalThis.__pulseSmokeSaveDialog; });
+    if (fs.existsSync(exportFile)) fs.unlinkSync(exportFile);
+  }
   requireCheck('noInternalPathsExposed', !JSON.stringify(snapshot).includes(dataDir) && !JSON.stringify(snapshot).includes(path.dirname(executable)));
 
   // The initial refresh already requests official limits. Waiting for it does

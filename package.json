@@ -1,8 +1,8 @@
 {
   "name": "codex-pulse",
   "productName": "Codex Pulse",
-  "version": "0.1.0",
-  "description": "A local-first Codex usage companion: a quiet widget and a complete activity journal.",
+  "version": "0.2.0",
+  "description": "Codex usage monitor and token tracker for Windows, with ChatGPT quota, daily history and a floating widget.",
   "private": true,
   "type": "module",
   "main": "src/main/index.mjs",

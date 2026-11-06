@@ -16,5 +16,6 @@ contextBridge.exposeInMainWorld('pulse', Object.freeze({
   refresh: (options) => ipcRenderer.invoke('pulse:refresh', options),
   getSettings: () => ipcRenderer.invoke('pulse:settings'),
   saveSettings: (patch) => ipcRenderer.invoke('pulse:save-settings', patch),
+  exportData: (format, range) => ipcRenderer.invoke('pulse:export', format, range),
   action: (name) => ipcRenderer.invoke('pulse:action', name),
 }));

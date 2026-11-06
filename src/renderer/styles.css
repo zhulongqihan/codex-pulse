@@ -13,6 +13,9 @@
   --serif: Georgia, "Noto Serif SC", "Songti SC", SimSun, serif;
   --ease: cubic-bezier(.22, 1, .36, 1);
 }
+.widget-app[data-skin-id="meter"] .widget-page{--primary:#b3d3d9;--primary-hover:#d6e9eb;--cache:#5798a7;--cache-soft:#36545e;--primary-soft:#314d55;--blue:#d9ad70;background:#20383e}
+.widget-app[data-skin-id="clear"] .widget-page{--primary:#a8c6fa;--primary-hover:#d2e1fb;--cache:#719bdc;--cache-soft:#364f77;--primary-soft:#30496d;--blue:#a8b4c7;background:#232b39}
+.widget-app .widget-today>strong{font-family:Bahnschrift,"Segoe UI",sans-serif;font-weight:500}
 :root[data-theme="dark"] {
   color-scheme: dark; --bg: oklch(.2 .006 130); --surface: oklch(.235 .008 130); --surface-strong: oklch(.28 .01 130);
   --ink: oklch(.94 .004 130); --muted: oklch(.73 .007 130); --soft: oklch(.59 .008 130);

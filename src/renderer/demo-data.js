@@ -1,7 +1,7 @@
 // Synthetic, deliberately labeled data for screenshots and browser previews.
 // No local account information or session content belongs in this file.
 export const DEMO_TODAY = '2026-11-06';
-const names = ['GPT-6.1 Sol', 'GPT-6 Luna', 'GPT-6 Astra'];
+const names = ['Codex', 'Codex mini', '其他模型'];
 const projects = ['创作工作台', '代码实验', '阅读整理'];
 const modelWeights = [13.2 / 24.8, 6.9 / 24.8, 4.7 / 24.8];
 const projectWeights = [.5, 7.6 / 24.8, 4.8 / 24.8];
@@ -58,6 +58,8 @@ function aggregate(rows, key) {
   }));
   return [...map.values()].sort((a, b) => b.totalTokens - a.totalTokens);
 }
+const demoCost = row => row.totalTokens / 1e6 * (123.45 / 141.9);
+daily.forEach(row => { row.estimatedCost=demoCost(row); row.models.forEach(m=>{m.estimatedCost=demoCost(m);}); row.projects.forEach(p=>{p.estimatedCost=demoCost(p);}); });
 export function getDemoSnapshot(range = {}) {
   const rows = daily.filter(d => (!range.from || d.date >= range.from) && (!range.to || d.date <= range.to));
   const totals = rows.reduce((acc, d) => {
@@ -75,18 +77,18 @@ export function getDemoSnapshot(range = {}) {
   }))));
   return {
     version: 1, mode: 'demo', timezone: 'Asia/Shanghai',
-    range: { from: range.from || daily[0].date, to: range.to || DEMO_TODAY },
+    range: { from: range.from || daily[0].date, to: range.to || DEMO_TODAY, timeZone:'Asia/Shanghai' }, pricingSource:'Illustrative synthetic demo reference', pricingBasis:'Demonstration values, not official model pricing.',
     status: { scanning: false, quotaRefreshing: false, progress: { done: 756, total: 756 }, scanAt: '2026-11-06T02:12:00Z', quotaAt: '2026-11-06T02:12:00Z', error: null, warnings: [] },
     quota: { available: true, remainingPercent: 68, usedPercent: 32, resetsAt: '2026-11-13T00:00:00+08:00', plan: 'Pro', source: 'codex-app-server', windows: [{ name: '周额度', remainingPercent: 68, resetsAt: '2026-11-13T00:00:00+08:00', windowMinutes: 10080 }] },
-    today: { ...daily.at(-1) }, totals, daily: rows,
-    models: aggregate(rows, 'models'), projects: aggregate(rows, 'projects'),
-    sessions: sessions.sort((a, b) => b.startedAt.localeCompare(a.startedAt)),
-    source: { sessionFiles: 756, lastScan: '2026-11-06T02:12:00Z', localOnly: true, logsOrigin: 'demo', logsAsOf: '2026-11-06T02:12:00Z', quotaAsOf: '2026-11-06T02:12:00Z' }
+    today: { ...daily.at(-1) }, totals: {...totals,estimatedCost:rows.reduce((sum,row)=>sum+row.estimatedCost,0)}, daily: rows,
+    models: aggregate(rows, 'models').map(r=>({...r,estimatedCost:demoCost(r)})), projects: aggregate(rows, 'projects').map(r=>({...r,estimatedCost:demoCost(r)})),
+    sessions: sessions.map(r=>({...r,estimatedCost:demoCost(r)})).sort((a, b) => b.startedAt.localeCompare(a.startedAt)),
+    source: { sessionDetailsComplete:true, sessionFiles: 756, lastScan: '2026-11-06T02:12:00Z', localOnly: true, logsOrigin: 'demo', logsAsOf: '2026-11-06T02:12:00Z', quotaAsOf: '2026-11-06T02:12:00Z' }
   };
 }
 export const demoAllDays = daily;
 export const defaultSettings = {
-  theme: 'light', language: 'zh', widgetVisible: true, launchAtLogin: false,
+  skinId:'meter', compactMode:false, theme: 'light', language: 'zh', widgetVisible: true, launchAtLogin: false,
   refreshSeconds: 60, motionLevel: 'gentle', reducedMotion: false,
   respectReducedMotion: true
 };

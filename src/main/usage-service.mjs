@@ -159,7 +159,7 @@ export function createUsageService({ dataDir, codexHome = process.env.CODEX_HOME
       quota: structuredClone(quota), today: { ...today, source: 'local-logs', available: logsAvailable, estimatedCost: totalCost(today.models || [], today.totalTokens) },
       daily: structuredClone(selected).map(row => ({ ...row, estimatedCost: totalCost(row.models || [], row.totalTokens) })), models: pricedModels, projects: [...projects.values()].sort((a, b) => b.totalTokens - a.totalTokens),
       sessions: sessions.map(row => ({ ...row, estimatedCost: modelCost(row) })),
-      source: { sessionFiles: local.sessionFiles || 0, lastScan: local.scannedAt, logsAsOf: local.scannedAt, quotaAsOf: status.quotaAt, origin: local.origin || 'pulse-scan', localOnly: true, logsAvailable },
+      source: { sessionFiles: local.sessionFiles || 0, lastScan: local.scannedAt, logsAsOf: local.scannedAt, quotaAsOf: status.quotaAt, origin: local.origin || 'pulse-scan', sessionDetailsComplete: logsAvailable && local.origin !== 'imported-desktop-cache', localOnly: true, logsAvailable },
     };
   }
   function emit() { if (!closed) { try { onUpdate(getSnapshot()); } catch { /* A UI listener must not interrupt scans. */ } } }
