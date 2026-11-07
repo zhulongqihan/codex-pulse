@@ -207,6 +207,7 @@ describe("App", () => {
   });
 
   beforeEach(() => {
+    Object.defineProperty(window, "innerWidth", { configurable: true, writable: true, value: 1440 });
     Element.prototype.scrollIntoView = vi.fn();
     Element.prototype.hasPointerCapture = vi.fn(() => false);
     Element.prototype.setPointerCapture = vi.fn();
@@ -265,7 +266,8 @@ describe("App", () => {
     expect(within(history).getAllByTestId("reset-history-day")).toHaveLength(30);
   });
 
-  it("retains the selected child agent, search, collapsed turns and reading position when returning from settings", async () => {
+  it.each([1440, 1000])("retains the selected child agent, search, collapsed turns and reading position through settings and account details at %ipx", async (width) => {
+    Object.defineProperty(window, "innerWidth", { configurable: true, writable: true, value: width });
     vi.stubGlobal("Worker", class { postMessage() {} terminate() {} });
     const timestamp = "2026-06-11T00:00:00Z";
     const usage = { inputTokens: 10, cachedInputTokens: 0, outputTokens: 2, reasoningOutputTokens: 0, totalTokens: 12, costUSD: 0.01, models: ["gpt-5"], projects: ["/repo/app"] };
@@ -314,6 +316,16 @@ describe("App", () => {
     expect(within(returned).getByRole("button", { name: /Turn one/ })).toHaveAttribute("aria-expanded", "false");
     expect(within(returned).getByTestId("session-detail-scroll").scrollTop).toBe(240);
     expect(within(returned).getByRole("button", { name: /child.*Child fixture/ })).toHaveAttribute("aria-current", "true");
+    if (width === 1000) {
+      await user.click(screen.getByTestId("account-toggle"));
+      expect(screen.getByTestId("account-drawer")).toBeVisible();
+      await user.keyboard("{Escape}");
+      expect(screen.queryByTestId("account-drawer")).not.toBeInTheDocument();
+      expect(screen.getByRole("dialog", { name: "Child fixture" })).toBeVisible();
+      expect(within(returned).getByRole("searchbox")).toHaveValue("needle");
+      expect(within(returned).getByTestId("session-detail-scroll").scrollTop).toBe(240);
+      expect(within(returned).getByRole("button", { name: /child.*Child fixture/ })).toHaveAttribute("aria-current", "true");
+    }
     expect(commandCount("fetch_session_detail")).toBe(2);
     expect(commandCount("scan_usage")).toBe(scans);
     expect(commandCount("fetch_codex_limits")).toBe(quotaQueries);
@@ -368,6 +380,7 @@ describe("App", () => {
     await user.click(screen.getByRole("tab", { name: "Monthly" }));
     expect(monthlyRow()).toHaveTextContent("$3.00");
     await user.click(screen.getByRole("button", { name: "Settings" }));
+    await user.click(screen.getByRole("tab", { name: "Data sources" }));
     expect(await screen.findByText("F:/HealthySource")).toBeVisible();
     expect(invokeMock).toHaveBeenCalledWith("fetch_usage_diagnostics");
   });
@@ -401,6 +414,7 @@ describe("App", () => {
     } }); });
     await waitFor(() => expect(previousReadStarted).toBe(true));
     await user.click(screen.getByRole("button", { name: "Settings" }));
+    await user.click(screen.getByRole("tab", { name: "Data sources" }));
     await user.click(screen.getByRole("button", { name: "Choose folder" }));
     await waitFor(() => expect(invokeMock).toHaveBeenCalledWith("configure_codex_home", { home: "F:/NewCodexSource" }));
     await waitFor(() => expect(screen.getByRole("button", { name: "Choose folder" })).toBeEnabled());
@@ -411,6 +425,155 @@ describe("App", () => {
     expect(screen.getByTestId("diagnostic-directory")).toHaveTextContent("F:/NewCodexSource");
     await user.click(screen.getByText("Technical details"));
     expect(screen.getByText("New source scan failed")).toBeVisible();
+  });
+
+  it.each([0, 920])("starts settings at its selected section and restores source scroll %i", async (initialScroll) => {
+    mockLoadedDashboard();
+    render(<App />);
+    await screen.findByTestId("dashboard-hero");
+    const main = document.querySelector<HTMLElement>(".pulse-main-scroll")!;
+    main.scrollTop = initialScroll;
+    await userEvent.click(screen.getByRole("button", { name: "Settings" }));
+    expect(main.scrollTop).toBe(0);
+    expect(screen.getByRole("tab", { name: "Appearance" })).toHaveAttribute("aria-selected", "true");
+    const general = screen.getByRole("tab", { name: "General" });
+    main.scrollTop = 400;
+    screen.getByRole("tab", { name: "Appearance" }).focus();
+    await userEvent.keyboard("{ArrowRight}");
+    expect(general).toHaveFocus();
+    expect(general).toHaveAttribute("aria-selected", "true");
+    expect(main.scrollTop).toBe(0);
+    expect(screen.getByRole("tabpanel", { name: "General" })).toBeVisible();
+    main.scrollTop = 300;
+    await userEvent.click(screen.getByRole("button", { name: "Back" }));
+    expect(main.scrollTop).toBe(initialScroll);
+  });
+
+  it.each([1000, 920])("keeps %ipx-window content unobscured until account details are requested and restores focus", async (width) => {
+    Object.defineProperty(window, "innerWidth", { configurable: true, writable: true, value: width });
+    mockLoadedDashboard();
+    render(<App />);
+    await screen.findByTestId("dashboard-hero");
+    expect(document.querySelector(".pulse-account-rail")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("account-drawer")).not.toBeInTheDocument();
+    const toggle = screen.getByTestId("account-toggle");
+    expect(toggle).toHaveAttribute("aria-expanded", "false");
+    const scanCount = invokeMock.mock.calls.filter(([command]) => command === "scan_usage").length;
+    const limitsCount = invokeMock.mock.calls.filter(([command]) => command === "fetch_codex_limits").length;
+    await userEvent.click(toggle);
+    expect(screen.getByRole("dialog", { name: "Account capacity" })).toBeVisible();
+    const close = screen.getByRole("button", { name: "Close account capacity" });
+    expect(close).toHaveFocus();
+    await userEvent.keyboard("{Shift>}{Tab}{/Shift}");
+    expect(screen.getByTestId("account-drawer")).toContainElement(document.activeElement as HTMLElement);
+    expect(close).not.toHaveFocus();
+    await userEvent.keyboard("{Tab}");
+    expect(close).toHaveFocus();
+    await userEvent.keyboard("{Escape}");
+    expect(screen.queryByTestId("account-drawer")).not.toBeInTheDocument();
+    expect(toggle).toHaveFocus();
+    await userEvent.click(toggle);
+    await userEvent.click(screen.getByTestId("account-backdrop"));
+    expect(screen.queryByTestId("account-drawer")).not.toBeInTheDocument();
+    expect(toggle).toHaveFocus();
+    expect(invokeMock.mock.calls.filter(([command]) => command === "scan_usage")).toHaveLength(scanCount);
+    expect(invokeMock.mock.calls.filter(([command]) => command === "fetch_codex_limits")).toHaveLength(limitsCount);
+  });
+
+  it("explains desktop-only actions in the browser preview without pretending to create windows or shortcuts", async () => {
+    window.history.replaceState({}, "", "?demo=1");
+    onTestFinished(() => window.history.replaceState({}, "", "/"));
+    mockLoadedDashboard();
+    render(<App />);
+    await screen.findByTestId("dashboard-hero");
+    await userEvent.click(screen.getByTestId("open-widget"));
+    expect(await screen.findByText("This action is available in the desktop app. The browser demo does not create windows or files.")).toBeVisible();
+    await userEvent.click(screen.getByTestId("create-shortcuts"));
+    expect(invokeMock).not.toHaveBeenCalledWith("create_pulse_shortcuts");
+    expect(invokeMock).not.toHaveBeenCalledWith("widget_action", { action: "show" });
+    expect(screen.queryByText("Desktop and Start menu shortcuts are ready.")).not.toBeInTheDocument();
+  });
+
+  it("opens the widget from a visible global action, reports failure and allows retry without refreshing data", async () => {
+    mockLoadedDashboard();
+    const original = invokeMock.getMockImplementation()!;
+    let attempts = 0;
+    invokeMock.mockImplementation((command: string, args?: any) => {
+      if (command === "widget_action") return ++attempts === 1 ? Promise.reject(new Error("Window manager unavailable")) : Promise.resolve();
+      return original(command, args);
+    });
+    render(<App />);
+    await screen.findByTestId("dashboard-hero");
+    const scanCount = invokeMock.mock.calls.filter(([command]) => command === "scan_usage").length;
+    const limitsCount = invokeMock.mock.calls.filter(([command]) => command === "fetch_codex_limits").length;
+    await userEvent.click(screen.getByTestId("open-widget"));
+    expect(await screen.findByText(/Could not open the widget: Window manager unavailable/)).toBeVisible();
+    expect(screen.getByTestId("open-widget")).toBeEnabled();
+    await userEvent.click(screen.getByTestId("open-widget"));
+    expect(await screen.findByText("Widget is on")).toBeVisible();
+    expect(invokeMock).toHaveBeenCalledWith("widget_action", { action: "show" });
+    expect(invokeMock.mock.calls.filter(([command]) => command === "scan_usage")).toHaveLength(scanCount);
+    expect(invokeMock.mock.calls.filter(([command]) => command === "fetch_codex_limits")).toHaveLength(limitsCount);
+  });
+
+  it("creates shortcuts only on request and keeps dismissed setup help available with its source shortcut", async () => {
+    mockLoadedDashboard();
+    const original = invokeMock.getMockImplementation()!;
+    invokeMock.mockImplementation((command: string, args?: any) => {
+      if (command === "create_pulse_shortcuts") return Promise.resolve({ desktop: "F:/fixture/Desktop/Pulse.lnk", startMenu: "F:/fixture/Programs/Pulse.lnk" });
+      if (command === "fetch_usage_diagnostics") return Promise.resolve({ codexHome: "F:/CodexHome", runtime: "native", status: "ready", filesFound: 1, cachedDays: 1, error: null });
+      return original(command, args);
+    });
+    const view = render(<App />);
+    await screen.findByTestId("dashboard-hero");
+    expect(invokeMock).not.toHaveBeenCalledWith("create_pulse_shortcuts");
+    await userEvent.click(screen.getByTestId("create-shortcuts"));
+    expect(await screen.findByText("Desktop and Start menu shortcuts are ready.")).toBeVisible();
+    expect(invokeMock).toHaveBeenCalledWith("create_pulse_shortcuts");
+    await userEvent.click(screen.getByRole("button", { name: "Got it" }));
+    expect(screen.queryByTestId("getting-started")).not.toBeInTheDocument();
+    expect(localStorage.getItem("codexpulse.quickstart.dismissed.v1")).toBe("true");
+    view.unmount(); render(<App />);
+    await screen.findByTestId("dashboard-hero");
+    expect(screen.queryByTestId("getting-started")).not.toBeInTheDocument();
+    const scanCount = invokeMock.mock.calls.filter(([command]) => command === "scan_usage").length;
+    const limitsCount = invokeMock.mock.calls.filter(([command]) => command === "fetch_codex_limits").length;
+    await userEvent.click(screen.getByTestId("help"));
+    expect(screen.getByTestId("getting-started")).toBeVisible();
+    await userEvent.click(screen.getByRole("button", { name: "Check data source" }));
+    expect(screen.getByRole("tab", { name: "Data sources" })).toHaveAttribute("aria-selected", "true");
+    expect(await screen.findByText("F:/CodexHome")).toBeVisible();
+    expect(invokeMock.mock.calls.filter(([command]) => command === "scan_usage")).toHaveLength(scanCount);
+    expect(invokeMock.mock.calls.filter(([command]) => command === "fetch_codex_limits")).toHaveLength(limitsCount);
+  });
+
+  it.each(["off", "gentle"])("keeps today's independent usage visible outside the historical range and respects %s motion when opening sessions", async (motion) => {
+    const previousMotion = document.documentElement.dataset.motion;
+    document.documentElement.dataset.motion = motion;
+    onTestFinished(() => { if (previousMotion) document.documentElement.dataset.motion = previousMotion; else delete document.documentElement.dataset.motion; });
+    mockLoadedDashboard();
+    const original = invokeMock.getMockImplementation()!;
+    const date = new Intl.DateTimeFormat("sv-SE", { timeZone: "UTC" }).format(new Date());
+    const daily = { date, inputTokens: 70, cachedInputTokens: 10, outputTokens: 7, totalTokens: 77, costUSD: null };
+    invokeMock.mockImplementation((command: string, args?: any) => {
+      if (command === "fetch_overview") return Promise.resolve(args?.range === "1d" ? { ...overview(77), range: "1d", startDate: date, endDate: date, daily: [daily] } : overview(0));
+      if (command === "fetch_session_details") return Promise.resolve([{ ...daily, reasoningOutputTokens: 0, models: ["gpt-5"], projects: ["/fixture"], turnCount: 1, path: "/fixture/today.jsonl", sessionId: "today", threadName: "Today's fixture", modifiedAtMs: Date.now(), sizeBytes: 1, dailyUsage: [daily] }]);
+      return original(command, args);
+    });
+    render(<App />);
+    expect(await screen.findByTestId("today-summary")).toBeVisible();
+    await waitFor(() => expect(screen.getByTestId("today-tokens")).toHaveTextContent("77"));
+    expect(screen.getByTestId("today-estimate")).toHaveTextContent("—");
+    const plotDay = document.querySelector<HTMLButtonElement>(".pulse-trend-day");
+    if (plotDay) fireEvent.mouseEnter(plotDay);
+    expect(screen.getByTestId("today-tokens")).toHaveTextContent("77");
+    const priorTodayReads = invokeMock.mock.calls.filter(([command, args]) => command === "fetch_overview" && args.range === "1d").length;
+    await userEvent.click(screen.getByRole("button", { name: "Today's sessions" }));
+    expect(screen.getByRole("tab", { name: "Sessions", selected: true })).toBeVisible();
+    expect(await screen.findByRole("heading", { name: "Today's fixture" })).toBeVisible();
+    expect(document.getElementById(`date-group-${date}`)).toBeVisible();
+    expect(invokeMock.mock.calls.filter(([command, args]) => command === "fetch_overview" && args.range === "1d").length).toBeGreaterThan(priorTodayReads);
+    await waitFor(() => expect(Element.prototype.scrollIntoView).toHaveBeenCalledWith({ behavior: motion === "off" ? "instant" : "smooth", block: "start" }));
   });
 
   it("shows the initial loading state while loading the cached overview", () => {
@@ -1084,7 +1247,7 @@ describe("App", () => {
     expect(within(trendsCard).getByRole("button", { name: "Tokens" })).toHaveAttribute("aria-pressed", "true");
     expect(within(trendsCard).getByRole("button", { name: "API estimate" })).toBeInTheDocument();
     const hero = screen.getByTestId("dashboard-hero");
-    for (const metric of ["Token Breakdown", "Avg / Day", "Cache Hit", "Cost / 1M"]) expect(hero).toHaveTextContent(metric);
+    for (const metric of ["Input breakdown and daily averages", "Avg / Day", "Cache Hit", "Cost / 1M"]) expect(hero).toHaveTextContent(metric);
     expect(screen.queryByText("Cached Tokens")).not.toBeInTheDocument();
     expect(screen.queryByText("Avg Daily Cost")).not.toBeInTheDocument();
     expect(screen.queryByText("Peak Token")).not.toBeInTheDocument();
@@ -1392,7 +1555,7 @@ describe("App", () => {
     await waitFor(() => expect(screen.getAllByText("1,600").length).toBeGreaterThan(0));
     await user.click(screen.getByRole("tab", { name: "Model" }));
     await user.click(screen.getByRole("combobox", { name: "Sort descending" }));
-    await user.click(screen.getByRole("option", { name: "Estimated cost" }));
+    await user.click(screen.getByRole("option", { name: "API estimate" }));
     await user.click(screen.getByRole("tab", { name: "Pricing Catalog" }));
     const search = await screen.findByRole("textbox", { name: "Search models or providers..." });
     await user.type(search, "gpt-5");
@@ -1409,7 +1572,7 @@ describe("App", () => {
     expect(screen.getByRole("tab", { name: "Model" })).toHaveAttribute("aria-selected", "true");
     expect(screen.getByRole("textbox", { name: "Search models or providers..." })).toHaveValue("gpt-5");
     await user.click(screen.getByRole("tab", { name: "Usage Analysis" }));
-    expect(screen.getByRole("combobox", { name: "Sort descending" })).toHaveTextContent("Estimated cost");
+    expect(screen.getByRole("combobox", { name: "Sort descending" })).toHaveTextContent("API estimate");
     expect(invokeMock.mock.calls.filter(([command]) => command === "scan_usage")).toHaveLength(scanCount);
     expect(invokeMock.mock.calls.filter(([command]) => command === "fetch_codex_limits")).toHaveLength(limitsCount);
     expect(invokeMock.mock.calls.filter(([command]) => command === "fetch_model_pricing_catalog")).toHaveLength(1);
@@ -2779,14 +2942,14 @@ describe("App", () => {
     await waitFor(() => expect(screen.getAllByText("1,600").length).toBeGreaterThan(0));
     await userEvent.click(screen.getByRole("button", { name: "Settings" }));
 
-    expect(screen.getByText("Manage local app state and recovery actions.")).toBeInTheDocument();
-    expect(screen.getByRole("tabpanel", { name: "Settings" })).toBeInTheDocument();
+    expect(screen.getByText("Appearance, account, desktop controls, data sources and maintenance.")).toBeVisible();
+    expect(screen.getByRole("tabpanel", { name: "Appearance" })).toBeInTheDocument();
     expect(screen.getByText("Display Settings")).toBeInTheDocument();
-    expect(screen.getByText("Menu Bar / System Tray Settings")).toBeInTheDocument();
+    expect(screen.getByText("System tray")).not.toBeVisible();
     expect(screen.queryByRole("button", { name: "Export" })).not.toBeInTheDocument();
     await userEvent.click(screen.getByRole("tab", { name: "Maintenance" }));
     expect(screen.getByRole("tab", { name: "Maintenance" })).toHaveAttribute("aria-selected", "true");
-    expect(screen.getByText("Menu Bar / System Tray Settings")).toBeInTheDocument();
+    expect(screen.getByText("System tray")).not.toBeVisible();
     expect(screen.getByText("Local cache")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Reset cache" })).toBeEnabled();
     await userEvent.click(screen.getByRole("button", { name: "Reset cache" }));
@@ -3208,8 +3371,9 @@ describe("App", () => {
     // Click Settings
     const settingsTab = screen.getByRole("button", { name: "Settings" });
     await userEvent.click(settingsTab);
+    await userEvent.click(screen.getByRole("tab", { name: "General" }));
 
-    expect(screen.getByText("Menu Bar / System Tray Settings")).toBeInTheDocument();
+    expect(screen.getByText("System tray")).not.toBeVisible();
     expect(screen.getByText("Display Settings")).toBeInTheDocument();
 
     // Verify Display Settings card is rendered with "Show Logs Tab" toggle switch
@@ -3250,6 +3414,7 @@ describe("App", () => {
     render(<App />);
 
     await userEvent.click(await screen.findByRole("button", { name: "Settings" }));
+    await userEvent.click(screen.getByRole("tab", { name: "General" }));
     const languageSelect = screen.getAllByRole("combobox").find((element) => element.textContent === "English")!;
     await waitFor(() => expect(languageSelect).toBeEnabled());
     fireEvent.keyDown(languageSelect, { key: "ArrowDown" });
@@ -3311,6 +3476,7 @@ describe("App", () => {
     render(<App />);
 
     await userEvent.click(await screen.findByRole("button", { name: "Settings" }));
+    await userEvent.click(screen.getByRole("tab", { name: "Tray & widget" }));
     fireEvent.change(screen.getByRole("textbox", { name: "Hour" }), { target: { value: " hours" } });
 
     expect(localStorage.getItem("tray_countdown_units")).toBe(JSON.stringify({

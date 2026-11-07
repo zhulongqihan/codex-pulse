@@ -1,0 +1,34 @@
+/* Task-first shell: wide account rail, explicit compact-window drawer, and setup actions. */
+.pulse-app .pulse-shell-action { display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-height: 34px; padding: 6px 10px; border: 1px solid rgb(var(--border)); border-radius: 7px; color: rgb(var(--foreground)); background: rgb(var(--surface)); font-size: 12px; white-space: nowrap; }
+.pulse-app .pulse-shell-action:hover { background: rgb(var(--muted)); }
+.pulse-app .pulse-shell-action small { color: rgb(var(--primary)); font-size: 11px; }
+.pulse-app .pulse-global-actions { gap: 8px; }
+.pulse-app .pulse-global-actions .pulse-widget-action { color: rgb(var(--primary)); }
+.pulse-getting-started { padding: 5px 0 9px; margin-bottom: 6px; border-bottom: 1px solid rgb(var(--border)); }
+.pulse-setup-line { display: flex; flex-wrap: wrap; align-items: center; gap: 7px 16px; }
+.pulse-setup-line > h2 { font-size: 12px; }
+.pulse-setup-line > .pulse-icon-button { margin-left: auto; }
+.pulse-getting-started > header { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+.pulse-getting-started h2 { margin: 0; font-size: 14px; font-weight: 650; }
+.pulse-getting-started header p { margin: 3px 0 0; font-size: 12px; color: rgb(var(--muted-foreground)); }
+.pulse-setup-status, .pulse-setup-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; font-size: 11px; }
+.pulse-setup-status > button { display: inline-flex; align-items: center; gap: 5px; color: rgb(var(--muted-foreground)); }
+.pulse-setup-status svg { color: rgb(var(--primary)); }
+.pulse-setup-status strong { color: rgb(var(--foreground)); font-weight: 550; margin-right: 2px; }
+.pulse-setup-actions > button { display: inline-flex; align-items: center; gap: 6px; color: rgb(var(--primary)); padding: 3px 0; text-align: left; }
+.pulse-setup-actions > button:hover { text-decoration: underline; text-underline-offset: 3px; }
+.pulse-setup-hint, .pulse-action-notice { color: rgb(var(--muted-foreground)); font-size: 12px; margin-top: 9px; line-height: 1.6; }
+.pulse-app .pulse-settings-layout { display: grid; grid-template-columns: 168px minmax(0,1fr); gap: 20px; }
+.pulse-settings-layout > [role="tablist"] { display: flex; flex-direction: column; align-self: start; gap: 5px; position: sticky; top: 0; padding: 0; }
+.pulse-settings-layout > [role="tablist"] > button { text-align: left; }
+.pulse-settings-tab-panel[hidden] { display: none !important; }
+.pulse-account-backdrop { position: fixed; inset: 0; z-index: 150; display: flex; justify-content: flex-end; background: rgb(0 0 0 / .32); }
+.pulse-account-drawer { display: flex; flex-direction: column; width: min(360px,100%); min-width: 0; height: 100%; background: rgb(var(--surface)); color: rgb(var(--foreground)); box-shadow: -8px 0 24px rgb(0 0 0 / .13); }
+.pulse-account-drawer > header { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 18px 20px; border-bottom: 1px solid rgb(var(--border)); }
+.pulse-account-drawer h2 { font-size: 16px; font-weight: 650; margin: 0; }
+.pulse-drawer-content { padding: 20px; overflow-y: auto; min-height: 0; }
+.pulse-shell-notice { margin: 0; padding: 8px 24px; background: rgb(var(--surface)); border-bottom: 1px solid rgb(var(--border)); font-size: 12px; }
+@media (min-width: 1101px) { .pulse-app .pulse-account-rail { position: static; } }
+@media (max-width: 1100px) { .pulse-app .pulse-account-rail { display: none; } .pulse-app .pulse-account-summary { display: inline; } }
+@media (max-width: 1100px) { .pulse-app .pulse-topbar { gap: 10px; padding-inline: 14px; } .pulse-app .pulse-page-label { display: none; } .pulse-app .pulse-global-actions .pulse-style-switch { display: none; } .pulse-app .pulse-shell-action { padding-inline: 8px; } }
+@media (max-width: 680px) { .pulse-settings-layout { grid-template-columns: 1fr !important; } .pulse-settings-layout > [role="tablist"] { flex-direction: row; overflow-x: auto; position: static; } .pulse-app .pulse-help-action span { display: none; } .pulse-app .pulse-global-actions { gap: 5px; } .pulse-app .pulse-brand > strong { font-size: 19px; } }

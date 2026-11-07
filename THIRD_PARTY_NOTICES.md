@@ -20,6 +20,8 @@ Available original dependency license texts are collected in [THIRD_PARTY_LICENS
 
 The MIT-licensed [`auto-launch` 0.6.0 source](src-tauri/vendor/auto-launch) is included with a small Windows executable-path quoting fix. Its original license and [patch description](src-tauri/vendor/auto-launch/PATCHES.md) accompany the source.
 
+The [`tauri-plugin-single-instance` 2.5.5 source](src-tauri/vendor/tauri-plugin-single-instance), under Apache-2.0 OR MIT, includes a small Windows instance-key extension so separate portable profiles remain isolated. Its original licenses and [patch description](src-tauri/vendor/tauri-plugin-single-instance/PATCHES.md) are preserved.
+
 ## Names and artwork
 
 OpenAI, ChatGPT, and Codex are names belonging to their respective owners. Codex Pulse is not affiliated with or endorsed by OpenAI.

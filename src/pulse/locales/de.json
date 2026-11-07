@@ -17,7 +17,7 @@
     "actions": "Aktionen",
     "date": "Datum",
     "tokens": "Tokens",
-    "cost": "Kosten",
+    "cost": "API-Schätzung",
     "cache": "Cache",
     "path": "Pfad",
     "mode": "Modus",
@@ -33,7 +33,7 @@
     "quota_monthly": "Monatskontingent",
     "used": "{{percent}} % verbraucht",
     "today": "Heutiger Verbrauch",
-    "estimated_cost": "Geschätzte Kosten"
+    "estimated_cost": "API-Schätzung"
   },
   "header": {
     "navigation": "Hauptnavigation",
@@ -94,8 +94,8 @@
     "rescan": "Lokale Protokolle erneut scannen",
     "cache_synced": "Cache synchronisiert",
     "out_of_sync": "Nicht synchronisiert",
-    "total_cost_label": "Gesamtkosten",
-    "cost_drivers": "Kostentreiber",
+    "total_cost_label": "API-Schätzung im Zeitraum",
+    "cost_drivers": "Verteilung der API-Schätzung",
     "sync_logs_to_cache_desc": "Lokale Protokolle mit dem Cache synchronisieren",
     "synced_message": "{{days}} Tage synchronisiert ({{reused}} aus dem Cache, {{parsed}} ausgewertet)",
     "resetting_message": "Lokaler Cache wird zurückgesetzt und Verbrauchsdaten werden neu aufgebaut.",
@@ -226,7 +226,7 @@
       "date": "Datum",
       "tokens": "Tokens gesamt",
       "quota": "Verbrauchtes Kontingent",
-      "cost": "Kosten",
+      "cost": "API-Schätzung",
       "cache": "Cache-Treffer",
       "actions": "Aktionen"
     },
@@ -259,7 +259,7 @@
       "inputTokens": "Eingabe",
       "cachedInputTokens": "Tokens aus dem Cache",
       "outputTokens": "Ausgabe",
-      "costUSD": "Kosten",
+      "costUSD": "API-Schätzung",
       "asc": "Aufsteigend",
       "desc": "Absteigend"
     }
@@ -270,7 +270,7 @@
     "cols": {
       "month": "Monat",
       "tokens": "Token-Zusammensetzung",
-      "cost": "Kosten",
+      "cost": "API-Schätzung",
       "cache": "Cache-Trefferquote"
     },
     "no_data": "Noch keine monatlichen Daten vorhanden.",
@@ -302,7 +302,7 @@
       "inputTokens": "Eingabe",
       "cachedInputTokens": "Tokens aus dem Cache",
       "outputTokens": "Ausgabe",
-      "costUSD": "Kosten",
+      "costUSD": "API-Schätzung",
       "asc": "Aufsteigend",
       "desc": "Absteigend"
     },
@@ -363,11 +363,11 @@
       "no_sample": "Keine zuordenbaren Aufnahmen"
     },
     "of_usage": "des Verbrauchs",
-    "of_cost": "der Kosten",
+    "of_cost": "der API-Schätzung",
     "summary": {
       "active_models": "Aktive Modelle",
       "total_tokens": "Tokens gesamt",
-      "estimated_cost": "Geschätzte Kosten",
+      "estimated_cost": "API-Schätzung",
       "cache_hit": "Cache-Trefferquote",
       "effective_price": "Effektiver Gesamtpreis / 1 Mio."
     },
@@ -392,14 +392,14 @@
     "sort": {
       "label": "Absteigend sortieren",
       "tokens": "Tokens gesamt",
-      "cost": "Geschätzte Kosten",
+      "cost": "API-Schätzung",
       "effective": "Effektiver Preis"
     },
     "groups": {
       "model": "Modell und Verbrauchsanteil",
       "tokens": "Token-Mix",
       "prices": "Preise / 1 Mio. Tokens",
-      "cost": "Kostenanteil"
+      "cost": "Einfluss auf die API-Schätzung"
     },
     "prices": {
       "input": "Eingabe",
@@ -429,7 +429,7 @@
     "cols": {
       "project": "Projektverzeichnis",
       "tokens": "Tokens gesamt",
-      "cost": "Kosten",
+      "cost": "API-Schätzung",
       "composition": "Token-Zusammensetzung",
       "trend": "Täglicher Verlauf",
       "tokens_cost": "Tokens und Kosten",
@@ -453,7 +453,7 @@
       "input": "Eingabe (mit Cache)",
       "cached": "Eingabe aus dem Cache",
       "output": "Ausgabe",
-      "cost": "Kosten",
+      "cost": "API-Schätzung",
       "ascending": "Aufsteigende Reihenfolge",
       "descending": "Absteigende Reihenfolge"
     },
@@ -479,7 +479,7 @@
     "input": "Eingabe",
     "output": "Ausgabe",
     "cached": "Aus dem Cache",
-    "estimated_cost": "Geschätzte Kosten",
+    "estimated_cost": "API-Schätzung",
     "sessions_list": "Sitzungsliste",
     "no_sessions": "Keine Sitzungen für dieses Projekt gefunden.",
     "project_details": "Projektdetails",
@@ -551,7 +551,7 @@
       "cache": "Cache",
       "mode": "Modus",
       "tokens": "Tokens",
-      "cost": "Kosten"
+      "cost": "API-Schätzung"
     },
     "no_data": "Keine Sitzungsprotokolle entsprechen den aktuellen Suchfiltern.",
     "showing_info": "{{count}} Sitzungen",
@@ -563,7 +563,7 @@
     "count_turns_one": "{{count}} Runde",
     "count_turns_other": "{{count}} Runden",
     "day_total_tokens": "Tokens gesamt am Tag",
-    "day_cost": "Tageskosten",
+    "day_cost": "API-Schätzung heute",
     "projects_models": "Projekte und Modelle",
     "time_label": "Zeit: {{time}}",
     "size_label": "Größe: {{size}}",
@@ -581,7 +581,7 @@
     "subagent_count_one": "{{count}} Unteragent",
     "subagent_count_other": "{{count}} Unteragenten",
     "subagent_group": "Unteragentengruppe",
-    "total_cost": "Gesamtkosten",
+    "total_cost": "API-Gesamtschätzung",
     "group_total_cost": "Hauptagent + Unteragenten",
     "open_session": "Sitzung {{title}} öffnen",
     "quota": {
@@ -625,12 +625,12 @@
       "type": "Anfragetyp",
       "tokens": "Tokens",
       "tokens_breakdown": "Aufschlüsselung (Eingabe / Ausgabe / Cache)",
-      "estimated_cost": "Geschätzte Kosten",
+      "estimated_cost": "API-Schätzung",
       "model": "Modellname",
       "duration": "Dauer",
       "total_tokens": "Tokens gesamt",
       "reasoning_tokens": "Schlussfolgern",
-      "cost": "Kosten",
+      "cost": "API-Schätzung",
       "cache": "Cache",
       "tool_calls": "Werkzeugaufrufe",
       "patches": "Patches",
@@ -753,7 +753,7 @@
   },
   "settings": {
     "title": "Einstellungen",
-    "subtitle": "Lokalen App-Zustand und Wiederherstellungsaktionen verwalten.",
+    "subtitle": "Darstellung, Konto, Desktop-Steuerung, Datenquellen und Wartung verwalten.",
     "nav_aria": "Einstellungsbereiche",
     "nav_general": "Allgemein",
     "nav_menu_bar": "Menüleiste / Infobereich",
@@ -776,7 +776,7 @@
     "system_title": "Systemeinstellungen",
     "system_desc": "Die Systemintegration von Codex Pulse verwalten.",
     "launch_at_login_title": "Bei Anmeldung starten",
-    "launch_at_login_desc": "Bei der Anmeldung im Hintergrund starten und über die Menüleiste oder den Infobereich verfügbar bleiben.",
+    "launch_at_login_desc": "Bei der Windows-Anmeldung im Infobereich starten.",
     "toggle_launch_at_login_aria": "Start bei Anmeldung ein-/ausschalten",
     "updates_title": "App-Updates",
     "updates_desc": "Nach Updates suchen und Versionen der Desktop-Anwendung verwalten.",
@@ -810,7 +810,7 @@
     "menu_bar_opt_weekly": "Wochenlimit",
     "menu_bar_opt_monthly": "Monatliches Verbrauchslimit",
     "menu_bar_opt_tokens": "Heutige Tokens gesamt",
-    "menu_bar_opt_cost": "Heutige Kosten",
+    "menu_bar_opt_cost": "API-Schätzung heute",
     "menu_bar_account": "Konto",
     "menu_bar_membership": "Tarif",
     "menu_bar_workspace": "Arbeitsbereich",
@@ -832,7 +832,7 @@
   "trends": {
     "view_label": "Verlaufsansicht",
     "legend_label": "Verlaufsreihen",
-    "view_cost": "Kosten",
+    "view_cost": "API-Schätzung",
     "view_quota": "Kontingent",
     "quota_trend": "Täglicher Kontingentverbrauch",
     "five_hour_usage": "5-Stunden-Verbrauch",
@@ -844,7 +844,7 @@
     "title_tokens": "Token-Verbrauchsverlauf",
     "title_cost": "Verlauf der geschätzten Kosten",
     "tab_tokens": "Tokens",
-    "tab_cost": "Kosten",
+    "tab_cost": "API-Schätzung",
     "title": "Verbrauchsverlauf",
     "description": "Verlauf der gesamten Tokens und Kosten im gewählten Zeitraum nach Kalendertagen.",
     "total_tokens": "Tokens gesamt",
@@ -901,7 +901,7 @@
     "feed_stale": "Ältere Feed-Daten werden angezeigt; eine Aktualisierung ist erforderlich."
   },
   "session_credits": {
-    "estimated_cost": "Geschätzte Kosten",
+    "estimated_cost": "API-Schätzung",
     "setting": "Abgebuchtes Sitzungsguthaben anzeigen",
     "description": "Für jede Sitzung vom Guthaben abgebuchte Beträge abfragen. Enthält Korrekturen und möglicherweise Aktionsguthaben. Daten können verzögert sein.",
     "label": "Guthabenabbuchungen · Sitzungssumme",

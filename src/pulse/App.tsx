@@ -12,7 +12,9 @@ import { LogPanel } from "@/components/log-panel";
 import { ModelsPage } from "@/components/models-page";
 import { MonthlyUsageTable } from "@/components/monthly-usage-table";
 import { ProjectUsageCard } from "@/components/project-usage-card";
-import { SettingsPage } from "@/components/settings-page";
+import { SettingsPage, type SettingsSection } from "@/components/settings-page";
+import { PulseAccountDrawer } from "@/components/pulse-account-drawer";
+import { PulseGettingStarted } from "@/components/pulse-getting-started";
 import { SessionUsageTable } from "@/components/session-usage-table";
 import { SessionDetailModal } from "@/components/session-detail-modal";
 import { ProjectSessionsModal } from "@/components/project-sessions-modal";
@@ -21,19 +23,46 @@ import { useUsageDashboard } from "@/hooks/use-usage-dashboard";
 import { buildMetricCards, getRangeLabel } from "@/lib/usage-dashboard";
 import { getReleaseNotes } from "@/lib/release-notes";
 import type { SessionDetailRow } from "@/lib/api";
-import { Activity, useEffect, useMemo, useRef, useState } from "react";
+import { Activity, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { PulseStyleSwitcher } from "@/components/pulse-appearance-controls";
 import { usePulseCopy } from "@/lib/pulse-copy";
 import { usePulsePreferences } from "@/lib/pulse-appearance";
-import { Sparkles, X, ChevronDown, ChevronUp, AlertTriangle, ArrowLeft, UserRound, Settings2 } from "lucide-react";
+import { useShellCopy } from "@/lib/shell-copy";
+import { invoke } from "@tauri-apps/api/core";
+import { Sparkles, X, ChevronDown, ChevronUp, AlertTriangle, ArrowLeft, UserRound, Settings2, MonitorUp, CircleHelp } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useTranslation } from "react-i18next";
+import "./shell-ux.css";
+
+const QUICK_START_DISMISSED = "codexpulse.quickstart.dismissed.v1";
+function useCompactWindow() {
+  const read = () => window.matchMedia?.("(max-width: 1100px)").matches ?? window.innerWidth <= 1100;
+  const [compact, setCompact] = useState(read);
+  useEffect(() => {
+    const media = window.matchMedia?.("(max-width: 1100px)");
+    const update = () => setCompact(read());
+    media?.addEventListener?.("change", update);
+    window.addEventListener("resize", update);
+    return () => { media?.removeEventListener?.("change", update); window.removeEventListener("resize", update); };
+  }, []);
+  return compact;
+}
 
 export default function App() {
   const { t, i18n } = useTranslation();
   const copy = usePulseCopy();
+  const shellCopy = useShellCopy();
   const preferences = usePulsePreferences();
   const [accountExpanded, setAccountExpanded] = useState(true);
+  const compactWindow = useCompactWindow();
+  const [accountDrawerOpen, setAccountDrawerOpen] = useState(false);
+  const [settingsInitialSection, setSettingsInitialSection] = useState<SettingsSection>("appearance");
+  const [settingsEntry, setSettingsEntry] = useState(0);
+  const [showQuickStart, setShowQuickStart] = useState(() => { try { return localStorage.getItem(QUICK_START_DISMISSED) !== "true"; } catch { return true; } });
+  const [helpExpanded, setHelpExpanded] = useState(false);
+  const [desktopAction, setDesktopAction] = useState<"widget" | "shortcuts" | null>(null);
+  const [desktopNotice, setDesktopNotice] = useState<string | null>(null);
+  const [desktopError, setDesktopError] = useState<string | null>(null);
   const contentScroll = useRef<HTMLDivElement>(null);
   const savedScroll = useRef(0);
   const visitedViews = useRef(new Set<DashboardView>(["dashboard"]));
@@ -72,6 +101,8 @@ export default function App() {
     view,
     range,
     overview,
+    todayOverview,
+    isTodayStale,
     monthlyUsage,
     codexLimits,
     codexLimitsError,
@@ -177,7 +208,7 @@ export default function App() {
     : t("loading.cached_snapshot_desc");
   const awaitingFirstScan = !hasScanned && !overview?.updatedAt;
   const showRecovery = !isLoading && (awaitingFirstScan || !!scanError || !!error || (view === "dashboard" && (!overview || overview.totals.totalTokens === 0)));
-  const showDashboard = !awaitingFirstScan && overview && (overview.totals.totalTokens > 0 || overview.models.length > 0);
+  const showDashboard = !awaitingFirstScan && overview;
   const isInstallingUpdate = updateInstallStatus === "downloading";
   const isUpdateInstalled = updateInstallStatus === "installed";
   const updateButtonLabel = isUpdateInstalled
@@ -189,12 +220,15 @@ export default function App() {
       : t("update.upgrade_now");
 
   visitedViews.current.add(view);
-  useEffect(() => {
-    if (view !== "settings" && savedScroll.current && contentScroll.current) {
-      contentScroll.current.scrollTop = savedScroll.current;
-      savedScroll.current = 0;
+  const previousView = useRef(view);
+  useLayoutEffect(() => {
+    if (contentScroll.current) {
+      if (view === "settings") contentScroll.current.scrollTop = 0;
+      else if (previousView.current === "settings") contentScroll.current.scrollTop = savedScroll.current;
     }
+    previousView.current = view;
   }, [view]);
+  useEffect(() => { if (!compactWindow) setAccountDrawerOpen(false); }, [compactWindow]);
   const navigate = (nextView: DashboardView) => {
     if (nextView === "settings" && view !== "settings") {
       setSettingsReturnView(view);
@@ -208,18 +242,47 @@ export default function App() {
     void handleViewChange(nextView);
   };
 
+  const openSettings = (section: SettingsSection = "appearance") => { setSettingsInitialSection(section); setSettingsEntry(value => value + 1); navigate("settings"); };
+  const showAccount = () => { if (compactWindow) setAccountDrawerOpen(true); else setAccountExpanded(true); };
+  const openHelp = () => { setShowQuickStart(true); setHelpExpanded(true); navigate("dashboard"); savedScroll.current = 0; if (contentScroll.current) contentScroll.current.scrollTop = 0; };
+  const dismissQuickStart = () => { setShowQuickStart(false); setHelpExpanded(false); try { localStorage.setItem(QUICK_START_DISMISSED, "true"); } catch { /* The help remains available without storage. */ } };
+  async function runDesktopAction(action: "widget" | "shortcuts") {
+    if (desktopAction) return;
+    setDesktopError(null); setDesktopNotice(null);
+    if (new URLSearchParams(location.search).get("demo") === "1" && import.meta.env.MODE !== "e2e") { setDesktopNotice(shellCopy("previewNote")); return; }
+    setDesktopAction(action);
+    try {
+      if (action === "widget") { await invoke("widget_action", { action: "show" }); setDesktopNotice(shellCopy("widgetVisible")); }
+      else { await invoke("create_pulse_shortcuts"); setDesktopNotice(shellCopy("shortcutsDone")); }
+    } catch (cause) { setDesktopError(`${shellCopy(action === "widget" ? "widgetError" : "shortcutsError")}: ${cause instanceof Error ? cause.message : String(cause)}`); }
+    finally { setDesktopAction(null); }
+  }
+  const quotaSummary = [codexLimits?.session, codexLimits?.weekly].filter(window => window != null).map(window => `${Math.round(window.remainingPercent)}%`).join(" / ");
+  const accountPanel = <>
+    <div className="pulse-account-identity"><UserRound size={20} aria-hidden="true"/><div><strong>{codexLimits?.account ?? copy("unknown")}</strong><p>{codexLimits?.membershipLevel ?? "—"}{codexLimits?.workspaceName ? ` · ${codexLimits.workspaceName}` : ""}</p></div></div>
+    <CodexSidebarLimits compact={false} limits={codexLimits} error={codexLimitsError} isLimitsRefreshing={isLimitsRefreshing} isWindowActivating={isWindowActivating} windowActivationStatus={windowActivationStatus} windowActivationError={windowActivationError} onRefreshLimits={() => void handleLimitsRefresh()} onActivateWindow={() => void handleActivateCodexWindow()}/>
+    <p className="pulse-source-note">{copy("accountNote")}</p>
+    <button type="button" className="pulse-text-button" onClick={() => { setAccountDrawerOpen(false); navigate("dashboard"); requestAnimationFrame(() => document.getElementById("pulse-account-details")?.scrollIntoView({ block: "start" })); }}>{copy("details")} →</button>
+  </>;
+
   return (
     <div className="pulse-app relative flex h-screen flex-col overflow-hidden bg-background text-foreground">
       <header className="pulse-topbar">
         <div className="pulse-brand"><span className="pulse-brand-mark" aria-hidden="true"><i/><i/><i/></span><strong>Pulse</strong>{document.documentElement.dataset.demo === "true" ? <span className="pulse-demo-label">{copy("sample")}</span> : null}<span className="pulse-page-label">{t(`common.${view === "models" ? "model" : view === "projects" ? "project" : view}`)}</span></div>
-        <div className="pulse-global-actions"><PulseStyleSwitcher/><button type="button" className="pulse-icon-button" aria-label={copy("account")} title={copy("account")} aria-pressed={accountExpanded} onClick={() => setAccountExpanded((value) => !value)}><UserRound size={18}/></button><button type="button" className="pulse-icon-button" aria-label={copy("appearance")} title={t("common.settings")} onClick={() => navigate("settings")}><Settings2 size={18}/></button></div>
+        <div className="pulse-global-actions"><PulseStyleSwitcher/>
+          <button type="button" data-testid="open-widget" className="pulse-shell-action pulse-widget-action" disabled={desktopAction !== null} aria-busy={desktopAction === "widget"} onClick={() => void runDesktopAction("widget")}><MonitorUp size={16}/><span>{shellCopy(desktopAction === "widget" ? "widgetBusy" : preferences.widgetVisible ? "widgetVisible" : "widget")}</span></button>
+          <button type="button" data-testid="account-toggle" className="pulse-shell-action" aria-label={shellCopy("account")} aria-expanded={compactWindow ? accountDrawerOpen : accountExpanded} aria-controls={compactWindow ? "pulse-account-drawer" : "pulse-account-rail"} onClick={() => compactWindow ? setAccountDrawerOpen(true) : setAccountExpanded(value => !value)}><UserRound size={17}/><span>{shellCopy("account")}</span>{compactWindow && quotaSummary ? <small className="pulse-account-summary">{quotaSummary} {shellCopy("remaining")}</small> : null}</button>
+          <button type="button" data-testid="help" className="pulse-shell-action pulse-help-action" onClick={openHelp} aria-label={shellCopy("help")} title={shellCopy("help")}><CircleHelp size={17}/><span>{shellCopy("help")}</span></button>
+          <button type="button" className="pulse-icon-button" aria-label={copy("appearance")} title={t("common.settings")} onClick={() => openSettings()}><Settings2 size={18}/></button>
+        </div>
       </header>
+      {(!showQuickStart || view !== "dashboard") && (desktopError || desktopNotice) ? <p className={`pulse-shell-notice ${desktopError ? "pulse-error" : ""}`} role={desktopError ? "alert" : "status"}>{desktopError ?? desktopNotice}</p> : null}
       <div className="pulse-workspace">
       <div data-tauri-drag-region aria-hidden="true" className="absolute inset-x-0 top-0 z-10 h-[var(--window-controls-height)] select-none" />
       {true ? (
         <AppSidebar
           view={view}
-          onViewChange={navigate}
+          onViewChange={next => next === "settings" ? openSettings() : navigate(next)}
           collapsed={sidebarCollapsed}
           onToggleCollapsed={() => setSidebarCollapsed((collapsed) => !collapsed)}
           width={sidebarWidth}
@@ -406,8 +469,13 @@ export default function App() {
           {visitedViews.current.has("dashboard") ? (
             <Activity mode={view === "dashboard" ? "visible" : "hidden"}>
             <div className="space-y-5">
+              {showQuickStart ? <PulseGettingStarted expanded={helpExpanded} onExpand={() => setHelpExpanded(value => !value)} localReady={!!overview?.updatedAt || diagnostics?.status === "ready"} accountReady={!!codexLimits} source={diagnostics?.codexHome} busy={desktopAction !== null} notice={desktopNotice} error={desktopError} onSource={() => openSettings("source")} onAccount={showAccount} onWidget={() => void runDesktopAction("widget")} onShortcuts={() => void runDesktopAction("shortcuts")} onDismiss={dismissQuickStart}/> : null}
               {showDashboard && overview ? <DashboardHeroCard
                 overview={overview}
+                  todayOverview={todayOverview}
+                  todayUnavailable={!isLoading && !todayOverview}
+                  todayStale={isTodayStale}
+                  onOpenToday={() => { const today = new Intl.DateTimeFormat("sv-SE", { timeZone: todayOverview?.timezone || overview.timezone }).format(new Date()); setSelectedSessionDate(today); void handleRangeChange("1d"); void handleViewChange("sessions"); }}
                 range={range}
                 isBusy={isLoading || isRefreshing || isResetting || isExporting !== null}
                 isExporting={isExporting}
@@ -519,6 +587,8 @@ export default function App() {
 
           {!isLoading && view === "settings" ? (
             <SettingsPage
+              key={settingsEntry}
+              initialSection={settingsInitialSection}
               isResetting={isResetting}
               isDisabled={isLoading || isMonthlyLoading || isRefreshing || isResetting || isExporting !== null}
               onReset={() => void handleReset()}
@@ -570,7 +640,7 @@ export default function App() {
           showSessionCredits={showSessionCredits}
           range={range}
           onSessionClick={setSelectedSession}
-          isActive={view !== "settings" && !selectedSession && !isResetHistoryOpen}
+          isActive={view !== "settings" && !selectedSession && !isResetHistoryOpen && !accountDrawerOpen}
           dataRevision={projectDataRevision}
           onScanComplete={handleLocalScanComplete}
           onClose={() => setSelectedProjectForModal(null)}
@@ -587,7 +657,7 @@ export default function App() {
         <div hidden={view === "settings"} inert={view === "settings"}>
         <SessionDetailModal
           session={selectedSession}
-          isActive={view !== "settings"}
+          isActive={view !== "settings" && !accountDrawerOpen}
           showSessionCredits={showSessionCredits}
           onScanComplete={async (session, previousPath, scan) => {
             setProjectDataRevision((value) => value + 1);
@@ -598,18 +668,16 @@ export default function App() {
         </div>
       )}
       {view !== "settings" && isResetHistoryOpen ? (
-        <CodexResetHistoryModal onClose={() => setIsResetHistoryOpen(false)} />
+        <CodexResetHistoryModal isActive={!accountDrawerOpen} onClose={() => setIsResetHistoryOpen(false)} />
       ) : null}
       </div>
       </div>
-      {accountExpanded && view !== "settings" && view !== "logs" ? <aside className="pulse-account-rail" aria-label={copy("account")}>
+      {!compactWindow && accountExpanded && view !== "settings" && view !== "logs" ? <aside id="pulse-account-rail" className="pulse-account-rail" aria-label={copy("account")}>
         <h2>{copy("account")}</h2>
-        <div className="pulse-account-identity"><UserRound size={20} aria-hidden="true"/><div><strong>{codexLimits?.account ?? copy("unknown")}</strong><p>{codexLimits?.membershipLevel ?? "—"}{codexLimits?.workspaceName ? ` · ${codexLimits.workspaceName}` : ""}</p></div></div>
-        <CodexSidebarLimits compact={false} limits={codexLimits} error={codexLimitsError} isLimitsRefreshing={isLimitsRefreshing} isWindowActivating={isWindowActivating} windowActivationStatus={windowActivationStatus} windowActivationError={windowActivationError} onRefreshLimits={() => void handleLimitsRefresh()} onActivateWindow={() => void handleActivateCodexWindow()}/>
-        <p className="pulse-source-note">{copy("accountNote")}</p>
-        <button type="button" className="pulse-text-button" onClick={() => { navigate("dashboard"); requestAnimationFrame(() => document.getElementById("pulse-account-details")?.scrollIntoView({block:"start"})); }}>{copy("details")} →</button>
+        {accountPanel}
       </aside> : null}
       </div>
+      {compactWindow && accountDrawerOpen ? <PulseAccountDrawer onClose={() => setAccountDrawerOpen(false)}>{accountPanel}</PulseAccountDrawer> : null}
       <footer className="pulse-statusbar"><span>{copy("local")} · {diagnostics?.filesFound ?? "—"} {t("session.file", {defaultValue: "logs"})}</span><span title={diagnostics?.codexHome}>{diagnostics?.runtime ?? "Codex"}</span><span>{overview?.timezone ?? ""}</span><span className="pulse-statusbar-end">{copy("motion")} {copy(preferences.motionLevel)}</span></footer>
     </div>
   );

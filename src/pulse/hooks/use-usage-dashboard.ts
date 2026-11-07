@@ -1259,6 +1259,8 @@ export function useUsageDashboard() {
     view,
     range,
     overview,
+    todayOverview,
+    isTodayStale,
     monthlyUsage,
     codexLimits,
     codexLimitsError,

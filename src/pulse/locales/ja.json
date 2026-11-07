@@ -17,7 +17,7 @@
     "actions": "操作",
     "date": "日付",
     "tokens": "トークン",
-    "cost": "料金",
+    "cost": "API 概算",
     "cache": "キャッシュ",
     "path": "パス",
     "mode": "モード",
@@ -33,7 +33,7 @@
     "quota_monthly": "月間の上限",
     "used": "使用済み {{percent}}%",
     "today": "今日の使用量",
-    "estimated_cost": "推定コスト"
+    "estimated_cost": "API 概算"
   },
   "header": {
     "navigation": "メインナビゲーション",
@@ -94,8 +94,8 @@
     "rescan": "ローカルログを再スキャンする",
     "cache_synced": "キャッシュが同期されました",
     "out_of_sync": "同期が取れていない",
-    "total_cost_label": "総コスト",
-    "cost_drivers": "コスト要因",
+    "total_cost_label": "期間の API 概算",
+    "cost_drivers": "API 概算の内訳",
     "sync_logs_to_cache_desc": "ローカルログをキャッシュに同期する",
     "synced_message": "{{days}}日分を同期（キャッシュ再利用{{reused}}件、解析{{parsed}}件）",
     "resetting_message": "ローカル キャッシュをリセットし、使用状況データを再構築します。",
@@ -226,7 +226,7 @@
       "date": "日付",
       "tokens": "総トークン数",
       "quota": "上限の消費",
-      "cost": "料金",
+      "cost": "API 概算",
       "cache": "キャッシュヒット",
       "actions": "操作"
     },
@@ -259,7 +259,7 @@
       "inputTokens": "入力",
       "cachedInputTokens": "キャッシュされたトークン",
       "outputTokens": "出力",
-      "costUSD": "料金",
+      "costUSD": "API 概算",
       "asc": "昇順",
       "desc": "降順"
     }
@@ -270,7 +270,7 @@
     "cols": {
       "month": "月",
       "tokens": "トークン構成",
-      "cost": "料金",
+      "cost": "API 概算",
       "cache": "キャッシュヒット率"
     },
     "no_data": "月別データはまだありません。",
@@ -302,7 +302,7 @@
       "inputTokens": "入力",
       "cachedInputTokens": "キャッシュされたトークン",
       "outputTokens": "出力",
-      "costUSD": "料金",
+      "costUSD": "API 概算",
       "asc": "昇順",
       "desc": "降順"
     },
@@ -363,11 +363,11 @@
       "no_sample": "帰属できる記録なし"
     },
     "of_usage": "（使用量に占める割合）",
-    "of_cost": "（コストに占める割合）",
+    "of_cost": "API 概算に占める割合",
     "summary": {
       "active_models": "アクティブモデル",
       "total_tokens": "総トークン数",
-      "estimated_cost": "推定コスト",
+      "estimated_cost": "API 概算",
       "cache_hit": "キャッシュヒット率",
       "effective_price": "全体の実効価格 / 100万トークン"
     },
@@ -392,14 +392,14 @@
     "sort": {
       "label": "降順で並べ替え",
       "tokens": "総トークン数",
-      "cost": "推定コスト",
+      "cost": "API 概算",
       "effective": "実効価格"
     },
     "groups": {
       "model": "モデルと使用量のシェア",
       "tokens": "トークンミックス",
       "prices": "価格/100万トークン",
-      "cost": "コストへの影響"
+      "cost": "API 概算への影響"
     },
     "prices": {
       "input": "入力",
@@ -429,7 +429,7 @@
     "cols": {
       "project": "プロジェクトディレクトリ",
       "tokens": "総トークン数",
-      "cost": "料金",
+      "cost": "API 概算",
       "composition": "トークン構成",
       "trend": "日別推移",
       "tokens_cost": "トークンと料金",
@@ -453,7 +453,7 @@
       "input": "入力（キャッシュあり）",
       "cached": "キャッシュされた入力",
       "output": "出力",
-      "cost": "料金",
+      "cost": "API 概算",
       "ascending": "昇順",
       "descending": "降順"
     },
@@ -479,7 +479,7 @@
     "input": "入力",
     "output": "出力",
     "cached": "キャッシュされた",
-    "estimated_cost": "推定コスト",
+    "estimated_cost": "API 概算",
     "sessions_list": "セッションリスト",
     "no_sessions": "このプロジェクトのセッションが見つかりませんでした。",
     "project_details": "プロジェクトの詳細",
@@ -551,7 +551,7 @@
       "cache": "キャッシュ",
       "mode": "モード",
       "tokens": "トークン",
-      "cost": "料金"
+      "cost": "API 概算"
     },
     "no_data": "現在の検索フィルターに一致するセッション ログはありません。",
     "showing_info": "{{count}} セッションを表示しています",
@@ -562,7 +562,7 @@
     "count_sessions_other": "{{count}} セッション",
     "count_turns": "{{count}} ターン",
     "day_total_tokens": "1日の合計トークン数",
-    "day_cost": "1日あたりの費用",
+    "day_cost": "当日の API 概算",
     "projects_models": "プロジェクトとモデル",
     "time_label": "時刻: {{time}}",
     "size_label": "サイズ: {{size}}",
@@ -580,7 +580,7 @@
     "subagent_count_one": "{{count}} サブエージェント",
     "subagent_count_other": "{{count}} サブエージェント",
     "subagent_group": "サブエージェントグループ",
-    "total_cost": "合計料金",
+    "total_cost": "合計 API 概算",
     "group_total_cost": "親子の合計料金",
     "open_session": "セッションを開く {{title}}",
     "quota": {
@@ -624,12 +624,12 @@
       "type": "リクエスト種別",
       "tokens": "トークン",
       "tokens_breakdown": "内訳 (入力 / 出力 / キャッシュ)",
-      "estimated_cost": "推定コスト",
+      "estimated_cost": "API 概算",
       "model": "モデル名",
       "duration": "所要時間",
       "total_tokens": "総トークン数",
       "reasoning_tokens": "推論",
-      "cost": "料金",
+      "cost": "API 概算",
       "cache": "キャッシュ",
       "tool_calls": "ツール呼び出し",
       "patches": "パッチ",
@@ -752,7 +752,7 @@
   },
   "settings": {
     "title": "設定",
-    "subtitle": "ローカルアプリの状態と復旧操作を管理します。",
+    "subtitle": "外観、アカウント、デスクトップ操作、データソース、メンテナンスを管理します。",
     "nav_aria": "設定セクション",
     "nav_general": "一般",
     "nav_menu_bar": "メニューバー / トレイ",
@@ -774,7 +774,7 @@
     "system_title": "システム設定",
     "system_desc": "Codex Pulse とシステムの連携方法を管理します。",
     "launch_at_login_title": "ログイン時に起動",
-    "launch_at_login_desc": "ログイン時にバックグラウンドで起動し、メニュー バーまたはシステム トレイからアプリを利用できるようにします。",
+    "launch_at_login_desc": "Windows へのサインイン時にシステムトレイで起動します。",
     "toggle_launch_at_login_aria": "ログイン時の起動の切り替え",
     "updates_title": "アプリのアップデート",
     "updates_desc": "アップデートを確認し、デスクトップ アプリケーションのバージョンを管理します。",
@@ -808,7 +808,7 @@
     "menu_bar_opt_weekly": "週間制限",
     "menu_bar_opt_monthly": "月間利用制限",
     "menu_bar_opt_tokens": "今日の合計トークン",
-    "menu_bar_opt_cost": "今日の費用",
+    "menu_bar_opt_cost": "当日の API 概算",
     "menu_bar_account": "現在のアカウント",
     "menu_bar_membership": "プラン",
     "menu_bar_workspace": "ワークスペース",
@@ -830,7 +830,7 @@
   "trends": {
     "view_label": "傾向の表示",
     "legend_label": "傾向の凡例",
-    "view_cost": "料金",
+    "view_cost": "API 概算",
     "view_quota": "クォータ",
     "quota_trend": "日別クォータ使用量",
     "five_hour_usage": "5時間の使用量",
@@ -842,7 +842,7 @@
     "title_tokens": "トークンの使用傾向",
     "title_cost": "推定コストの傾向",
     "tab_tokens": "トークン",
-    "tab_cost": "料金",
+    "tab_cost": "API 概算",
     "title": "使用傾向",
     "description": "選択した日付範囲におけるトークン数とコストの推移。",
     "total_tokens": "総トークン数",
@@ -899,7 +899,7 @@
     "feed_stale": "古いフィード情報を表示しています。更新が必要です。"
   },
   "session_credits": {
-    "estimated_cost": "推定費用",
+    "estimated_cost": "API 概算",
     "setting": "セッションの credits 差引額を表示",
     "description": "セッションで credits 残高から差し引かれた数量を取得します。調整や無料 credits を含む場合があり、データが遅れることがあります。",
     "label": "残高差引額 · セッション累計",

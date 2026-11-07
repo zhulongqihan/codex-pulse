@@ -44,12 +44,14 @@ if (!cargoRoot) throw new Error('Run through scripts/build-env.ps1 to locate loc
 for (const index of readdirSync(join(cargoRoot, 'registry/src'))) {
   for (const crate of readdirSync(join(cargoRoot, 'registry/src', index))) {
     if (crate === 'auto-launch-0.6.0') continue; // The locally patched source below is the selected crate.
+    if (crate === 'tauri-plugin-single-instance-2.5.5') continue;
     const directory = join(cargoRoot, 'registry/src', index, crate);
     const manifest = readFileSync(join(directory, 'Cargo.toml'), 'utf8');
     add(`${crate} (Rust)`, directory, manifest.match(/^license\s*=\s*"([^"]+)"/m)?.[1]);
   }
 }
 add('auto-launch-0.6.0 (Rust, Pulse compatibility patch)', join(root, 'src-tauri/vendor/auto-launch'), 'MIT');
+add('tauri-plugin-single-instance-2.5.5 (Rust, profile isolation patch)', join(root, 'src-tauri/vendor/tauri-plugin-single-instance'), 'Apache-2.0 OR MIT');
 sections.sort((a, b) => a.localeCompare(b));
 writeFileSync(join(root, 'THIRD_PARTY_LICENSES.txt'), 'Codex Pulse dependency notices\n\nOriginal license texts from the installed, locked dependency packages.\nThis includes build/test dependencies present in the source distribution.\nCodex Usage Desktop has its own preserved license in vendor/codex-usage-desktop/LICENSE.\n\n' + sections.join('\n\n'));
 console.log(`Collected ${sections.length} dependency notices.`);

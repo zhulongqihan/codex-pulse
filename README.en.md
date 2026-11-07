@@ -8,6 +8,7 @@ Explore local token usage, official account capacity and complete recorded conve
 
 ## Features
 
+- **Today and current capacity first**: today's local activity stays independent of historical filters, alongside account capacity and reset times. The complete-range trend and main usage drivers appear together, with daily detail available when needed.
 - **Six work views:** dashboard, sessions, models, daily, monthly and projects, plus settings and optional diagnostics. Collapse or resize navigation and return from settings to your previous view.
 - **Complete date ranges:** nine presets, all retained history and custom inclusive ranges. Daily averages use calendar days. The monthly view independently queries the current month to date and the previous 11 calendar months, distinguishing missing retention, partial retention and zero activity.
 - **Tokens and reference costs:** input, cached input, output, cache hit rate, model unit prices and a searchable price catalog. Charts provide date selection, legends, units, a data table and fullscreen viewing. Compare models, dates and projects identified by their complete paths.
@@ -25,7 +26,7 @@ Explore local token usage, official account capacity and complete recorded conve
 |---|---|
 | ![Clear with synthetic data](docs/screenshots/clear-overview.png) | ![Meter with synthetic data](docs/screenshots/meter-overview.png) |
 
-Both styles share the same capabilities. Clear uses lightweight horizontal date bars; Meter uses a dark comparison field. Charts retain the entire selected range, with scrolling for longer periods.
+Both styles share the same capabilities. Clear uses lightweight comparisons and continuous tables; Meter emphasizes one dark trend field. The overview fits the selected range, with daily detail, a data table, full screen, and keyboard controls available when needed.
 
 ## Run on Windows
 
@@ -34,7 +35,9 @@ Both styles share the same capabilities. Clear uses lightweight horizontal date 
 3. Requires Windows 10/11 x64 and [Microsoft Edge WebView2 Evergreen Runtime](https://developer.microsoft.com/microsoft-edge/webview2/). The portable archive does not bundle that system runtime. Node.js and Rust are not required.
 4. Confirm your Codex Home in settings, then choose appearance, refresh interval and widget preferences. Account queries require an existing ChatGPT sign-in; API key mode does not expose subscription quotas.
 
-Closing the main window hides it to the tray. Choose **Quit** in the tray menu to exit completely. Check for updates in settings, or exit the app and replace program files with a newer release while keeping `data`.
+To add desktop and Start menu entries, use the app's shortcut action or run **Create-Codex-Pulse-Shortcuts.cmd** from the portable package. Recreate the shortcuts after moving the application directory.
+
+Opening the app again restores the window for the same data folder. Closing the main window hides it to the tray. Choose **Quit** in the tray menu to exit completely. Check for updates in settings, or exit the app and replace program files with a newer release while keeping `data`.
 
 ## Understanding the data
 

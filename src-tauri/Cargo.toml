@@ -1,6 +1,6 @@
 [package]
 name = "codex-pulse"
-version = "0.3.0"
+version = "0.4.0"
 description = "Local-first desktop dashboard for Codex CLI token usage and cost estimates."
 authors = ["zhulongqihan", "vincent (upstream)"]
 license = "MIT"
@@ -48,9 +48,13 @@ objc2 = "0.6.5"
 [target.'cfg(any(target_os = "macos", windows, target_os = "linux"))'.dependencies]
 tauri-plugin-autostart = "2.7.0"
 
+[target."cfg(windows)".dependencies]
+tauri-plugin-single-instance = "=2.5.5"
+
 [features]
 e2e = ["dep:tauri-plugin-wdio", "dep:tauri-plugin-wdio-webdriver"]
 
 [patch.crates-io]
 # Preserve executable paths containing spaces in Windows login startup commands.
 auto-launch = { path = "vendor/auto-launch" }
+tauri-plugin-single-instance = { path = "vendor/tauri-plugin-single-instance" }

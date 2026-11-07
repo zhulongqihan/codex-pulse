@@ -11,6 +11,8 @@ mod exporter;
 mod overview;
 mod pricing;
 mod pulse_desktop;
+mod pulse_shortcuts;
+mod pulse_instance;
 mod pulse_update;
 mod project_sessions;
 mod scanner;
@@ -888,8 +890,10 @@ fn setup_app_menu(app: &mut tauri::App) -> tauri::Result<()> {
 pub fn run() {
     let paths = pulse_desktop::prepare_paths().expect("Cannot prepare portable Codex Pulse data directory");
     let log_directory = paths.logs.clone();
-    let builder = tauri::Builder::default()
-        .plugin(
+    let builder = tauri::Builder::default();
+    #[cfg(windows)]
+    let builder = builder.plugin(pulse_instance::plugin(&paths));
+    let builder = builder.plugin(
             tauri_plugin_log::Builder::new()
                 .targets([
                     tauri_plugin_log::Target::new(tauri_plugin_log::TargetKind::Stdout),
@@ -908,7 +912,7 @@ pub fn run() {
         .plugin(tauri_plugin_wdio_webdriver::init())
         .plugin(tauri_plugin_wdio::init());
 
-    builder
+    let app = builder
         .on_window_event(|window, event| {
             if window.label() == "widget" && matches!(event, tauri::WindowEvent::Resized(_) | tauri::WindowEvent::ScaleFactorChanged { .. }) {
                 let _ = pulse_desktop::keep_widget_visible(window.app_handle());
@@ -991,7 +995,7 @@ pub fn run() {
             tauri::WebviewWindowBuilder::new(app, "main", tauri::WebviewUrl::App("index.html".into()))
                 .title("Codex Pulse").data_directory(paths.profile.clone())
                 .inner_size(1440.0, 960.0).min_inner_size(760.0, 540.0)
-                .visible(!std::env::args().any(|arg| arg == "--hidden"))
+                .visible(!std::env::args().any(|arg| arg == "--hidden" || arg == "--quit"))
                 .build()?;
             pulse_desktop::setup_widget(app, &paths, &preferences)?;
             setup_app_menu(app)?;
@@ -1080,6 +1084,7 @@ pub fn run() {
             pulse_desktop::set_pulse_preferences,
             pulse_desktop::widget_action,
             pulse_desktop::get_pulse_paths,
+            pulse_shortcuts::create_pulse_shortcuts,
             pulse_desktop::open_pulse_data_dir,
             pulse_desktop::get_widget_snapshot,
             pulse_desktop::update_widget_snapshot,
@@ -1120,8 +1125,12 @@ pub fn run() {
             tray_popover::tray_popover_action
         ])
         .build(tauri::generate_context!())
-        .expect("error while building tauri application")
-        .run(|app, event| {
+        .expect("error while building tauri application");
+    if std::env::args().any(|argument| argument == "--quit") {
+        app.cleanup_before_exit();
+        return;
+    }
+    app.run(|app, event| {
             if matches!(event, tauri::RunEvent::Exit) {
                 pulse_desktop::save_widget_position(app);
             }

@@ -17,7 +17,7 @@
     "actions": "操作",
     "date": "日期",
     "tokens": "Tokens",
-    "cost": "成本",
+    "cost": "API 估價",
     "cache": "快取",
     "path": "路徑",
     "mode": "模式",
@@ -33,7 +33,7 @@
     "quota_monthly": "每月額度",
     "used": "已用 {{percent}}%",
     "today": "今日用量",
-    "estimated_cost": "預估成本"
+    "estimated_cost": "API 估價"
   },
   "header": {
     "navigation": "主導覽",
@@ -94,8 +94,8 @@
     "rescan": "重新掃描本地日誌",
     "cache_synced": "快取已同步",
     "out_of_sync": "未同步",
-    "total_cost_label": "總花費",
-    "cost_drivers": "成本分布",
+    "total_cost_label": "期間 API 估價",
+    "cost_drivers": "API 估價分布",
     "sync_logs_to_cache_desc": "同步本地日誌到快取",
     "synced_message": "已同步 {{days}} 天資料 ({{reused}} 個快取，{{parsed}} 個解析)",
     "resetting_message": "正在重置本地快取並重新建立使用資料。",
@@ -226,7 +226,7 @@
       "date": "日期",
       "tokens": "Tokens 消耗",
       "quota": "額度消耗",
-      "cost": "成本",
+      "cost": "API 估價",
       "cache": "快取命中率",
       "actions": "操作"
     },
@@ -259,7 +259,7 @@
       "inputTokens": "輸入",
       "cachedInputTokens": "快取 Token",
       "outputTokens": "輸出",
-      "costUSD": "成本",
+      "costUSD": "API 估價",
       "asc": "升序",
       "desc": "降序"
     }
@@ -270,7 +270,7 @@
     "cols": {
       "month": "月份",
       "tokens": "Token 構成",
-      "cost": "成本",
+      "cost": "API 估價",
       "cache": "快取命中率"
     },
     "no_data": "尚無按月彙整的資料。",
@@ -302,7 +302,7 @@
       "inputTokens": "輸入",
       "cachedInputTokens": "快取 Token",
       "outputTokens": "輸出",
-      "costUSD": "成本",
+      "costUSD": "API 估價",
       "asc": "升序",
       "desc": "降序"
     },
@@ -363,11 +363,11 @@
       "no_sample": "暫無可歸因快照"
     },
     "of_usage": "用量佔比",
-    "of_cost": "成本佔比",
+    "of_cost": "API 估價占比",
     "summary": {
       "active_models": "活躍模型",
       "total_tokens": "總 Token",
-      "estimated_cost": "預估成本",
+      "estimated_cost": "API 估價",
       "cache_hit": "快取命中率",
       "effective_price": "整體有效單價 / 百萬 Token"
     },
@@ -392,14 +392,14 @@
     "sort": {
       "label": "降序排序",
       "tokens": "總 Token",
-      "cost": "預估成本",
+      "cost": "API 估價",
       "effective": "有效單價"
     },
     "groups": {
       "model": "模型與用量佔比",
       "tokens": "Token 構成",
       "prices": "每百萬 Token 單價",
-      "cost": "成本影響"
+      "cost": "API 估價影響"
     },
     "prices": {
       "input": "輸入",
@@ -429,7 +429,7 @@
     "cols": {
       "project": "專案路徑/名稱",
       "tokens": "Tokens 消耗",
-      "cost": "成本",
+      "cost": "API 估價",
       "composition": "Token 構成",
       "trend": "每日趨勢",
       "tokens_cost": "Token 與成本",
@@ -453,7 +453,7 @@
       "input": "輸入（含快取）",
       "cached": "快取輸入",
       "output": "輸出",
-      "cost": "成本",
+      "cost": "API 估價",
       "ascending": "升序排列",
       "descending": "降序排列"
     },
@@ -479,7 +479,7 @@
     "input": "輸入 (Input)",
     "output": "輸出 (Output)",
     "cached": "已快取",
-    "estimated_cost": "預估成本",
+    "estimated_cost": "API 估價",
     "sessions_list": "工作階段明細列表",
     "no_sessions": "該專案下沒有找到工作階段資料。",
     "project_details": "專案詳細資訊",
@@ -551,7 +551,7 @@
       "cache": "快取",
       "mode": "模式",
       "tokens": "Tokens",
-      "cost": "成本"
+      "cost": "API 估價"
     },
     "no_data": "沒有找到符合目前搜尋篩選條件的工作階段記錄。",
     "showing_info": "目前顯示 {{count}} 條工作階段",
@@ -562,7 +562,7 @@
     "count_sessions_other": "{{count}} 個工作階段",
     "count_turns": "{{count}} 回合",
     "day_total_tokens": "單日 Tokens 總數",
-    "day_cost": "單日花費",
+    "day_cost": "當日 API 估價",
     "projects_models": "專案與模型",
     "time_label": "時間: {{time}}",
     "size_label": "大小: {{size}}",
@@ -581,7 +581,7 @@
     "subagent_count_one": "{{count}} 個子 Agent",
     "subagent_count_other": "{{count}} 個子 Agent",
     "subagent_group": "子 Agent 分組",
-    "total_cost": "總費用",
+    "total_cost": "總 API 估價",
     "group_total_cost": "父子總費用",
     "open_session": "開啟工作階段 {{title}}",
     "quota": {
@@ -625,12 +625,12 @@
       "type": "請求類型",
       "tokens": "Token 消耗",
       "tokens_breakdown": "消耗細分 (輸入 / 輸出 / 已快取)",
-      "estimated_cost": "預估成本",
+      "estimated_cost": "API 估價",
       "model": "所用模型",
       "duration": "耗時",
       "total_tokens": "Token 總數",
       "reasoning_tokens": "推理",
-      "cost": "成本",
+      "cost": "API 估價",
       "cache": "快取",
       "tool_calls": "工具呼叫",
       "patches": "修補",
@@ -760,7 +760,7 @@
   },
   "settings": {
     "title": "設定",
-    "subtitle": "管理本地應用程式快取資料和恢復操作。",
+    "subtitle": "管理外觀、帳號、桌面操作、資料來源與維護。",
     "nav_aria": "設定分類",
     "nav_general": "通用",
     "nav_menu_bar": "選單列 / 系統匣",
@@ -782,7 +782,7 @@
     "system_title": "系統設定",
     "system_desc": "管理 Codex Pulse 與系統的整合方式。",
     "launch_at_login_title": "開機自動啟動",
-    "launch_at_login_desc": "登入系統時在背景啟動，並透過選單列或系統匣保持可用。",
+    "launch_at_login_desc": "登入 Windows 時在系統匣中啟動。",
     "toggle_launch_at_login_aria": "切換開機自動啟動",
     "updates_title": "應用程式更新",
     "updates_desc": "檢查新版本並管理桌面用戶端的更新升級。",
@@ -816,7 +816,7 @@
     "menu_bar_opt_weekly": "每週額度限制",
     "menu_bar_opt_monthly": "每月額度限制",
     "menu_bar_opt_tokens": "今日消耗總 Token",
-    "menu_bar_opt_cost": "今日預估成本",
+    "menu_bar_opt_cost": "當日 API 估價",
     "menu_bar_account": "目前帳號",
     "menu_bar_membership": "訂閱類型",
     "menu_bar_workspace": "工作區",
@@ -838,7 +838,7 @@
   "trends": {
     "view_label": "趨勢檢視",
     "legend_label": "趨勢圖例",
-    "view_cost": "費用",
+    "view_cost": "API 估價",
     "view_quota": "額度",
     "quota_trend": "每日額度消耗",
     "five_hour_usage": "5h 消耗",
@@ -850,7 +850,7 @@
     "title_tokens": "Token 消耗趨勢",
     "title_cost": "預估成本趨勢",
     "tab_tokens": "Tokens 消耗",
-    "tab_cost": "預估花費",
+    "tab_cost": "API 估價",
     "title": "使用趨勢",
     "description": "所選日曆日時段內的 Token 消耗與成本變化趨勢。",
     "total_tokens": "Tokens 總計",
@@ -907,7 +907,7 @@
     "feed_stale": "正在顯示舊 Feed 資料，需要重新整理。"
   },
   "session_credits": {
-    "estimated_cost": "估算費用",
+    "estimated_cost": "API 估價",
     "setting": "顯示工作階段 credits 扣除",
     "description": "查詢工作階段從 credits 餘額中扣除的數量。包含餘額調整，可能包含贈送 credits，資料可能延遲。",
     "label": "餘額扣除 · 工作階段累計",

@@ -17,7 +17,7 @@
     "actions": "操作",
     "date": "日期",
     "tokens": "Tokens",
-    "cost": "成本",
+    "cost": "API 估价",
     "cache": "缓存",
     "path": "路径",
     "mode": "模式",
@@ -33,7 +33,7 @@
     "quota_monthly": "每月额度",
     "used": "已用 {{percent}}%",
     "today": "今日用量",
-    "estimated_cost": "预估成本"
+    "estimated_cost": "API 估价"
   },
   "header": {
     "navigation": "主导航",
@@ -94,8 +94,8 @@
     "rescan": "重新扫描本地日志",
     "cache_synced": "缓存已同步",
     "out_of_sync": "未同步",
-    "total_cost_label": "总花费",
-    "cost_drivers": "成本分布",
+    "total_cost_label": "期间 API 估价",
+    "cost_drivers": "API 估价分布",
     "sync_logs_to_cache_desc": "同步本地日志到缓存",
     "synced_message": "已同步 {{days}} 天数据 ({{reused}} 个缓存，{{parsed}} 个解析)",
     "resetting_message": "正在重置本地缓存并重新构建使用数据。",
@@ -226,7 +226,7 @@
       "date": "日期",
       "tokens": "Tokens 消耗",
       "quota": "额度消耗",
-      "cost": "成本",
+      "cost": "API 估价",
       "cache": "缓存命中率",
       "actions": "操作"
     },
@@ -259,7 +259,7 @@
       "inputTokens": "输入",
       "cachedInputTokens": "缓存 Token",
       "outputTokens": "输出",
-      "costUSD": "成本",
+      "costUSD": "API 估价",
       "asc": "升序",
       "desc": "降序"
     }
@@ -270,7 +270,7 @@
     "cols": {
       "month": "月份",
       "tokens": "Token 构成",
-      "cost": "成本",
+      "cost": "API 估价",
       "cache": "缓存命中率"
     },
     "no_data": "尚无按月汇总的数据。",
@@ -302,7 +302,7 @@
       "inputTokens": "输入",
       "cachedInputTokens": "缓存 Token",
       "outputTokens": "输出",
-      "costUSD": "成本",
+      "costUSD": "API 估价",
       "asc": "升序",
       "desc": "降序"
     },
@@ -363,11 +363,11 @@
       "no_sample": "暂无可归因快照"
     },
     "of_usage": "用量占比",
-    "of_cost": "成本占比",
+    "of_cost": "API 估价占比",
     "summary": {
       "active_models": "活跃模型",
       "total_tokens": "总 Token",
-      "estimated_cost": "预估成本",
+      "estimated_cost": "API 估价",
       "cache_hit": "缓存命中率",
       "effective_price": "整体有效单价 / 百万 Token"
     },
@@ -392,14 +392,14 @@
     "sort": {
       "label": "降序排序",
       "tokens": "总 Token",
-      "cost": "预估成本",
+      "cost": "API 估价",
       "effective": "有效单价"
     },
     "groups": {
       "model": "模型与用量占比",
       "tokens": "Token 构成",
       "prices": "每百万 Token 单价",
-      "cost": "成本影响"
+      "cost": "API 估价影响"
     },
     "prices": {
       "input": "输入",
@@ -429,7 +429,7 @@
     "cols": {
       "project": "项目路径/名称",
       "tokens": "Tokens 消耗",
-      "cost": "成本",
+      "cost": "API 估价",
       "composition": "Token 构成",
       "trend": "每日趋势",
       "tokens_cost": "Token 与成本",
@@ -453,7 +453,7 @@
       "input": "输入（含缓存）",
       "cached": "缓存输入",
       "output": "输出",
-      "cost": "成本",
+      "cost": "API 估价",
       "ascending": "升序排列",
       "descending": "降序排列"
     },
@@ -479,7 +479,7 @@
     "input": "输入 (Input)",
     "output": "输出 (Output)",
     "cached": "已缓存",
-    "estimated_cost": "预估成本",
+    "estimated_cost": "API 估价",
     "sessions_list": "会话明细列表",
     "no_sessions": "该项目下没有找到会话数据。",
     "project_details": "项目详情",
@@ -551,7 +551,7 @@
       "cache": "缓存",
       "mode": "模式",
       "tokens": "Tokens",
-      "cost": "成本"
+      "cost": "API 估价"
     },
     "no_data": "没有找到符合当前搜索筛选条件的会话记录。",
     "showing_info": "当前显示 {{count}} 条会话",
@@ -562,7 +562,7 @@
     "count_sessions_other": "{{count}} 个会话",
     "count_turns": "{{count}} 回合",
     "day_total_tokens": "单日 Tokens 总数",
-    "day_cost": "单日花费",
+    "day_cost": "当日 API 估价",
     "projects_models": "项目与模型",
     "time_label": "时间: {{time}}",
     "size_label": "大小: {{size}}",
@@ -581,7 +581,7 @@
     "subagent_count_one": "{{count}} 个子 Agent",
     "subagent_count_other": "{{count}} 个子 Agent",
     "subagent_group": "子 Agent 分组",
-    "total_cost": "总费用",
+    "total_cost": "总 API 估价",
     "group_total_cost": "父子总费用",
     "open_session": "打开会话 {{title}}",
     "quota": {
@@ -625,12 +625,12 @@
       "type": "请求类型",
       "tokens": "Token 消耗",
       "tokens_breakdown": "消耗细分 (输入 / 输出 / 已缓存)",
-      "estimated_cost": "预估成本",
+      "estimated_cost": "API 估价",
       "model": "所用模型",
       "duration": "耗时",
       "total_tokens": "Token 总数",
       "reasoning_tokens": "推理",
-      "cost": "成本",
+      "cost": "API 估价",
       "cache": "缓存",
       "tool_calls": "工具调用",
       "patches": "补丁",
@@ -760,7 +760,7 @@
   },
   "settings": {
     "title": "设置",
-    "subtitle": "管理本地应用缓存数据和恢复操作。",
+    "subtitle": "管理外观、账号、桌面操作、数据来源与维护。",
     "nav_aria": "设置分类",
     "nav_general": "通用",
     "nav_menu_bar": "菜单栏 / 系统托盘",
@@ -782,7 +782,7 @@
     "system_title": "系统设置",
     "system_desc": "管理 Codex Pulse 与系统的集成方式。",
     "launch_at_login_title": "开机自启动",
-    "launch_at_login_desc": "登录系统时在后台启动，并通过菜单栏或系统托盘保持可用。",
+    "launch_at_login_desc": "登录 Windows 时在系统托盘中启动。",
     "toggle_launch_at_login_aria": "切换开机自启动",
     "updates_title": "应用更新",
     "updates_desc": "检查新版本并管理桌面客户端的更新升级。",
@@ -816,7 +816,7 @@
     "menu_bar_opt_weekly": "周度额度限制",
     "menu_bar_opt_monthly": "月度额度限制",
     "menu_bar_opt_tokens": "今日消耗总 Token",
-    "menu_bar_opt_cost": "今日预估成本",
+    "menu_bar_opt_cost": "当日 API 估价",
     "menu_bar_account": "当前账号",
     "menu_bar_membership": "订阅类型",
     "menu_bar_workspace": "工作区",
@@ -838,7 +838,7 @@
   "trends": {
     "view_label": "趋势视图",
     "legend_label": "趋势图例",
-    "view_cost": "费用",
+    "view_cost": "API 估价",
     "view_quota": "额度",
     "quota_trend": "每日额度消耗",
     "five_hour_usage": "5h 消耗",
@@ -850,7 +850,7 @@
     "title_tokens": "Token 消耗趋势",
     "title_cost": "预估成本趋势",
     "tab_tokens": "Tokens 消耗",
-    "tab_cost": "预估花费",
+    "tab_cost": "API 估价",
     "title": "使用趋势",
     "description": "所选自然日窗口内的 Token 消耗与成本变化趋势。",
     "total_tokens": "Tokens 总计",
@@ -907,7 +907,7 @@
     "feed_stale": "正在显示旧 Feed 数据，需要刷新。"
   },
   "session_credits": {
-    "estimated_cost": "估算费用",
+    "estimated_cost": "API 估价",
     "setting": "显示会话 credits 扣除",
     "description": "查询会话从 credits 余额中扣除的数量。包含余额调整，可能包含赠送 credits，数据可能延迟。",
     "label": "余额扣除 · 会话累计",

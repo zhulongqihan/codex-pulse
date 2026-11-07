@@ -385,7 +385,7 @@ export function SessionUsageTable({
       const timer = setTimeout(() => {
         const element = document.getElementById(`date-group-${initialExpandedDate}`);
         if (element) {
-          element.scrollIntoView({ behavior: "smooth", block: "start" });
+          element.scrollIntoView({ behavior: document.documentElement.dataset.motion === "off" ? "instant" : "smooth", block: "start" });
         }
       }, 100);
       return () => clearTimeout(timer);

@@ -35,7 +35,7 @@ describe("explicit browser-only demo transport", () => {
     installDemoBridge();
     expect(await state.callback!("fetch_overview", { range: "1d" })).toMatchObject({ days: 1, timezone: "Asia/Shanghai" });
     expect(await state.callback!("fetch_codex_limits")).toMatchObject({ account: "demo@example.invalid", creditsIsMock: true });
-    for (const command of ["activate_codex_window", "download_and_install_update", "open_pulse_data_dir", "configure_codex_home", "reveal_in_file_manager", "plugin:autostart|enable"]) {
+    for (const command of ["activate_codex_window", "download_and_install_update", "open_pulse_data_dir", "configure_codex_home", "reveal_in_file_manager", "plugin:autostart|enable", "create_pulse_shortcuts"]) {
       await expect(state.callback!(command)).rejects.toThrow("desktop app only");
     }
     await expect(state.callback!("open_url", { url: "https://chatgpt.com/backend-api/" })).rejects.toThrow("desktop app only");

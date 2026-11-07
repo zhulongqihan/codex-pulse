@@ -1,11 +1,12 @@
 // @vitest-environment jsdom
 
-import { render, screen, within } from "@testing-library/react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import i18n from "../i18n";
 import type { CodexLimitsResponse, OverviewResponse } from "../lib/api";
 import { DashboardHeroCard } from "./dashboard-hero-card";
+import { currentDateInTimezone } from "../lib/trend-buckets";
 
 const overview: OverviewResponse = {
   range: "30d", days: 30, timezone: "UTC", startDate: "2026-10-01", endDate: "2026-10-30", updatedAt: null,
@@ -102,6 +103,43 @@ describe("Dashboard cost distribution", () => {
     expect(within(region).getByText("$0.00")).toBeInTheDocument();
     expect(region.querySelector(".pulse-rank-row small")).toHaveTextContent("—");
     expect(region).not.toHaveTextContent("NaN");
+  });
+});
+
+describe("stable today and separate period",()=>{
+  beforeEach(async()=>{await i18n.changeLanguage("en");});
+  const row=(date:string,totalTokens:number,costUSD:number|null)=>({date,inputTokens:totalTokens,cachedInputTokens:0,outputTokens:0,totalTokens,costUSD});
+  const today=()=>currentDateInTimezone("UTC");
+  it("keeps today's 77 independent of a 9,999 period and historical hover, then restores the selected day",async()=>{
+    const user=userEvent.setup();const date=today();const oneDay={...overview,range:"1d",days:1,startDate:date,endDate:date,daily:[row(date,77,null)],totals:{...overview.totals,totalTokens:77,costUSD:null}};
+    const range={...overview,daily:[row("2020-01-01",9999,10),row(date,77,1)],totals:{...overview.totals,totalTokens:9999,costUSD:10}};
+    render(<DashboardHeroCard overview={range} todayOverview={oneDay} range="30d" isBusy={false} isExporting={null} onRangeChange={vi.fn()} onExport={vi.fn()} metrics={[]} codexLimits={null}/>);
+    expect(screen.getByTestId("today-tokens")).toHaveTextContent("77");expect(screen.getByTestId("today-estimate")).toHaveTextContent("—");expect(screen.getByTestId("range-summary")).toHaveTextContent("9,999");
+    const historical=screen.getByRole("button",{name:/2020-01-01 · Tokens/});fireEvent.mouseEnter(historical);
+    expect(screen.getByTestId("trend-inspector")).toHaveTextContent("Preview");expect(screen.getByTestId("trend-inspector")).toHaveTextContent("9,999");expect(screen.getByTestId("today-tokens")).toHaveTextContent("77");
+    fireEvent.mouseLeave(historical.closest(".pulse-chart-scroll")!);expect(screen.getByTestId("trend-inspector")).toHaveTextContent(date);expect(screen.getByTestId("trend-inspector")).toHaveTextContent("77");
+    await user.click(historical);fireEvent.mouseLeave(historical.closest(".pulse-chart-scroll")!);expect(historical).toHaveAttribute("aria-pressed","true");
+    await user.click(screen.getByRole("button",{name:"Back to today"}));expect(screen.getByTestId("trend-inspector")).toHaveTextContent(date);expect(screen.getByTestId("today-tokens")).toHaveTextContent("77");
+  });
+  it("keeps unavailable and yesterday-only readings unknown, while a confirmed zero remains zero",()=>{
+    const range={...overview,totals:{...overview.totals,totalTokens:9999}};
+    const {rerender}=render(hero(null,range));expect(screen.getByTestId("today-tokens")).toHaveTextContent("—");
+    const snapshot={...overview,daily:[row("2000-01-01",10,1)]};
+    const props={overview:range,range:"30d",isBusy:false,isExporting:null,onRangeChange:vi.fn(),onExport:vi.fn(),metrics:[],codexLimits:null};
+    rerender(<DashboardHeroCard {...props} todayOverview={snapshot}/>);expect(screen.getByTestId("today-tokens")).toHaveTextContent("—");
+    rerender(<DashboardHeroCard {...props} todayOverview={{...snapshot,daily:[row(today(),0,0)]}} todayStale/>);expect(screen.getByTestId("today-tokens")).toHaveTextContent("0");expect(screen.getByTestId("today-estimate")).toHaveTextContent("$0.00");expect(screen.getByTestId("today-summary")).toHaveTextContent("Showing the last successful reading");
+  });
+  it("does not relabel a retained snapshot as today after midnight in another source timezone",()=>{
+    vi.useFakeTimers();let cleanup=()=>{};
+    try {
+      vi.setSystemTime(new Date("2026-11-07T00:15:00Z"));
+      const snapshot={...overview,timezone:"America/Los_Angeles",daily:[row("2026-11-06",77,1)]};
+      const props={overview,range:"30d",isBusy:false,isExporting:null,onRangeChange:vi.fn(),onExport:vi.fn(),metrics:[],codexLimits:null};
+      const rendered=render(<DashboardHeroCard {...props} todayOverview={snapshot}/>);cleanup=rendered.unmount;
+      expect(screen.getByTestId("today-tokens")).toHaveTextContent("77");expect(screen.getByTestId("today-summary")).toHaveTextContent("2026-11-06");
+      rendered.rerender(<DashboardHeroCard {...props} todayOverview={{...snapshot,timezone:"Asia/Shanghai"}}/>);
+      expect(screen.getByTestId("today-summary")).toHaveTextContent("2026-11-07");expect(screen.getByTestId("today-tokens")).toHaveTextContent("—");
+    } finally {cleanup();vi.useRealTimers();}
   });
 });
 

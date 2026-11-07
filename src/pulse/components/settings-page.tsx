@@ -1,6 +1,8 @@
 import { PulseAppearanceSettings, PulseWidgetSettings } from "./pulse-appearance-controls";
 import { PulseSourceSettings } from "./pulse-source-settings";
 import { usePulseCopy } from "@/lib/pulse-copy";
+import { useShellCopy } from "@/lib/shell-copy";
+import { quotaWindowLabel } from "@/lib/quota-windows";
 import { RotateCcw, Sparkles, RefreshCw, CheckCircle, ArrowUpRight, RotateCw, AlertTriangle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -14,7 +16,7 @@ import {
 import { hasSubscription } from "./codex-limits-card";
 import tauriConfig from "../../../src-tauri/tauri.conf.json";
 import { Trans, useTranslation } from "react-i18next";
-import { useMemo, useState } from "react";
+import { useLayoutEffect, useMemo, useRef, useState } from "react";
 import { getReleaseNotes } from "@/lib/release-notes";
 import { getLanguage, languageCodes, languages } from "@/lib/languages";
 import type { TrayCountdownUnits } from "@/lib/tray-format";
@@ -27,6 +29,7 @@ import {
 } from "@/components/ui/select";
 
 type SettingsPageProps = {
+  initialSection?: SettingsSection;
   isResetting: boolean;
   isDisabled: boolean;
   onReset: () => void;
@@ -69,11 +72,12 @@ const TRAY_OPTION_KEYS = {
   cost: "cost",
 } as const;
 
-type SettingsSection = "appearance" | "source" | "general" | "menuBar" | "maintenance" | "third_party";
+export type SettingsSection = "appearance" | "source" | "general" | "menuBar" | "maintenance" | "third_party";
 
 const SETTINGS_SECTIONS: SettingsSection[] = ["appearance", "general", "source", "menuBar", "maintenance", "third_party"];
 
 export function SettingsPage({
+  initialSection = "appearance",
   isResetting,
   isDisabled,
   onReset,
@@ -106,7 +110,11 @@ export function SettingsPage({
 }: SettingsPageProps) {
   const { t, i18n } = useTranslation();
   const copy = usePulseCopy();
-  const [activeSection, setActiveSection] = useState<SettingsSection>("appearance");
+  const shellCopy = useShellCopy();
+  const [activeSection, setActiveSection] = useState<SettingsSection>(initialSection);
+  const container = useRef<HTMLDivElement>(null);
+  const isMac = document.documentElement.dataset.platform === "macos";
+  useLayoutEffect(() => { const scroll = container.current?.closest<HTMLElement>(".pulse-main-scroll"); if (scroll) scroll.scrollTop = 0; }, [activeSection]);
   const isRateLimitError = !!(
     updateInfo?.releaseNotes?.includes("GitHub API rate limit exceeded") ||
     updateInfo?.releaseNotes?.includes("GitHub API 访问受限")
@@ -143,7 +151,7 @@ export function SettingsPage({
 
   const renderSectionTab = (section: SettingsSection) => {
     const selected = activeSection === section;
-    const label = section === "appearance" || section === "source" ? copy(section) : t(`settings.nav_${section === "menuBar" ? "menu_bar" : section}`);
+    const label = section === "menuBar" ? shellCopy("tray") : section === "appearance" || section === "source" ? copy(section) : t(`settings.nav_${section}`);
     const sectionId = `settings-section-${section}`;
 
     return (
@@ -154,9 +162,19 @@ export function SettingsPage({
         id={`settings-tab-${section}`}
         aria-selected={selected}
         aria-controls={sectionId}
+        tabIndex={selected ? 0 : -1}
+        onKeyDown={event => {
+          const index = SETTINGS_SECTIONS.indexOf(section);
+          const next = event.key === "Home" ? 0 : event.key === "End" ? SETTINGS_SECTIONS.length - 1
+            : event.key === "ArrowRight" || event.key === "ArrowDown" ? (index + 1) % SETTINGS_SECTIONS.length
+            : event.key === "ArrowLeft" || event.key === "ArrowUp" ? (index + SETTINGS_SECTIONS.length - 1) % SETTINGS_SECTIONS.length : null;
+          if (next === null) return;
+          event.preventDefault();
+          setActiveSection(SETTINGS_SECTIONS[next]);
+          document.getElementById(`settings-tab-${SETTINGS_SECTIONS[next]}`)?.focus({ preventScroll: true });
+        }}
         onClick={() => {
           setActiveSection(section);
-          document.getElementById(sectionId)?.scrollIntoView?.({ block: "start", behavior: document.documentElement.dataset.motion === "off" ? "instant" : "smooth" });
         }}
         className={`min-w-0 whitespace-normal break-words rounded-md px-3 py-2 text-left text-sm font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 focus:ring-offset-background ${
           selected
@@ -428,12 +446,12 @@ export function SettingsPage({
     <PulseWidgetSettings/>
     <Card>
       <CardHeader>
-        <CardTitle>{t("settings.menu_bar_title")}</CardTitle>
-        <CardDescription>{t("settings.menu_bar_desc")}</CardDescription>
+        <CardTitle>{isMac ? t("settings.menu_bar_title") : shellCopy("trayTitle")}</CardTitle>
+        <CardDescription>{isMac ? t("settings.menu_bar_desc") : shellCopy("trayDescription")}</CardDescription>
       </CardHeader>
       <CardContent className="space-y-6">
         <div className="border-t border-border pt-5 space-y-4">
-          <h4 className="text-sm font-medium text-foreground">{t("settings.menu_bar_show_title")}</h4>
+          <h4 className="text-sm font-medium text-foreground">{isMac ? t("settings.menu_bar_show_title") : shellCopy("trayValues")}</h4>
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             {optionKeys.map((key) => (
               <label key={`title-${key}`} className="flex items-center gap-3 cursor-pointer">
@@ -445,8 +463,8 @@ export function SettingsPage({
                   className="h-4 w-4 rounded border-border bg-neutral-800 text-indigo-600 focus:ring-indigo-500 focus:ring-offset-background disabled:opacity-50"
                 />
                 <span className="text-sm text-muted-foreground hover:text-foreground transition-colors">
-                  {key === "limitWeekly" && !hasSub
-                    ? t("settings.menu_bar_opt_monthly")
+                  {key === "limitWeekly"
+                    ? codexLimits?.weekly ? quotaWindowLabel(codexLimits.weekly, t) : shellCopy("longWindow")
                     : t(`settings.menu_bar_opt_${TRAY_OPTION_KEYS[key]}`)}
                 </span>
               </label>
@@ -456,9 +474,9 @@ export function SettingsPage({
 
         <div className="border-t border-border pt-5 space-y-4">
           <div className="space-y-1">
-            <h4 className="text-sm font-medium text-foreground">{t("settings.menu_bar_format_title")}</h4>
+            <h4 className="text-sm font-medium text-foreground">{isMac ? t("settings.menu_bar_format_title") : shellCopy("formatTitle")}</h4>
             <p className="text-sm leading-6 text-muted-foreground">
-              {t("settings.menu_bar_format_desc")}
+              {isMac ? t("settings.menu_bar_format_desc") : shellCopy("formatDescription")}
             </p>
           </div>
           <div className="space-y-4">
@@ -498,8 +516,8 @@ export function SettingsPage({
                   className="h-4 w-4 rounded border-border bg-neutral-800 text-indigo-600 focus:ring-indigo-500 focus:ring-offset-background disabled:opacity-50"
                 />
                 <span className="text-sm text-muted-foreground hover:text-foreground transition-colors">
-                  {key === "limitWeekly" && !hasSub
-                    ? t("settings.menu_bar_opt_monthly")
+                  {key === "limitWeekly"
+                    ? codexLimits?.weekly ? quotaWindowLabel(codexLimits.weekly, t) : shellCopy("longWindow")
                     : t(`settings.menu_bar_opt_${TRAY_OPTION_KEYS[key]}`)}
                 </span>
               </label>
@@ -531,55 +549,57 @@ export function SettingsPage({
   );
 
   return (
-    <div className="max-w-5xl space-y-4">
+    <div ref={container} className="max-w-5xl space-y-4">
       <div className="space-y-1">
         <h1 className="text-2xl font-semibold tracking-tight text-foreground">{t("settings.title")}</h1>
         <p className="text-sm text-muted-foreground">{t("settings.subtitle")}</p>
       </div>
       {operationError ? <p role="alert" className="pulse-error border border-error/20 bg-error/5 p-3">{operationError}</p> : null}
 
-      <div className="grid gap-4 lg:grid-cols-[180px_minmax(0,1fr)]">
+      <div className="pulse-settings-layout">
         <div
           role="tablist"
           aria-label={t("settings.nav_aria")}
-          className="flex gap-2 overflow-x-auto rounded-lg border border-border bg-card p-2 lg:sticky lg:top-4 lg:flex-col lg:self-start lg:overflow-visible"
+          className="pulse-settings-tabs"
         >
           {SETTINGS_SECTIONS.map(renderSectionTab)}
         </div>
 
         <div
-          role="tabpanel"
           id="settings-panel"
-          aria-label={t("settings.title")}
           className="space-y-4"
         >
-          <section id="settings-section-appearance" aria-labelledby="settings-tab-appearance" className="scroll-mt-4"><PulseAppearanceSettings/></section>
+          <section role="tabpanel" hidden={activeSection !== "appearance"} id="settings-section-appearance" aria-labelledby="settings-tab-appearance" className="pulse-settings-tab-panel"><PulseAppearanceSettings/></section>
           <section
             id="settings-section-general"
+            role="tabpanel" hidden={activeSection !== "general"}
             aria-labelledby="settings-tab-general"
-            className="scroll-mt-4 space-y-4"
+            className="pulse-settings-tab-panel space-y-4"
           >
             {generalContent}
           </section>
           <section
             id="settings-section-menuBar"
+            role="tabpanel" hidden={activeSection !== "menuBar"}
             aria-labelledby="settings-tab-menuBar"
-            className="scroll-mt-4"
+            className="pulse-settings-tab-panel"
           >
             {menuBarContent}
           </section>
-          <section id="settings-section-source" aria-labelledby="settings-tab-source" className="scroll-mt-4"><PulseSourceSettings diagnostics={diagnostics} onChoose={onChooseSource} onDetect={onDetectSource} busy={isDisabled}/></section>
+          <section role="tabpanel" hidden={activeSection !== "source"} id="settings-section-source" aria-labelledby="settings-tab-source" className="pulse-settings-tab-panel"><PulseSourceSettings diagnostics={diagnostics} onChoose={onChooseSource} onDetect={onDetectSource} busy={isDisabled}/></section>
           <section
             id="settings-section-maintenance"
+            role="tabpanel" hidden={activeSection !== "maintenance"}
             aria-labelledby="settings-tab-maintenance"
-            className="scroll-mt-4 space-y-4"
+            className="pulse-settings-tab-panel space-y-4"
           >
             {maintenanceContent}
           </section>
           <section
             id="settings-section-third_party"
+            role="tabpanel" hidden={activeSection !== "third_party"}
             aria-labelledby="settings-tab-third_party"
-            className="scroll-mt-4"
+            className="pulse-settings-tab-panel"
           >
             <Card>
               <CardHeader>

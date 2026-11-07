@@ -365,7 +365,7 @@ function ResetHistoryContent({ resets }: { resets: CodexResetAnnouncement[] }) {
   );
 }
 
-export function CodexResetHistoryModal({ onClose }: { onClose: () => void }) {
+export function CodexResetHistoryModal({ onClose, isActive = true }: { onClose: () => void; isActive?: boolean }) {
   const { t } = useTranslation();
   const [resets, setResets] = useState<CodexResetAnnouncement[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -373,12 +373,13 @@ export function CodexResetHistoryModal({ onClose }: { onClose: () => void }) {
   const requestRef = useRef<Promise<CodexResetAnnouncement[]> | null>(null);
 
   useEffect(() => {
+    if (!isActive) return;
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") onClose();
     };
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [onClose]);
+  }, [onClose, isActive]);
 
   useEffect(() => {
     let active = true;

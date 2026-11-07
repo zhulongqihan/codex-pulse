@@ -646,9 +646,9 @@ describe("session titles", () => {
     expect(within(larger).getByTestId("token-total")).toHaveTextContent("200");
     expect(within(smaller).getByTestId("session-cost")).toHaveTextContent("$0.001");
     expect(within(larger).getByTestId("session-cost")).toHaveTextContent("$0.004");
-    expect(within(smaller).getByText("Cost")).toBeInTheDocument();
-    expect(i18n.t("sessions.cols.cost", { lng: "zh" })).toBe("成本");
-    expect(i18n.t("sessions.cols.cost", { lng: "ja" })).toBe("料金");
+    expect(within(smaller).getByText("API estimate")).toBeInTheDocument();
+    expect(i18n.t("sessions.cols.cost", { lng: "zh" })).toBe("API 估价");
+    expect(i18n.t("sessions.cols.cost", { lng: "ja" })).toBe("API 概算");
     expect(within(smaller).getByTestId("token-total").querySelector<HTMLElement>("[aria-hidden='true']")).toHaveStyle({ width: "50%" });
     expect(within(larger).getByTestId("token-total").querySelector<HTMLElement>("[aria-hidden='true']")).toHaveStyle({ width: "100%" });
     expect(within(smaller).getByTestId("session-cost")).toHaveAttribute("data-cost-tone", "low");
@@ -1092,7 +1092,7 @@ describe("session titles", () => {
     resolveDetail(replayDetail({ summary: { ...replayDetail({}).summary, inputTokens: 250, outputTokens: 75, costUSD: null } }));
     await waitFor(() => expect(within(summary).getByText("Input tokens").parentElement).toHaveTextContent("250"));
     expect(within(summary).getByText("Output tokens").parentElement).toHaveTextContent("75");
-    expect(within(summary).getByText("Cost").parentElement).toHaveTextContent("—");
+    expect(within(summary).getByText("API estimate").parentElement).toHaveTextContent("—");
   });
 
   it("navigates to turn edges by scrolling only the replay viewport", async () => {

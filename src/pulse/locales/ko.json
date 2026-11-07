@@ -17,7 +17,7 @@
     "actions": "작업",
     "date": "날짜",
     "tokens": "토큰",
-    "cost": "비용",
+    "cost": "API 추정 비용",
     "cache": "캐시",
     "path": "경로",
     "mode": "모드",
@@ -33,7 +33,7 @@
     "quota_monthly": "월간 한도",
     "used": "사용 {{percent}}%",
     "today": "오늘 사용량",
-    "estimated_cost": "예상 비용"
+    "estimated_cost": "API 추정 비용"
   },
   "header": {
     "navigation": "주 탐색 메뉴",
@@ -94,8 +94,8 @@
     "rescan": "로컬 로그 다시 스캔",
     "cache_synced": "캐시 동기화됨",
     "out_of_sync": "동기화 필요",
-    "total_cost_label": "총비용",
-    "cost_drivers": "비용 발생 요인",
+    "total_cost_label": "기간 API 추정 비용",
+    "cost_drivers": "API 추정 비용 분포",
     "sync_logs_to_cache_desc": "로컬 로그를 캐시에 동기화합니다",
     "synced_message": "{{days}}일 동기화 완료 (캐시 {{reused}}개, 분석 {{parsed}}개)",
     "resetting_message": "로컬 캐시를 초기화하고 사용량 데이터를 다시 구성하고 있습니다.",
@@ -226,7 +226,7 @@
       "date": "날짜",
       "tokens": "총 토큰",
       "quota": "한도 사용량",
-      "cost": "비용",
+      "cost": "API 추정 비용",
       "cache": "캐시 적중률",
       "actions": "작업"
     },
@@ -259,7 +259,7 @@
       "inputTokens": "입력",
       "cachedInputTokens": "캐시된 토큰",
       "outputTokens": "출력",
-      "costUSD": "비용",
+      "costUSD": "API 추정 비용",
       "asc": "오름차순",
       "desc": "내림차순"
     }
@@ -270,7 +270,7 @@
     "cols": {
       "month": "월",
       "tokens": "토큰 구성",
-      "cost": "비용",
+      "cost": "API 추정 비용",
       "cache": "캐시 적중률"
     },
     "no_data": "아직 누적된 월별 데이터가 없습니다.",
@@ -302,7 +302,7 @@
       "inputTokens": "입력",
       "cachedInputTokens": "캐시된 토큰",
       "outputTokens": "출력",
-      "costUSD": "비용",
+      "costUSD": "API 추정 비용",
       "asc": "오름차순",
       "desc": "내림차순"
     },
@@ -363,11 +363,11 @@
       "no_sample": "모델을 특정할 수 있는 스냅샷 없음"
     },
     "of_usage": "사용량 비중",
-    "of_cost": "비용 비중",
+    "of_cost": "API 추정 비용 비율",
     "summary": {
       "active_models": "사용한 모델",
       "total_tokens": "총 토큰",
-      "estimated_cost": "추정 비용",
+      "estimated_cost": "API 추정 비용",
       "cache_hit": "캐시 적중률",
       "effective_price": "전체 실효 요금 / 100만 토큰"
     },
@@ -392,14 +392,14 @@
     "sort": {
       "label": "내림차순 정렬",
       "tokens": "총 토큰",
-      "cost": "추정 비용",
+      "cost": "API 추정 비용",
       "effective": "실효 요금"
     },
     "groups": {
       "model": "모델 및 사용량 비중",
       "tokens": "토큰 구성",
       "prices": "요금 / 100만 토큰",
-      "cost": "비용 비중"
+      "cost": "API 추정 비용 영향"
     },
     "prices": {
       "input": "입력",
@@ -429,7 +429,7 @@
     "cols": {
       "project": "프로젝트 폴더",
       "tokens": "총 토큰",
-      "cost": "비용",
+      "cost": "API 추정 비용",
       "composition": "토큰 구성",
       "trend": "일별 추이",
       "tokens_cost": "토큰 및 비용",
@@ -453,7 +453,7 @@
       "input": "입력 (캐시 포함)",
       "cached": "캐시된 입력",
       "output": "출력",
-      "cost": "비용",
+      "cost": "API 추정 비용",
       "ascending": "오름차순",
       "descending": "내림차순"
     },
@@ -479,7 +479,7 @@
     "input": "입력",
     "output": "출력",
     "cached": "캐시됨",
-    "estimated_cost": "추정 비용",
+    "estimated_cost": "API 추정 비용",
     "sessions_list": "세션 목록",
     "no_sessions": "이 프로젝트의 세션이 없습니다.",
     "project_details": "프로젝트 상세",
@@ -551,7 +551,7 @@
       "cache": "캐시",
       "mode": "모드",
       "tokens": "토큰",
-      "cost": "비용"
+      "cost": "API 추정 비용"
     },
     "no_data": "현재 검색 필터에 맞는 세션 로그가 없습니다.",
     "showing_info": "세션 {{count}}개 표시",
@@ -563,7 +563,7 @@
     "count_turns_one": "{{count}}턴",
     "count_turns_other": "{{count}}턴",
     "day_total_tokens": "일일 총 토큰",
-    "day_cost": "일일 비용",
+    "day_cost": "당일 API 추정 비용",
     "projects_models": "프로젝트 및 모델",
     "time_label": "시간: {{time}}",
     "size_label": "크기: {{size}}",
@@ -581,7 +581,7 @@
     "subagent_count_one": "하위 에이전트 {{count}}개",
     "subagent_count_other": "하위 에이전트 {{count}}개",
     "subagent_group": "하위 에이전트 그룹",
-    "total_cost": "총비용",
+    "total_cost": "총 API 추정 비용",
     "group_total_cost": "상위 + 하위 에이전트",
     "open_session": "{{title}} 세션 열기",
     "quota": {
@@ -625,12 +625,12 @@
       "type": "요청 유형",
       "tokens": "토큰",
       "tokens_breakdown": "구성 (입력 / 출력 / 캐시)",
-      "estimated_cost": "추정 비용",
+      "estimated_cost": "API 추정 비용",
       "model": "모델 이름",
       "duration": "소요 시간",
       "total_tokens": "총 토큰",
       "reasoning_tokens": "추론",
-      "cost": "비용",
+      "cost": "API 추정 비용",
       "cache": "캐시",
       "tool_calls": "도구 호출",
       "patches": "패치",
@@ -753,7 +753,7 @@
   },
   "settings": {
     "title": "설정",
-    "subtitle": "로컬 앱 상태와 복구 작업을 관리합니다.",
+    "subtitle": "외관, 계정, 데스크톱 동작, 데이터 소스 및 유지 관리를 설정합니다.",
     "nav_aria": "설정 항목",
     "nav_general": "일반",
     "nav_menu_bar": "메뉴 막대 / 시스템 트레이",
@@ -776,7 +776,7 @@
     "system_title": "시스템 설정",
     "system_desc": "Codex Pulse의 시스템 연동 방식을 관리합니다.",
     "launch_at_login_title": "로그인 시 실행",
-    "launch_at_login_desc": "로그인하면 백그라운드에서 시작하여 메뉴 막대 또는 시스템 트레이에서 앱을 사용할 수 있습니다.",
+    "launch_at_login_desc": "Windows 로그인 시 시스템 트레이에서 시작합니다.",
     "toggle_launch_at_login_aria": "로그인 시 실행 전환",
     "updates_title": "앱 업데이트",
     "updates_desc": "업데이트를 확인하고 데스크톱 앱 버전을 관리합니다.",
@@ -810,7 +810,7 @@
     "menu_bar_opt_weekly": "주간 한도",
     "menu_bar_opt_monthly": "월간 사용 한도",
     "menu_bar_opt_tokens": "오늘의 총 토큰",
-    "menu_bar_opt_cost": "오늘의 비용",
+    "menu_bar_opt_cost": "당일 API 추정 비용",
     "menu_bar_account": "계정",
     "menu_bar_membership": "요금제",
     "menu_bar_workspace": "작업 공간",
@@ -832,7 +832,7 @@
   "trends": {
     "view_label": "추이 보기",
     "legend_label": "추이 범례",
-    "view_cost": "비용",
+    "view_cost": "API 추정 비용",
     "view_quota": "한도",
     "quota_trend": "일별 한도 사용량",
     "five_hour_usage": "5시간 사용량",
@@ -844,7 +844,7 @@
     "title_tokens": "토큰 사용량 추이",
     "title_cost": "추정 비용 추이",
     "tab_tokens": "토큰",
-    "tab_cost": "비용",
+    "tab_cost": "API 추정 비용",
     "title": "사용량 추이",
     "description": "선택한 날짜 범위의 총 토큰과 비용 변화를 표시합니다.",
     "total_tokens": "총 토큰",
@@ -901,7 +901,7 @@
     "feed_stale": "이전 피드 데이터를 표시하고 있습니다. 새로고침이 필요합니다."
   },
   "session_credits": {
-    "estimated_cost": "예상 비용",
+    "estimated_cost": "API 추정 비용",
     "setting": "세션 credits 차감 표시",
     "description": "세션에서 credits 잔액에서 차감된 수량을 조회합니다. 조정 및 무료 credits가 포함될 수 있으며 데이터가 지연될 수 있습니다.",
     "label": "잔액 차감 · 세션 누적",

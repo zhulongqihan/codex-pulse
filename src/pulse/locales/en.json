@@ -17,7 +17,7 @@
     "actions": "Actions",
     "date": "Date",
     "tokens": "Tokens",
-    "cost": "Cost",
+    "cost": "API estimate",
     "cache": "Cache",
     "path": "Path",
     "mode": "Mode",
@@ -33,7 +33,7 @@
     "quota_monthly": "Monthly quota",
     "used": "Used {{percent}}%",
     "today": "Today’s usage",
-    "estimated_cost": "Estimated cost"
+    "estimated_cost": "API estimate"
   },
   "header": {
     "navigation": "Main navigation",
@@ -94,8 +94,8 @@
     "rescan": "Rescan local logs",
     "cache_synced": "Cache Synced",
     "out_of_sync": "Out of Sync",
-    "total_cost_label": "Total cost",
-    "cost_drivers": "Cost Drivers",
+    "total_cost_label": "Period API estimate",
+    "cost_drivers": "API estimate distribution",
     "sync_logs_to_cache_desc": "Sync local logs to cache",
     "synced_message": "Synced {{days}} days ({{reused}} cached, {{parsed}} parsed)",
     "resetting_message": "Resetting local cache and rebuilding usage data.",
@@ -226,7 +226,7 @@
       "date": "Date",
       "tokens": "Total Tokens",
       "quota": "Quota Used",
-      "cost": "Cost",
+      "cost": "API estimate",
       "cache": "Cache Hit",
       "actions": "Actions"
     },
@@ -259,7 +259,7 @@
       "inputTokens": "Input",
       "cachedInputTokens": "Cached tokens",
       "outputTokens": "Output",
-      "costUSD": "Cost",
+      "costUSD": "API estimate",
       "asc": "Ascending",
       "desc": "Descending"
     }
@@ -270,7 +270,7 @@
     "cols": {
       "month": "Month",
       "tokens": "Token Composition",
-      "cost": "Cost",
+      "cost": "API estimate",
       "cache": "Cache Hit Rate"
     },
     "no_data": "No monthly data accumulated yet.",
@@ -302,7 +302,7 @@
       "inputTokens": "Input",
       "cachedInputTokens": "Cached tokens",
       "outputTokens": "Output",
-      "costUSD": "Cost",
+      "costUSD": "API estimate",
       "asc": "Ascending",
       "desc": "Descending"
     },
@@ -363,11 +363,11 @@
       "no_sample": "No attributable snapshots"
     },
     "of_usage": "of usage",
-    "of_cost": "of cost",
+    "of_cost": "of API estimate",
     "summary": {
       "active_models": "Active models",
       "total_tokens": "Total tokens",
-      "estimated_cost": "Estimated cost",
+      "estimated_cost": "API estimate",
       "cache_hit": "Cache hit rate",
       "effective_price": "Overall effective price / 1M"
     },
@@ -392,14 +392,14 @@
     "sort": {
       "label": "Sort descending",
       "tokens": "Total tokens",
-      "cost": "Estimated cost",
+      "cost": "API estimate",
       "effective": "Effective price"
     },
     "groups": {
       "model": "Model & usage share",
       "tokens": "Token mix",
       "prices": "Prices / 1M tokens",
-      "cost": "Cost impact"
+      "cost": "API estimate impact"
     },
     "prices": {
       "input": "Input",
@@ -429,7 +429,7 @@
     "cols": {
       "project": "Project Directory",
       "tokens": "Total Tokens",
-      "cost": "Cost",
+      "cost": "API estimate",
       "composition": "Token composition",
       "trend": "Daily trend",
       "tokens_cost": "Tokens and cost",
@@ -453,7 +453,7 @@
       "input": "Input (with cache)",
       "cached": "Cached input",
       "output": "Output",
-      "cost": "Cost",
+      "cost": "API estimate",
       "ascending": "Ascending order",
       "descending": "Descending order"
     },
@@ -479,7 +479,7 @@
     "input": "Input",
     "output": "Output",
     "cached": "Cached",
-    "estimated_cost": "Estimated Cost",
+    "estimated_cost": "API estimate",
     "sessions_list": "Sessions List",
     "no_sessions": "No sessions found for this project.",
     "project_details": "Project Details",
@@ -551,7 +551,7 @@
       "cache": "Cache",
       "mode": "Mode",
       "tokens": "Tokens",
-      "cost": "Cost"
+      "cost": "API estimate"
     },
     "no_data": "No session logs match the current search filters.",
     "showing_info": "Showing {{count}} sessions",
@@ -563,7 +563,7 @@
     "count_turns_one": "{{count}} turn",
     "count_turns_other": "{{count}} turns",
     "day_total_tokens": "Day Total Tokens",
-    "day_cost": "Day Cost",
+    "day_cost": "Today’s API estimate",
     "projects_models": "Projects & Models",
     "time_label": "Time: {{time}}",
     "size_label": "Size: {{size}}",
@@ -581,7 +581,7 @@
     "subagent_count_one": "{{count}} subagent",
     "subagent_count_other": "{{count}} subagents",
     "subagent_group": "Subagent group",
-    "total_cost": "Total cost",
+    "total_cost": "Total API estimate",
     "group_total_cost": "Parent + subagents",
     "open_session": "Open session {{title}}",
     "quota": {
@@ -625,12 +625,12 @@
       "type": "Request Type",
       "tokens": "Tokens",
       "tokens_breakdown": "Breakdown (Input / Output / Cached)",
-      "estimated_cost": "Estimated Cost",
+      "estimated_cost": "API estimate",
       "model": "Model Name",
       "duration": "Duration",
       "total_tokens": "Total tokens",
       "reasoning_tokens": "Reasoning",
-      "cost": "Cost",
+      "cost": "API estimate",
       "cache": "Cache",
       "tool_calls": "Tool calls",
       "patches": "Patches",
@@ -753,7 +753,7 @@
   },
   "settings": {
     "title": "Settings",
-    "subtitle": "Manage local app state and recovery actions.",
+    "subtitle": "Appearance, account, desktop controls, data sources and maintenance.",
     "nav_aria": "Settings sections",
     "nav_general": "General",
     "nav_menu_bar": "Menu Bar / System Tray",
@@ -776,7 +776,7 @@
     "system_title": "System Settings",
     "system_desc": "Manage how Codex Pulse integrates with your system.",
     "launch_at_login_title": "Launch at Login",
-    "launch_at_login_desc": "Start in the background when you log in and keep the app available from the menu bar or system tray.",
+    "launch_at_login_desc": "Start in the Windows system tray when you sign in.",
     "toggle_launch_at_login_aria": "Toggle Launch at Login",
     "updates_title": "App Updates",
     "updates_desc": "Check for updates and manage desktop application versions.",
@@ -810,7 +810,7 @@
     "menu_bar_opt_weekly": "Weekly Limit",
     "menu_bar_opt_monthly": "Monthly usage limit",
     "menu_bar_opt_tokens": "Today's Total Tokens",
-    "menu_bar_opt_cost": "Today's Cost",
+    "menu_bar_opt_cost": "Today’s API estimate",
     "menu_bar_account": "Account",
     "menu_bar_membership": "Plan",
     "menu_bar_workspace": "Workspace",
@@ -832,7 +832,7 @@
   "trends": {
     "view_label": "Trend view",
     "legend_label": "Trend series",
-    "view_cost": "Cost",
+    "view_cost": "API estimate",
     "view_quota": "Quota",
     "quota_trend": "Daily quota consumption",
     "five_hour_usage": "5h usage",
@@ -844,7 +844,7 @@
     "title_tokens": "Token Usage Trends",
     "title_cost": "Estimated Cost Trends",
     "tab_tokens": "Tokens",
-    "tab_cost": "Cost",
+    "tab_cost": "API estimate",
     "title": "Usage Trends",
     "description": "Total token and cost movement across the selected natural-day window.",
     "total_tokens": "Total Tokens",
@@ -901,7 +901,7 @@
     "feed_stale": "Showing older feed data; it needs refreshing."
   },
   "session_credits": {
-    "estimated_cost": "Estimated cost",
+    "estimated_cost": "API estimate",
     "setting": "Show session credits debited",
     "description": "Query credits debited from the balance for each session. Includes adjustments and may include promotional credits. Data may be delayed.",
     "label": "Balance debits · session total",

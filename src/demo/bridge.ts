@@ -1,6 +1,7 @@
 import { isTauri } from "@tauri-apps/api/core";
 import { emit } from "@tauri-apps/api/event";
 import { mockIPC, mockWindows } from "@tauri-apps/api/mocks";
+import appManifest from "../../package.json";
 import type { TrayPopoverData } from "../pulse/lib/tray-popover";
 import type { PulsePreferences } from "../pulse/lib/pulse-appearance";
 import { account, catalog, forecast, monthly, now, overview, projectAnalytics, projectDaySessions, projectSessionDays, replay, resets, retainedFrom, sessions, today } from "./fixtures";
@@ -75,7 +76,7 @@ export function installDemoBridge() {
         return { identity: "synthetic-demo-only", requestStatus: null, retryAt: null,
           rows: scope?.active && scope.revision === args.revision ? (args.threads ?? []).filter((row: { threadId: string }) => sessions.some(session => session.threadId === row.threadId)).map((row: { threadId: string }) => ({ threadId: row.threadId, dataStatus: "available", balanceUsageCredits: "1.250001", usageSource: "synthetic-demo", dataAsOf: stamp(), fetchedAt: stamp(), stale: false, isMock: true })) : [] };
       }
-      case "check_for_updates": return { hasUpdate: false, currentVersion: "0.3.0", latestVersion: "0.3.0", latestTag: "v0.3.0", releaseName: "Codex Pulse", releaseNotes: "Browser demonstration: update checks are disabled.", releaseUrl: "https://github.com/zhulongqihan/codex-pulse/releases", etag: null, notModified: false };
+      case "check_for_updates": return { hasUpdate: false, currentVersion: appManifest.version, latestVersion: appManifest.version, latestTag: `v${appManifest.version}`, releaseName: "Codex Pulse", releaseNotes: "Browser demonstration: update checks are disabled.", releaseUrl: "https://github.com/zhulongqihan/codex-pulse/releases", etag: null, notModified: false };
       case "set_background_refresh_interval": case "reset_usage_state": return null;
       case "plugin:autostart|is_enabled": return false;
       case "plugin:dialog|save": return args.options?.defaultPath ?? "CodexPulse-demo.md";
@@ -90,6 +91,7 @@ export function installDemoBridge() {
         if (url.protocol !== "https:" || url.hostname !== "github.com") return unavailable();
         window.open(url.href, "_blank", "noopener,noreferrer"); return null;
       }
+      case "create_pulse_shortcuts":
       case "widget_action": case "tray_popover_action": case "activate_codex_window": case "download_and_install_update": case "restart_app":
       case "open_pulse_data_dir": case "reveal_in_file_manager": case "configure_codex_home": case "schedule_cache_rebuild":
       case "plugin:autostart|enable": case "plugin:autostart|disable": return unavailable();

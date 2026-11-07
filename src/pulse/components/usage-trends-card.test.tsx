@@ -56,4 +56,15 @@ describe("Pulse full-range trends",()=>{
     const user=userEvent.setup();render(<UsageTrendsCard daily={daily} metrics={[]} cacheHitRate={.2}/>);await user.click(screen.getByRole("button",{name:"Show data table"}));const rows=within(screen.getByRole("table")).getAllByRole("row");expect(rows).toHaveLength(4);expect(rows[2]).toHaveTextContent("2026-10-26");expect(rows[2]).toHaveTextContent("—");
   });
   it("rounds a common scale instead of normalizing every bar",()=>{expect(niceScale(150)).toBe(200);expect(niceScale(2_400_000)).toBe(2_500_000);expect(niceScale(0)).toBe(1);});
+  it("fits a complete long period through declared groups and restores all daily records on demand",async()=>{
+    const user=userEvent.setup();const days=Array.from({length:365},(_,index)=>({...daily[0],date:new Date(Date.UTC(2025,0,index+1)).toISOString().slice(0,10)}));
+    const {container}=render(<UsageTrendsCard daily={days} metrics={[]} cacheHitRate={.2}/>);
+    expect(container.querySelectorAll(".pulse-trend-day").length).toBeLessThanOrEqual(60);expect(screen.getByText("Grouped into up to 7 days per point")).toBeInTheDocument();expect(container.querySelector(".pulse-chart-caption")).toHaveTextContent("2025-01-01 — 2025-12-31");
+    await user.click(screen.getByRole("button",{name:"Day by day"}));expect(container.querySelectorAll(".pulse-trend-day")).toHaveLength(365);expect(screen.queryByText("Grouped into up to 7 days per point")).not.toBeInTheDocument();
+    await user.click(screen.getByRole("button",{name:"Show data table"}));expect(within(screen.getByRole("table")).getAllByRole("row")).toHaveLength(366);
+  });
+  it("renders a point for a one-day overview and preserves a total-only token observation",()=>{
+    const {container}=render(<UsageTrendsCard daily={[{...daily[0],inputTokens:0,cachedInputTokens:0,outputTokens:0,totalTokens:130}]} metrics={[]} cacheHitRate={0}/>);
+    expect(container.querySelector("circle.pulse-line-aggregate")).not.toBeNull();expect(screen.getByText("Some records only provide a token total")).toBeInTheDocument();expect(screen.getByTestId("trend-inspector")).toHaveTextContent("130");
+  });
 });
