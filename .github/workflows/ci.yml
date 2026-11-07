@@ -38,6 +38,11 @@ jobs:
         run: New-Item -ItemType Directory -Force $env:TEMP,$env:CARGO_HOME,$env:CARGO_TARGET_DIR | Out-Null
       - name: Set up pnpm
         run: npm install --global pnpm@10.20.0
+      - name: Check versions and public source boundaries
+        run: |
+          pnpm version:check
+          pnpm source:check
+          pnpm test:tooling
       - name: Set up Rust
         run: |
           rustup toolchain install 1.94.1 --profile minimal

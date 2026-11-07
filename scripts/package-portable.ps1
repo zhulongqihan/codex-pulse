@@ -2,6 +2,8 @@ param([switch]$SkipBuild)
 $ErrorActionPreference = 'Stop'
 . (Join-Path $PSScriptRoot 'build-env.ps1')
 Set-Location $pulseRoot
+node (Join-Path $PSScriptRoot 'version.mjs') check
+if ($LASTEXITCODE -ne 0) { throw 'Application versions do not agree' }
 if (!$SkipBuild) {
   pnpm exec tauri build --no-bundle
   if ($LASTEXITCODE -ne 0) { throw 'Native build failed' }
@@ -10,6 +12,8 @@ $manifest = Get-Content -LiteralPath (Join-Path $pulseRoot 'package.json') -Raw 
 $version = $manifest.version
 $binary = Join-Path $env:CARGO_TARGET_DIR 'release/codex-pulse.exe'
 if (!(Test-Path -LiteralPath $binary)) { throw 'Release executable is missing' }
+$binaryVersion = [Diagnostics.FileVersionInfo]::GetVersionInfo($binary).ProductVersion
+if ($binaryVersion -ne $version) { throw "Release executable version '$binaryVersion' does not match '$version'; rebuild before packaging" }
 $release = Join-Path $pulseRoot 'release'
 $staging = Join-Path $release "CodexPulse-$version-windows-x64"
 New-Item -ItemType Directory -Force -Path $staging | Out-Null

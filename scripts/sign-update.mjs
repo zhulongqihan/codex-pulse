@@ -1,6 +1,7 @@
 import { generateKeyPairSync, createPublicKey, createPrivateKey, sign, createHash } from 'node:crypto';
 import { mkdirSync, existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { resolve, dirname } from 'node:path';
+import { checkVersions } from './version.mjs';
 
 const root = resolve(import.meta.dirname, '..');
 const keyPath = process.env.PULSE_SIGNING_KEY_FILE || resolve(root, '.local/signing/update-private.pem');
@@ -14,6 +15,7 @@ if (process.argv.includes('--init')) {
   writeFileSync(resolve(root, 'src-tauri/update-public-key.bin'), publicKey);
   console.log('Update verification public key saved; signing private key stays local.');
 } else {
+  checkVersions(root);
   const executable = process.argv[2];
   const notesPath = process.argv[3];
   if (!executable || !notesPath) throw new Error('Usage: node scripts/sign-update.mjs <exe> <release-notes.md>');
