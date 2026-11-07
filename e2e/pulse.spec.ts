@@ -100,6 +100,8 @@ describe('Pulse native parity', () => {
 
   it('remains operable at a narrow window and in dark compact mode', async () => {
     await browser.setWindowSize(1000, 780);
+    const accountToggle = $('.pulse-global-actions > button[aria-pressed]');
+    if (await accountToggle.getAttribute('aria-pressed') === 'true') await accountToggle.click();
     for (const skinId of ['clear', 'meter']) {
       await invoke('set_pulse_preferences', { patch: { skinId, theme: 'dark', compactMode: true, motionLevel: 'off' } });
       await $('[data-testid="daily-nav-tab"]').click();
@@ -108,6 +110,12 @@ describe('Pulse native parity', () => {
       await $('[data-testid="sessions-nav-tab"]').click();
       await $('[data-testid="session-card"]').click();
       await $('#session-compact-navigation').waitForDisplayed();
+      expect(await browser.execute(() => {
+        const button = document.querySelector('#session-compact-navigation button:last-child')!;
+        const box = button.getBoundingClientRect();
+        const hit = document.elementFromPoint(box.x + box.width / 2, box.y + box.height / 2);
+        return hit === button || button.contains(hit);
+      })).toBe(true);
       const turnCount = await browser.execute(() => document.querySelectorAll('#session-turn-selector option').length);
       expect(turnCount).toBeGreaterThan(0);
       await $('#session-turn-selector').selectByIndex(turnCount - 1);
