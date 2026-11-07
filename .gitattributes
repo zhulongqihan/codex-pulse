@@ -7,5 +7,6 @@
 *.md text eol=lf
 *.html text eol=lf
 *.cmd text eol=crlf
+*.patch text eol=lf
 THIRD_PARTY_LICENSES.txt -whitespace
 src-tauri/vendor/** -whitespace
