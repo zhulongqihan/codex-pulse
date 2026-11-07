@@ -1,0 +1,13 @@
+diff --git a/build/index.js b/build/index.js
+index 43954f0a991816bcaa75c04be483ae96a257a4a8..82b8dd9f66f72f5691502c3278937f9b044e69b7 100644
+--- a/build/index.js
++++ b/build/index.js
+@@ -657,7 +657,7 @@ ${chalk.red(error.stack || error.message)}`);
+   }
+   getFilenames(specs = []) {
+     if (specs.length > 0) {
+-      return "- " + specs.join(", ").replace(new RegExp(`${process.cwd()}`, "g"), "");
++      return "- " + specs.join(", ").split(process.cwd()).join("");
+     }
+     return "";
+   }

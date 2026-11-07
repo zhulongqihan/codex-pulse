@@ -1,21 +1,24 @@
 # Third-party notices
 
-## Feature inspiration
+## Reused source
 
-Codex Pulse uses its own implementation and visual identity. These projects informed the combination of a small usage companion and a detailed local dashboard; they are acknowledged as inspiration, not vendored source code:
+Codex Pulse has its own visual identity and portable distribution. Its Rust domain engine, orchestration, typed contracts, replay components, translations and regression tests are adapted from **Codex Usage Desktop 5.6.0**, MIT, Copyright (c) 2026 vincent. The imported commit is `1e8d2a2bae8ed466b0a48a37eb16f936629aa9c0`. The original license is preserved in [vendor/codex-usage-desktop/LICENSE](vendor/codex-usage-desktop/LICENSE); adapted source resides in `src-tauri/`, `src/pulse/`, and `e2e/`.
+
+The compact desktop companion was also informed by the following project:
 
 | Project | License and copyright | Reference reviewed |
 |---|---|---|
 | [asetho/ChatGPT-Usage](https://github.com/asetho/ChatGPT-Usage) | MIT; Copyright (c) 2026 asetho™ | [v1.0.33 LICENSE](https://github.com/asetho/ChatGPT-Usage/blob/v1.0.33/LICENSE) |
-| [itvincent-git/codex-usage-desktop](https://github.com/itvincent-git/codex-usage-desktop) | MIT; Copyright (c) 2026 vincent | [app-v5.6.0 LICENSE](https://github.com/itvincent-git/codex-usage-desktop/blob/app-v5.6.0/LICENSE) |
 
-If a future contribution incorporates substantial source from another project, it must add the applicable original copyright and license text here before distribution. Acknowledgment alone does not satisfy a copied code's license conditions.
+Additional source reuse must retain the applicable original copyright and license text. Acknowledgment alone does not satisfy copied code's license conditions.
 
 ## Dependencies
 
-Electron, Chromium, Node.js, React, Vite, and other dependencies are distributed under their respective licenses. Release packaging must preserve their accompanying license and notice files. The root MIT license covers Codex Pulse's own code; it does not relicense third-party software.
+Tauri, React, Rust crates, JavaScript packages and bundled KaTeX fonts are distributed under their respective licenses. The root MIT license covers Codex Pulse's own code; it does not relicense third-party software. Microsoft WebView2 is supplied separately under Microsoft's terms.
 
-The renderer bundles React 19.3.1, React DOM 19.3.1, Scheduler 0.28.0 (MIT), and Lucide React 1.69.0 (ISC). Their original license texts are collected in [THIRD_PARTY_LICENSES.txt](THIRD_PARTY_LICENSES.txt), which is copied into the portable distribution. If these dependencies change, regenerate that file from the versions in the lockfile. Electron's accompanying `LICENSE` and `LICENSES.chromium.html` remain separate and must also be retained.
+Available original dependency license texts are collected in [THIRD_PARTY_LICENSES.txt](THIRD_PARTY_LICENSES.txt), which accompanies the portable distribution. Regenerate it when dependencies change. [Source attribution](vendor/codex-usage-desktop/NOTICE.md) records the imported baseline.
+
+The MIT-licensed [`auto-launch` 0.6.0 source](src-tauri/vendor/auto-launch) is included with a small Windows executable-path quoting fix. Its original license and [patch description](src-tauri/vendor/auto-launch/PATCHES.md) accompany the source.
 
 ## Names and artwork
 

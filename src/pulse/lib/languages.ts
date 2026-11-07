@@ -1,0 +1,33 @@
+import { de, enUS, ja, ko, zhCN, zhTW } from "date-fns/locale";
+import deTranslations from "@/locales/de.json";
+import en from "@/locales/en.json";
+import jaTranslations from "@/locales/ja.json";
+import koTranslations from "@/locales/ko.json";
+import zh from "@/locales/zh.json";
+import zhHant from "@/locales/zh-Hant.json";
+
+export const languages = {
+  en: { name: "English", translations: en, dateLocale: enUS, intlLocale: "en-US", systemLocales: ["en"] },
+  zh: { name: "简体中文", translations: zh, dateLocale: zhCN, intlLocale: "zh-CN", systemLocales: ["zh-CN", "zh-SG", "zh-Hans"] },
+  "zh-Hant": { name: "繁體中文", translations: zhHant, dateLocale: zhTW, intlLocale: "zh-TW", systemLocales: ["zh-Hant", "zh-TW", "zh-HK", "zh-MO"] },
+  ja: { name: "日本語", translations: jaTranslations, dateLocale: ja, intlLocale: "ja-JP", systemLocales: ["ja"] },
+  ko: { name: "한국어", translations: koTranslations, dateLocale: ko, intlLocale: "ko-KR", systemLocales: ["ko"] },
+  de: { name: "Deutsch", translations: deTranslations, dateLocale: de, intlLocale: "de-DE", systemLocales: ["de"] },
+} as const;
+
+export type Language = keyof typeof languages;
+export const languageCodes = Object.keys(languages) as Language[];
+
+export function findLanguage(locale: string): Language | undefined {
+  const normalized = locale.toLowerCase();
+  return languageCodes.find((code) =>
+    normalized === code.toLowerCase() || languages[code].systemLocales.some((systemLocale) => {
+      const supported = systemLocale.toLowerCase();
+      return normalized === supported || normalized.startsWith(`${supported}-`);
+    }),
+  );
+}
+
+export function getLanguage(locale: string): Language {
+  return findLanguage(locale) ?? "en";
+}

@@ -1,0 +1,1361 @@
+import { useCodexForecast } from "@/hooks/use-codex-forecast";
+import { open, save } from "@tauri-apps/plugin-dialog";
+import { disable as disableAutostart, enable as enableAutostart, isEnabled as isAutostartEnabled } from "@tauri-apps/plugin-autostart";
+import { listen } from "@tauri-apps/api/event";
+import { useEffect, useEffectEvent, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
+import {
+  activateCodexWindow,
+  exportUsage,
+  fetchCodexLimits,
+  fetchLatestCodexReset,
+  fetchCodexResetHistory,
+  fetchMonthlyUsage,
+  fetchOverview,
+  resetUsageState,
+  type CodexLimitsResponse,
+  type CodexResetAnnouncement,
+  type ExportFormat,
+  type MonthlyUsageResponse,
+  type OverviewResponse,
+  type RangeKey,
+  checkForUpdates,
+  downloadAndInstallUpdate,
+  openUrl,
+  restartApp,
+  type UpdateCheckResponse,
+  type UpdateDownloadProgress,
+  fetchSessionDetails,
+  type CodexLimitWindow,
+  type CodexWindowActivationStatus,
+  type SessionDetailRow,
+  updateTray,
+  updateWidgetSnapshot,
+  getPulsePaths,
+  type TrayMenuItemDto,
+  scanUsage,
+  fetchUsageDiagnostics,
+  configureCodexHome,
+  type UsageDiagnostics,
+  setBackgroundRefreshInterval,
+  type UsageRefreshResponse,
+  type ScanResponse,
+} from "@/lib/api";
+import { formatCurrency, formatCurrencyShort, formatNumber } from "@/lib/formatters";
+import type { TrayQuotaIndicator, TrayMetricIndicator } from "@/lib/tray-icon";
+import type { TrayPopoverData } from "@/lib/tray-popover";
+import { quotaWindowKind, quotaWindowLabel } from "@/lib/quota-windows";
+import { REFRESH_MINUTES } from "@/lib/legacy-preferences";
+import type { DashboardView } from "@/components/dashboard-header";
+import { getExportDialogOptions, getExportFileName, getRangeLabel } from "@/lib/usage-dashboard";
+import tauriConfig from "../../../src-tauri/tauri.conf.json";
+import { formatResetTime, RECENT_RESET_OVERVIEW_DAYS } from "@/components/codex-limits-card";
+import {
+  DEFAULT_TRAY_COUNTDOWN_UNITS,
+  formatCompactResetCountdown,
+  formatTrayLimitTitle,
+  formatTrayTokens,
+  type TrayCountdownUnits,
+} from "@/lib/tray-format";
+
+function isNewerVersion(current: string, target: string): boolean {
+  const parse = (v: string) => {
+    const cleaned = v.replace(/^(app-v|v)/, "");
+    const parts = cleaned.split(".").map(p => parseInt(p, 10));
+    return parts.length >= 3 ? parts.slice(0, 3) : [0, 0, 0];
+  };
+  const [cMaj, cMin, cPat] = parse(current);
+  const [tMaj, tMin, tPat] = parse(target);
+  if (tMaj !== cMaj) return tMaj > cMaj;
+  if (tMin !== cMin) return tMin > cMin;
+  return tPat > cPat;
+}
+
+export const AUTO_REFRESH_INTERVAL_OPTIONS = REFRESH_MINUTES;
+export type AutoRefreshIntervalMinutes = (typeof AUTO_REFRESH_INTERVAL_OPTIONS)[number];
+const DEFAULT_AUTO_REFRESH_INTERVAL_MINUTES: AutoRefreshIntervalMinutes = 5;
+const UPDATE_CHECK_INTERVAL_MS = 24 * 60 * 60_000;
+const UPDATE_CHECK_RETRY_MS = 60 * 60_000;
+const CHATGPT_USAGE_URL = "https://chatgpt.com/#settings/Usage";
+
+function hasExpiredLimitWindow(window: CodexLimitWindow | null | undefined): boolean {
+  if (!window?.resetsAt) return false;
+
+  const resetTime = new Date(window.resetsAt).getTime();
+  return Number.isFinite(resetTime) && resetTime <= Date.now();
+}
+
+function hasExpiredCodexLimitWindow(limits: CodexLimitsResponse | null): boolean {
+  return hasExpiredLimitWindow(limits?.session) || hasExpiredLimitWindow(limits?.weekly);
+}
+
+export type UpdateInstallStatus = "idle" | "downloading" | "installed";
+
+export type UpdateProgressState = {
+  downloaded: number;
+  total: number | null;
+  percent: number | null;
+  finished: boolean;
+};
+
+type ScanMessage = {
+  key: string;
+  values?: Record<string, string | number>;
+};
+
+const emptyUpdateProgress: UpdateProgressState = {
+  downloaded: 0,
+  total: null,
+  percent: null,
+  finished: false,
+};
+
+function toUpdateProgressState(progress: UpdateDownloadProgress): UpdateProgressState {
+  const total = typeof progress.total === "number" && progress.total > 0 ? progress.total : null;
+  const percent = total === null
+    ? null
+    : Math.max(0, Math.min(100, Math.round((progress.downloaded / total) * 100)));
+
+  return {
+    downloaded: progress.downloaded,
+    total,
+    percent,
+    finished: progress.finished,
+  };
+}
+
+export function useUsageDashboard() {
+  const { t, i18n } = useTranslation();
+  const [view, setView] = useState<DashboardView>("dashboard");
+  const [range, setRange] = useState<RangeKey>("30d");
+  const [overview, setOverview] = useState<OverviewResponse | null>(null);
+  // The tray/widget always describe today, even while the workspace reads a historical range.
+  const [todayOverview, setTodayOverview] = useState<OverviewResponse | null>(null);
+  const [isTodayStale, setIsTodayStale] = useState(false);
+  const [monthlyUsage, setMonthlyUsage] = useState<MonthlyUsageResponse | null>(null);
+  const [codexLimits, setCodexLimits] = useState<CodexLimitsResponse | null>(null);
+  const [codexLimitsError, setCodexLimitsError] = useState<string | null>(null);
+  const [isLimitsRefreshing, setIsLimitsRefreshing] = useState(false);
+  const [isWindowActivating, setIsWindowActivating] = useState(false);
+  const [windowActivationStatus, setWindowActivationStatus] = useState<CodexWindowActivationStatus | null>(null);
+  const [windowActivationError, setWindowActivationError] = useState<string | null>(null);
+  const forecast = useCodexForecast(view === "dashboard", i18n.language);
+  const [isScanning, setIsScanning] = useState(true);
+  const [hasScanned, setHasScanned] = useState(false);
+  const [scanError, setScanError] = useState<string | null>(null);
+  const [diagnostics, setDiagnostics] = useState<UsageDiagnostics | null>(null);
+  const [diagnosticsError, setDiagnosticsError] = useState<string | null>(null);
+  const [isLimitsLoading, setIsLimitsLoading] = useState(true);
+  const [isResetLoading, setIsResetLoading] = useState(true);
+  const [resetError, setResetError] = useState<string | null>(null);
+  const [latestCodexReset, setLatestCodexReset] = useState<CodexResetAnnouncement | null>(null);
+  const [recentCodexResets, setRecentCodexResets] = useState<CodexResetAnnouncement[] | null>(null);
+  const [scanMessage, setScanMessage] = useState<ScanMessage>({ key: "hero.sync_logs_to_cache_desc" });
+  const [error, setError] = useState<string | null>(null);
+  const [bootstrapped, setBootstrapped] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isMonthlyLoading, setIsMonthlyLoading] = useState(false);
+  const [sessions, setSessions] = useState<SessionDetailRow[]>([]);
+  const [hasLoadedSessions, setHasLoadedSessions] = useState(false);
+  const [isSessionsLoading, setIsSessionsLoading] = useState(false);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [isResetting, setIsResetting] = useState(false);
+  const [isExporting, setIsExporting] = useState<ExportFormat | null>(null);
+  const [lastRescanDurationMs, setLastRescanDurationMs] = useState<number | null>(null);
+  const [launchAtLogin, setLaunchAtLogin] = useState(false);
+  const [launchAtLoginError, setLaunchAtLoginError] = useState<string | null>(null);
+  const [isLaunchAtLoginUpdating, setIsLaunchAtLoginUpdating] = useState(false);
+
+  const [updateInfo, setUpdateInfo] = useState<UpdateCheckResponse | null>(null);
+  const [isUpdateChecking, setIsUpdateChecking] = useState(false);
+  const [updateCheckError, setUpdateCheckError] = useState<string | null>(null);
+  const [updateInstallStatus, setUpdateInstallStatus] = useState<UpdateInstallStatus>("idle");
+  const [updateProgress, setUpdateProgress] = useState<UpdateProgressState>(emptyUpdateProgress);
+  const [updateInstallError, setUpdateInstallError] = useState<string | null>(null);
+  const [isUpdateDismissed, setIsUpdateDismissed] = useState(false);
+  const [trayClockMinute, setTrayClockMinute] = useState(() => Math.floor(Date.now() / 60_000));
+
+  const [showSessionCredits, setShowSessionCreditsState] = useState(() => localStorage.getItem("show_session_credits") === "true");
+  const setShowSessionCredits = (show: boolean) => {
+    localStorage.setItem("show_session_credits", String(show));
+    setShowSessionCreditsState(show);
+  };
+
+  const [showLogsTab, setShowLogsTabState] = useState(() => {
+    return localStorage.getItem("show_logs_tab") === "true";
+  });
+
+  const [autoRefreshIntervalMinutes, setAutoRefreshIntervalMinutesState] = useState<AutoRefreshIntervalMinutes>(() => {
+    const saved = Number(localStorage.getItem("auto_refresh_interval_minutes"));
+    return AUTO_REFRESH_INTERVAL_OPTIONS.includes(saved as AutoRefreshIntervalMinutes)
+      ? saved as AutoRefreshIntervalMinutes
+      : DEFAULT_AUTO_REFRESH_INTERVAL_MINUTES;
+  });
+
+  const setShowLogsTab = (show: boolean) => {
+    localStorage.setItem("show_logs_tab", show.toString());
+    setShowLogsTabState(show);
+    if (!show && view === "logs") {
+      setView("dashboard");
+    }
+  };
+
+  const setAutoRefreshIntervalMinutes = (minutes: AutoRefreshIntervalMinutes) => {
+    localStorage.setItem("auto_refresh_interval_minutes", String(minutes));
+    setAutoRefreshIntervalMinutesState(minutes);
+  };
+
+  useEffect(() => {
+    void setBackgroundRefreshInterval(autoRefreshIntervalMinutes).catch((err) => {
+      setError(errorMessage(err, "Failed to update the automatic refresh interval."));
+    });
+  }, [autoRefreshIntervalMinutes]);
+
+  const [trayTitleShow, setTrayTitleShowState] = useState(() => {
+    try {
+      const saved = localStorage.getItem("tray_title_show");
+      if (saved) return JSON.parse(saved);
+    } catch (_) {}
+    return { limit5h: true, limitWeekly: true, tokens: false, cost: false };
+  });
+
+  const [trayMenuShow, setTrayMenuShowState] = useState(() => {
+    try {
+      const saved = localStorage.getItem("tray_menu_show");
+      if (saved) return JSON.parse(saved);
+    } catch (_) {}
+    return { limit5h: true, limitWeekly: true, tokens: true, cost: true };
+  });
+
+  const [trayCountdownUnits, setTrayCountdownUnitsState] = useState<TrayCountdownUnits>(() => {
+    try {
+      const saved = localStorage.getItem("tray_countdown_units");
+      if (saved) return { ...DEFAULT_TRAY_COUNTDOWN_UNITS, ...JSON.parse(saved) };
+    } catch (_) {}
+    return DEFAULT_TRAY_COUNTDOWN_UNITS;
+  });
+
+  const handleTrayTitleShowChange = (key: "limit5h" | "limitWeekly" | "tokens" | "cost", value: boolean) => {
+    const next = { ...trayTitleShow, [key]: value };
+    localStorage.setItem("tray_title_show", JSON.stringify(next));
+    setTrayTitleShowState(next);
+  };
+
+  const handleTrayMenuShowChange = (key: "limit5h" | "limitWeekly" | "tokens" | "cost", value: boolean) => {
+    const next = { ...trayMenuShow, [key]: value };
+    localStorage.setItem("tray_menu_show", JSON.stringify(next));
+    setTrayMenuShowState(next);
+  };
+
+  const handleTrayCountdownUnitChange = (key: keyof TrayCountdownUnits, value: string) => {
+    const next = { ...trayCountdownUnits, [key]: value };
+    localStorage.setItem("tray_countdown_units", JSON.stringify(next));
+    setTrayCountdownUnitsState(next);
+  };
+
+  useEffect(() => {
+    if (!bootstrapped) return;
+
+    const timer = window.setInterval(() => {
+      setTrayClockMinute(Math.floor(Date.now() / 60_000));
+    }, 60_000);
+
+    return () => window.clearInterval(timer);
+  }, [bootstrapped]);
+
+  useEffect(() => {
+    let isMounted = true;
+    let unlisten: (() => void) | null = null;
+
+    void listen<UpdateDownloadProgress>("update-download-progress", (event) => {
+      if (!isMounted) return;
+      setUpdateProgress(toUpdateProgressState(event.payload));
+    }).then((cleanup) => {
+      if (isMounted) {
+        unlisten = cleanup;
+      } else {
+        cleanup();
+      }
+    }).catch((err) => {
+      console.warn("Failed to listen for update download progress", err);
+    });
+
+    return () => {
+      isMounted = false;
+      unlisten?.();
+    };
+  }, []);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    void isAutostartEnabled()
+      .then((enabled) => {
+        if (!isMounted) return;
+        setLaunchAtLogin(enabled);
+        setLaunchAtLoginError(null);
+      })
+      .catch((err) => {
+        if (!isMounted) return;
+        setLaunchAtLoginError(errorMessage(err, "Failed to read login item setting."));
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  const hasBootstrappedRef = useRef(false);
+  const lastLimitsFetchTimeRef = useRef<number>(0);
+  const limitsFetchInFlightRef = useRef(false);
+  const limitsGeneration = useRef(0);
+  const lastAutoScanTimeRef = useRef<number>(0);
+  const scanInFlightRef = useRef<Promise<void> | null>(null);
+  const updateCheckInFlightRef = useRef<Promise<void> | null>(null);
+  const windowActivationInFlightRef = useRef(false);
+
+  const overviewGeneration = useRef(0);
+  const monthlyGeneration = useRef(0);
+  const sessionsGeneration = useRef(0);
+  const localReloadGeneration = useRef(0);
+  const currentRange = useRef(range);
+  currentRange.current = range;
+
+  const loadOverview = useEffectEvent(async (nextRange: RangeKey) => {
+    const generation = ++overviewGeneration.current;
+    const [requested, today] = await Promise.allSettled([
+      fetchOverview(nextRange),
+      nextRange === "1d" ? Promise.resolve(null) : fetchOverview("1d"),
+    ]);
+    if (generation !== overviewGeneration.current || nextRange !== currentRange.current) return;
+    if (nextRange === "1d") setIsTodayStale(requested.status === "rejected");
+    else setIsTodayStale(today.status === "rejected");
+    if (today.status === "fulfilled" && today.value) setTodayOverview(today.value);
+    if (requested.status === "rejected") throw requested.reason;
+    const data = requested.value;
+    if (nextRange === "1d") setTodayOverview(data);
+    setOverview(data);
+    setError(null);
+    return data;
+  });
+
+  const loadMonthlyUsage = useEffectEvent(async () => {
+    const generation = ++monthlyGeneration.current;
+    const data = await fetchMonthlyUsage();
+    if (generation !== monthlyGeneration.current) return;
+    setMonthlyUsage(data);
+    setError(null);
+  });
+
+  const loadSessions = useEffectEvent(async () => {
+    const generation = ++sessionsGeneration.current;
+    const data = await fetchSessionDetails();
+    if (generation !== sessionsGeneration.current) return;
+    setSessions(data);
+    setHasLoadedSessions(true);
+    setError(null);
+  });
+
+  const loadCodexLimits = useEffectEvent(async (options?: { force?: boolean }) => {
+    if (limitsFetchInFlightRef.current) return;
+    const now = Date.now();
+    const isManual = options?.force === true;
+    if (!isManual && now - lastLimitsFetchTimeRef.current < 5000) {
+      return;
+    }
+
+    lastLimitsFetchTimeRef.current = now;
+    limitsFetchInFlightRef.current = true;
+    setIsLimitsLoading(true);
+    const generation = ++limitsGeneration.current;
+
+    try {
+      const data = await fetchCodexLimits();
+      if (generation !== limitsGeneration.current) return;
+      setCodexLimits(data);
+      setCodexLimitsError(null);
+    } catch (limitsError) {
+      if (generation !== limitsGeneration.current) return;
+      setCodexLimitsError(errorMessage(limitsError, "Failed to load Codex limits."));
+    } finally {
+      if (generation === limitsGeneration.current) {
+        limitsFetchInFlightRef.current = false;
+        setIsLimitsLoading(false);
+      }
+    }
+  });
+
+  const loadLatestCodexReset = useEffectEvent(async () => {
+    setIsResetLoading(true);
+    try {
+      const data = await fetchLatestCodexReset();
+      setLatestCodexReset(data);
+      setResetError(null);
+    } catch (error) {
+      setResetError(errorMessage(error, "Failed to load reset history."));
+    } finally {
+      setIsResetLoading(false);
+    }
+  });
+
+  const loadRecentCodexResets = useEffectEvent(async () => {
+    try {
+      const data = await fetchCodexResetHistory(RECENT_RESET_OVERVIEW_DAYS);
+      setRecentCodexResets(data);
+    } catch (error) {
+      // A failed refresh must not erase the last successful calendar/history.
+      setResetError(errorMessage(error, "Failed to load reset history."));
+    }
+  });
+
+  const loadDiagnostics = useEffectEvent(async () => {
+    try {
+      setDiagnostics(await fetchUsageDiagnostics());
+      setDiagnosticsError(null);
+    } catch (error) {
+      setDiagnosticsError(errorMessage(error, "Failed to inspect the Codex directory."));
+    }
+  });
+
+  const scanAndReloadOverview = useEffectEvent(async (startedAt: number, options?: { force?: boolean }) => {
+    if (scanInFlightRef.current) {
+      await scanInFlightRef.current;
+      return;
+    }
+
+    const scanPromise = (async () => {
+      setIsScanning(true);
+      if (options?.force) void loadCodexLimits({ force: true });
+      try {
+        // Local usage must become visible even when the online quota request fails or is slow.
+        const scan = await scanUsage();
+        const filesReused = scan.metrics?.filesReused ?? 0;
+        const filesParsed = scan.metrics?.filesParsed ?? 0;
+        setScanMessage({ key: "hero.synced_message", values: { days: scan.importedDays, reused: filesReused, parsed: filesParsed } });
+        const data = await loadOverview(currentRange.current);
+        setScanError(null);
+        if (!data || data.totals.totalTokens === 0 || view === "settings") await loadDiagnostics();
+        if (view === "monthly" || monthlyUsage) await loadMonthlyUsage();
+        if (view === "sessions") await loadSessions();
+        setLastRescanDurationMs(performance.now() - startedAt);
+        if (!options?.force && filesParsed > 0) void loadCodexLimits({ force: true });
+      } catch (error) {
+        setScanError(errorMessage(error, "Local scan failed."));
+        await loadDiagnostics();
+        throw error;
+      } finally {
+        setHasScanned(true);
+        setIsScanning(false);
+      }
+    })();
+
+    scanInFlightRef.current = scanPromise;
+    try {
+      await scanPromise;
+    } finally {
+      scanInFlightRef.current = null;
+    }
+  });
+
+  const runAutoRescan = useEffectEvent(async () => {
+    if (isResetting) {
+      return;
+    }
+
+    const now = Date.now();
+    if (now - lastAutoScanTimeRef.current < autoRefreshIntervalMinutes * 60_000) {
+      return;
+    }
+
+    lastAutoScanTimeRef.current = now;
+    const startedAt = performance.now();
+    try {
+      await scanAndReloadOverview(startedAt, { force: codexLimitsError !== null || hasExpiredCodexLimitWindow(codexLimits) });
+    } catch (scanError) {
+      setError(errorMessage(scanError, "Background refresh failed."));
+    }
+  });
+
+  const performBackgroundUpdateCheck = useEffectEvent(async () => {
+    let cachedInfo: UpdateCheckResponse | null = null;
+    try {
+      const now = Date.now();
+      const lastCheckTimeStr = localStorage.getItem("last_update_check_time");
+      const lastCheckResultStr = localStorage.getItem("last_update_check_result");
+      const lastCheckFailedTimeStr = localStorage.getItem("last_update_check_failed_time");
+
+      if (lastCheckResultStr) {
+        try {
+          cachedInfo = JSON.parse(lastCheckResultStr) as UpdateCheckResponse;
+          if (cachedInfo) {
+            const currentRunningVersion = tauriConfig.version;
+            if (!isNewerVersion(currentRunningVersion, cachedInfo.latestVersion)) {
+              // The running version is equal to or newer than the cached latest version,
+              // meaning we've successfully updated. Mark as no update available.
+              cachedInfo = {
+                ...cachedInfo,
+                hasUpdate: false,
+                currentVersion: currentRunningVersion,
+              };
+              localStorage.setItem("last_update_check_result", JSON.stringify(cachedInfo));
+            }
+          }
+        } catch (jsonErr) {
+          console.warn("Failed to parse cached update check result", jsonErr);
+        }
+      }
+
+      // 1. If we recently failed, enforce a 1-hour cooldown before trying again
+      if (lastCheckFailedTimeStr) {
+        const lastCheckFailedTime = parseInt(lastCheckFailedTimeStr, 10);
+        if (now - lastCheckFailedTime < 3600000) {
+          if (cachedInfo) {
+            setUpdateInfo(cachedInfo);
+            if (cachedInfo.hasUpdate) {
+              const dismissedTag = localStorage.getItem("dismissed_update_tag");
+              if (dismissedTag === cachedInfo.latestTag) {
+                setIsUpdateDismissed(true);
+              }
+            }
+          }
+          return;
+        }
+      }
+
+      // 2. If we had a successful check within the last 24 hours, use it
+      if (lastCheckTimeStr && cachedInfo) {
+        const lastCheckTime = parseInt(lastCheckTimeStr, 10);
+        // Cache for 24 hours to prevent hitting GitHub API rate limit during hot reloads or frequent restarts
+        if (now - lastCheckTime < 86400000) {
+          setUpdateInfo(cachedInfo);
+          if (cachedInfo.hasUpdate) {
+            const dismissedTag = localStorage.getItem("dismissed_update_tag");
+            if (dismissedTag === cachedInfo.latestTag) {
+              setIsUpdateDismissed(true);
+            }
+          }
+          return;
+        }
+      }
+
+      // If we are calling the API, pass the cached ETag (if available) to leverage conditional 304 responses
+      const etag = cachedInfo?.etag || null;
+      const info = await checkForUpdates(etag);
+
+      // Clear any prior failure timestamp on success
+      localStorage.removeItem("last_update_check_failed_time");
+
+      if (info.notModified && cachedInfo) {
+        // GitHub API returned 304 Not Modified. Reuse our cached result but refresh the check timestamp.
+        setUpdateInfo(cachedInfo);
+        localStorage.setItem("last_update_check_time", now.toString());
+
+        if (cachedInfo.hasUpdate) {
+          const dismissedTag = localStorage.getItem("dismissed_update_tag");
+          if (dismissedTag === cachedInfo.latestTag) {
+            setIsUpdateDismissed(true);
+          }
+        }
+        return;
+      }
+
+      setUpdateInfo(info);
+      localStorage.setItem("last_update_check_time", now.toString());
+      localStorage.setItem("last_update_check_result", JSON.stringify(info));
+
+      if (info.hasUpdate) {
+        const dismissedTag = localStorage.getItem("dismissed_update_tag");
+        if (dismissedTag === info.latestTag) {
+          setIsUpdateDismissed(true);
+        }
+      }
+    } catch (e) {
+      console.warn("Background update check failed", e);
+      localStorage.setItem("last_update_check_failed_time", Date.now().toString());
+
+      // If we had a previously cached success result, still display it
+      if (cachedInfo) {
+        setUpdateInfo(cachedInfo);
+        if (cachedInfo.hasUpdate) {
+          const dismissedTag = localStorage.getItem("dismissed_update_tag");
+          if (dismissedTag === cachedInfo.latestTag) {
+            setIsUpdateDismissed(true);
+          }
+        }
+      }
+    }
+  });
+
+  const runBackgroundUpdateCheck = useEffectEvent(async () => {
+    if (!updateCheckInFlightRef.current) {
+      const checkPromise = performBackgroundUpdateCheck();
+      updateCheckInFlightRef.current = checkPromise;
+      void checkPromise.finally(() => {
+        if (updateCheckInFlightRef.current === checkPromise) {
+          updateCheckInFlightRef.current = null;
+        }
+      });
+    }
+
+    await updateCheckInFlightRef.current;
+  });
+
+  const bootstrap = useEffectEvent(async () => {
+    if (hasBootstrappedRef.current) {
+      return;
+    }
+
+    hasBootstrappedRef.current = true;
+    setIsLoading(true);
+
+    try {
+      // Do not block initial render on limits fetch
+      void loadCodexLimits();
+      void loadLatestCodexReset();
+      void loadRecentCodexResets();
+      await loadOverview(range);
+    } catch (loadError) {
+      setError(errorMessage(loadError, "Failed to load overview."));
+    } finally {
+      // Keep recovery actions and background events available after an initial read failure.
+      setBootstrapped(true);
+      setIsLoading(false);
+    }
+
+    const startedAt = performance.now();
+    void scanAndReloadOverview(startedAt).catch((scanError: unknown) => {
+      setError(errorMessage(scanError, "Background refresh failed."));
+    });
+
+    void runBackgroundUpdateCheck();
+  });
+
+  const handleBackgroundRefreshCompleted = useEffectEvent(async (refresh: UsageRefreshResponse) => {
+    if (refresh.limits) {
+      setCodexLimits(refresh.limits);
+      setCodexLimitsError(null);
+      lastLimitsFetchTimeRef.current = Date.now();
+    } else if (refresh.limitsError) {
+      setCodexLimitsError(refresh.limitsError);
+      lastLimitsFetchTimeRef.current = Date.now();
+    } else if (refresh.limitsSkipped && (codexLimitsError !== null || hasExpiredCodexLimitWindow(codexLimits))) {
+      await loadCodexLimits({ force: true });
+    }
+
+    setScanError(null);
+    setHasScanned(true);
+    // Reload overview to keep UI fresh
+    const filesParsed = refresh.scan?.metrics?.filesParsed ?? 0;
+    const isForeground = document.visibilityState === "visible";
+    if (isForeground || filesParsed > 0) {
+      const data = await loadOverview(range);
+      if (data?.totals.totalTokens === 0) await loadDiagnostics();
+      if (view === "monthly" || monthlyUsage) {
+        await loadMonthlyUsage();
+      }
+      if (view === "sessions") {
+        await loadSessions();
+      }
+    }
+  });
+
+  useEffect(() => {
+    void bootstrap();
+  }, [bootstrap]);
+
+  useEffect(() => {
+    if (!bootstrapped) return;
+
+    let cancelled = false;
+    let timer: number | null = null;
+
+    const readTimestamp = (key: string) => {
+      const value = Number(localStorage.getItem(key));
+      return Number.isFinite(value) && value > 0 ? value : null;
+    };
+
+    const scheduleNextCheck = () => {
+      const now = Date.now();
+      const lastSuccess = localStorage.getItem("last_update_check_result")
+        ? readTimestamp("last_update_check_time")
+        : null;
+      const lastFailure = readTimestamp("last_update_check_failed_time");
+      const nextCheckAt = Math.max(
+        lastSuccess ? lastSuccess + UPDATE_CHECK_INTERVAL_MS : now + UPDATE_CHECK_RETRY_MS,
+        lastFailure ? lastFailure + UPDATE_CHECK_RETRY_MS : now,
+      );
+
+      timer = window.setTimeout(() => {
+        void runBackgroundUpdateCheck().finally(() => {
+          if (!cancelled) {
+            scheduleNextCheck();
+          }
+        });
+      }, Math.max(0, nextCheckAt - now));
+    };
+
+    scheduleNextCheck();
+
+    return () => {
+      cancelled = true;
+      if (timer !== null) {
+        window.clearTimeout(timer);
+      }
+    };
+  }, [bootstrapped, runBackgroundUpdateCheck]);
+
+  // Re-fetch usage when the page/window regains focus after the configured refresh interval.
+  useEffect(() => {
+    if (!bootstrapped) return;
+
+    let hiddenSince: number | null = null;
+
+    function handleInactive() {
+      if (hiddenSince === null) {
+        hiddenSince = Date.now();
+      }
+    }
+
+    function handleActive() {
+      if (document.visibilityState === "visible" && document.hasFocus()) {
+        const inactiveDuration = hiddenSince;
+        hiddenSince = null;
+        if (inactiveDuration !== null && Date.now() - inactiveDuration >= autoRefreshIntervalMinutes * 60_000) {
+          void runAutoRescan();
+        }
+      }
+    }
+
+    function handleVisibilityChange() {
+      if (document.visibilityState === "hidden") {
+        handleInactive();
+      } else {
+        handleActive();
+      }
+    }
+
+    window.addEventListener("focus", handleActive);
+    window.addEventListener("blur", handleInactive);
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+
+    if (document.visibilityState === "hidden" || !document.hasFocus()) {
+      hiddenSince = Date.now();
+    }
+
+    return () => {
+      window.removeEventListener("focus", handleActive);
+      window.removeEventListener("blur", handleInactive);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+    };
+  }, [bootstrapped, runAutoRescan, autoRefreshIntervalMinutes]);
+
+  // Listen for background refresh events emitted from the Rust backend
+  useEffect(() => {
+    if (!bootstrapped) return;
+
+    let cancelled = false;
+    let unlistenFn: (() => void) | null = null;
+    let unlistenError: (() => void) | null = null;
+
+    const setupListener = async () => {
+      try {
+        const stopErrors = await listen<string>("background-refresh-failed", (event) => {
+          setScanError(event.payload);
+          void loadDiagnostics();
+        });
+        if (cancelled) stopErrors();
+        else unlistenError = stopErrors;
+        const unsubscribe = await listen<UsageRefreshResponse>("background-refresh-completed", async (event) => {
+          await handleBackgroundRefreshCompleted(event.payload);
+          window.dispatchEvent(new Event("session-credits-revalidate"));
+        });
+        if (cancelled) {
+          unsubscribe();
+        } else {
+          unlistenFn = unsubscribe;
+        }
+      } catch (err) {
+        console.error("Failed to setup background refresh listener:", err);
+      }
+    };
+
+    void setupListener();
+
+    return () => {
+      cancelled = true;
+      unlistenFn?.();
+      unlistenError?.();
+    };
+  }, [bootstrapped]);
+
+  // Update tray icon whenever limits, overview, translation, or tray settings change
+  useEffect(() => {
+    if (!bootstrapped) return;
+
+    const tz = todayOverview?.timezone;
+    const todayStr = getTodayDateString(tz);
+    const todayRow = todayOverview?.daily?.find((d) => d.date === todayStr);
+    const todayTokens = todayRow?.totalTokens;
+    const todayTokensLabel = todayTokens == null ? "—" : formatTrayTokens(todayTokens);
+    const todayCost = todayRow?.costUSD;
+
+    const windows = [
+      { key: "limit5h" as const, window: codexLimits?.session },
+      { key: "limitWeekly" as const, window: codexLimits?.weekly },
+    ];
+
+    const titleParts: string[] = [];
+    const indicators: TrayQuotaIndicator[] = [];
+    const addIndicator = (window: CodexLimitWindow | null | undefined, kind: TrayQuotaIndicator["kind"]) => {
+      indicators.push({
+        kind,
+        remainingPercent: window?.remainingPercent ?? null,
+        countdown: formatCompactResetCountdown(window?.resetsAt ?? null, trayCountdownUnits),
+      });
+    };
+    for (const entry of windows) {
+      if (!trayTitleShow[entry.key]) continue;
+      const kind = quotaWindowKind(entry.window);
+      const template = `${quotaWindowLabel(entry.window, t)}: {remaining}/{reset}`;
+      titleParts.push(formatTrayLimitTitle(template, entry.window, trayCountdownUnits));
+      addIndicator(entry.window, kind);
+    }
+
+    const metrics: TrayMetricIndicator[] = [];
+    if (trayTitleShow.tokens) metrics.push({ kind: "tokens", value: todayTokensLabel });
+    if (trayTitleShow.cost) metrics.push({ kind: "cost", value: formatCurrencyShort(todayCost).replace(/^(?:US)?\$\s*/, "") });
+    const extraParts: string[] = [];
+    if (trayTitleShow.tokens) extraParts.push(`T: ${todayTokensLabel}`);
+    if (trayTitleShow.cost) extraParts.push(formatCurrencyShort(todayCost));
+    titleParts.push(...extraParts);
+    const title = titleParts.join(" ");
+
+    const items: TrayMenuItemDto[] = [];
+
+    if (codexLimits?.account) {
+      items.push({ id: "account", text: `${t("settings.menu_bar_account")}: ${codexLimits.account}`, enabled: false });
+    }
+    if (codexLimits?.membershipLevel) {
+      items.push({ id: "membership", text: `${t("settings.menu_bar_membership")}: ${codexLimits.membershipLevel}`, enabled: false });
+    }
+    if (codexLimits?.workspaceName) {
+      items.push({ id: "workspace", text: `${t("settings.menu_bar_workspace")}: ${codexLimits.workspaceName}`, enabled: false });
+    }
+    const accountItemCount = items.length;
+
+    for (const entry of windows) {
+      if (!trayMenuShow[entry.key]) continue;
+      const window = entry.window;
+      const label = quotaWindowLabel(window, t);
+      const text = window
+        ? `${label}: ${Math.round(window.remainingPercent)}% ${t("limits.remaining")} (${t("limits.consumed")}: ${Math.round(window.usedPercent)}%); ${formatResetTime(window.resetsAt, window.windowMinutes, t)}`
+        : `${label}: ${t("limits.unavailable")}`;
+      items.push({ id: entry.key === "limit5h" ? "status_5h" : "status_weekly", text, enabled: false });
+    }
+
+    if (items.length > accountItemCount && (trayMenuShow.tokens || trayMenuShow.cost)) {
+      items.push({ id: "separator", text: "", enabled: false });
+    }
+
+    if (trayMenuShow.tokens) {
+      const text = `${t("settings.menu_bar_opt_tokens")}: ${todayTokensLabel}`;
+      items.push({ id: "status_tokens", text, enabled: false });
+    }
+
+    if (trayMenuShow.cost) {
+      const text = `${t("settings.menu_bar_opt_cost")}: ${formatCurrency(todayCost)}`;
+      items.push({ id: "status_cost", text, enabled: false });
+    }
+
+    if (accountItemCount > 0 && items.length > accountItemCount) {
+      items.splice(accountItemCount, 0, { id: "separator", text: "", enabled: false });
+    }
+
+    const quotas: TrayPopoverData["quotas"] = [];
+    const addQuota = (kind: TrayQuotaIndicator["kind"], window: CodexLimitWindow | null | undefined) => {
+      const reset = window?.resetsAt ? new Date(window.resetsAt) : null;
+      const validReset = reset && Number.isFinite(reset.getTime());
+      const resetText = validReset
+        ? reset.getTime() <= Date.now()
+          ? t("limits.resetting_soon")
+          : t("limits.sidebar_reset_at", { time: reset.toLocaleString(i18n.language, {
+              ...(kind === "5h" ? {} : { month: "2-digit", day: "2-digit" } as const),
+              hour: "2-digit", minute: "2-digit", hour12: false,
+            }) })
+        : t("limits.reset_unavailable");
+      const countdown = formatCompactResetCountdown(window?.resetsAt ?? null, trayCountdownUnits);
+      quotas.push({
+        kind,
+        label: quotaWindowLabel(window, t),
+        remainingPercent: window?.remainingPercent ?? null,
+        usedText: window ? t("tray.used", { percent: Math.round(window.usedPercent) }) : t("limits.unavailable"),
+        resetText: `${resetText}${validReset && countdown && countdown !== "soon" && kind === "5h" ? ` · ${countdown}` : ""}`,
+      });
+    };
+    for (const entry of windows) {
+      addQuota(quotaWindowKind(entry.window), entry.window);
+    }
+
+    const widgetData: TrayPopoverData = {
+        updatedAt: todayOverview?.updatedAt ?? null,
+        stale: scanError !== null || codexLimitsError !== null || isTodayStale,
+        account: codexLimits?.account ?? null,
+        membership: codexLimits?.membershipLevel ?? null,
+        workspace: codexLimits?.workspaceName ?? null,
+        quotas,
+        tokens: { value: todayTokensLabel, exact: todayTokens == null ? "—" : formatNumber(todayTokens) },
+        cost: formatCurrency(todayCost),
+        labels: {
+          remaining: t("limits.remaining"),
+          today: t("tray.today"),
+          cost: t("tray.estimated_cost"),
+          unavailable: t("limits.unavailable"),
+          showMain: t("settings.menu_bar_show_main"),
+          quit: t("settings.menu_bar_quit"),
+        },
+      };
+    void updateWidgetSnapshot(widgetData).catch((err) => console.warn("Failed to update widget", err));
+    void updateTray({
+      title,
+      items,
+      indicators,
+      metrics,
+      popover: {
+        ...widgetData,
+        quotas: quotas.filter((_, index) => trayMenuShow[windows[index].key]),
+        tokens: trayMenuShow.tokens ? widgetData.tokens : null,
+        cost: trayMenuShow.cost ? widgetData.cost : null,
+      },
+      show_main_text: t("settings.menu_bar_show_main", { defaultValue: "Show Main Window" }),
+      quit_text: t("settings.menu_bar_quit", { defaultValue: "Quit" }),
+    }).catch((err) => {
+      console.warn("Failed to update tray", err);
+    });
+  }, [
+    bootstrapped,
+    codexLimits,
+    codexLimitsError,
+    scanError,
+    todayOverview,
+    isTodayStale,
+    trayTitleShow,
+    trayMenuShow,
+    trayCountdownUnits,
+    trayClockMinute,
+    t,
+  ]);
+
+  async function handleViewChange(nextView: DashboardView) {
+    setView(nextView);
+
+    if (nextView === "settings" && bootstrapped) await loadDiagnostics();
+
+    if (nextView === "monthly" && !monthlyUsage && bootstrapped) {
+      setIsMonthlyLoading(true);
+      try {
+        await loadMonthlyUsage();
+      } catch (monthlyError) {
+        setError(monthlyError instanceof Error ? monthlyError.message : "Failed to load monthly usage.");
+      } finally {
+        setIsMonthlyLoading(false);
+      }
+    }
+
+    if (nextView === "sessions" && bootstrapped) {
+      if (!hasLoadedSessions) {
+        setIsSessionsLoading(true);
+      }
+      try {
+        await loadSessions();
+      } catch (sessionsError) {
+        setError(sessionsError instanceof Error ? sessionsError.message : "Failed to load sessions.");
+      } finally {
+        if (!hasLoadedSessions) {
+          setIsSessionsLoading(false);
+        }
+      }
+    }
+  }
+
+  async function handleRangeChange(nextRange: RangeKey) {
+    currentRange.current = nextRange;
+    setRange(nextRange);
+
+    if (!bootstrapped) {
+      return;
+    }
+
+    setIsLoading(true);
+
+    try {
+      const data = await loadOverview(nextRange);
+      if (data?.totals.totalTokens === 0) await loadDiagnostics();
+    } catch (rangeError) {
+      setError(rangeError instanceof Error ? rangeError.message : "Failed to switch range.");
+    } finally {
+      setIsLoading(false);
+    }
+  }
+
+  async function handleLocalScanComplete(scan: ScanResponse, updatedSession?: SessionDetailRow, previousPath?: string) {
+    if (updatedSession) setSessions((current) => current.map((session) => session.path === previousPath ? updatedSession : session));
+    const generation = ++localReloadGeneration.current;
+    const sessionsRequest = ++sessionsGeneration.current;
+    const nextRange = range;
+    const [, nextSessions, nextMonthly] = await Promise.all([
+      loadOverview(nextRange),
+      hasLoadedSessions ? fetchSessionDetails() : Promise.resolve(null),
+      monthlyUsage ? fetchMonthlyUsage() : Promise.resolve(null),
+    ]);
+    if (generation !== localReloadGeneration.current) return;
+    if (nextSessions && sessionsRequest === sessionsGeneration.current) setSessions(nextSessions);
+    if (nextMonthly) setMonthlyUsage(nextMonthly);
+    setLastRescanDurationMs(scan.metrics?.totalMs ?? null);
+    setError(null);
+  }
+
+  async function handlePricingRefreshed() {
+    await Promise.all([
+      loadOverview(range),
+      monthlyUsage ? loadMonthlyUsage() : Promise.resolve(),
+      hasLoadedSessions ? loadSessions() : Promise.resolve(),
+    ]);
+  }
+
+  async function handleRefresh() {
+    setIsRefreshing(true);
+    const startedAt = performance.now();
+    void forecast.refresh();
+
+    try {
+      await scanAndReloadOverview(startedAt, { force: true });
+      await Promise.all([loadLatestCodexReset(), loadRecentCodexResets()]);
+    } catch (refreshError) {
+      setError(errorMessage(refreshError, "Refresh failed."));
+    } finally {
+      setIsRefreshing(false);
+    }
+  }
+
+  async function handleCodexHomeChange(chooseDirectory: boolean) {
+    if (isRefreshing || isScanning) return;
+    setIsRefreshing(true);
+    try {
+      const home = chooseDirectory
+        ? await open({ directory: true, multiple: false, title: t("recovery.choose_directory") })
+        : null;
+      if (chooseDirectory && typeof home !== "string") return;
+      await configureCodexHome(typeof home === "string" ? home : null);
+      limitsGeneration.current++;
+      overviewGeneration.current++;
+      monthlyGeneration.current++;
+      sessionsGeneration.current++;
+      localReloadGeneration.current++;
+      limitsFetchInFlightRef.current = false;
+      setCodexLimits(null);
+      setCodexLimitsError(null);
+      setOverview(null);
+      setTodayOverview(null);
+      setIsTodayStale(false);
+      setMonthlyUsage(null);
+      setSessions([]);
+      setHasLoadedSessions(false);
+      await loadDiagnostics();
+      await scanAndReloadOverview(performance.now(), { force: true });
+    } catch (error) {
+      setScanError(errorMessage(error, "Failed to change Codex directory."));
+    } finally {
+      setIsRefreshing(false);
+    }
+  }
+
+  async function handleLimitsRefresh() {
+    setIsLimitsRefreshing(true);
+    setWindowActivationStatus(null);
+    setWindowActivationError(null);
+    try {
+      await loadCodexLimits({ force: true });
+    } finally {
+      setIsLimitsRefreshing(false);
+    }
+  }
+
+  async function handleActivateCodexWindow() {
+    if (windowActivationInFlightRef.current) {
+      return;
+    }
+    const confirmed = window.confirm(t("limits.activate_confirm"));
+    if (!confirmed) {
+      return;
+    }
+
+    windowActivationInFlightRef.current = true;
+    setIsWindowActivating(true);
+    setWindowActivationStatus(null);
+    setWindowActivationError(null);
+    try {
+      const response = await activateCodexWindow();
+      setCodexLimits(response.limits);
+      setCodexLimitsError(null);
+      setWindowActivationStatus(response.status);
+      lastLimitsFetchTimeRef.current = Date.now();
+    } catch (activationError) {
+      setWindowActivationError(errorMessage(activationError, t("limits.activate_failed")));
+    } finally {
+      windowActivationInFlightRef.current = false;
+      setIsWindowActivating(false);
+    }
+  }
+
+  async function handleReset() {
+    const confirmed = window.confirm(
+      t("settings.reset_confirm", { defaultValue: "Reset cached usage and pricing data, then rebuild it from local Codex logs? Source logs will not be deleted." })
+    );
+    if (!confirmed) {
+      return;
+    }
+
+    setIsResetting(true);
+    setMonthlyUsage(null);
+    setScanMessage({ key: "hero.resetting_message" });
+    const startedAt = performance.now();
+
+    try {
+      await resetUsageState();
+      await scanAndReloadOverview(startedAt, { force: true });
+      setScanMessage({ key: "hero.reset_rebuilt_message" });
+    } catch (resetError) {
+      setError(resetError instanceof Error ? resetError.message : "Reset failed.");
+    } finally {
+      setIsResetting(false);
+    }
+  }
+
+  async function handleExport(format: ExportFormat) {
+    if (!overview || isLoading || isResetting) {
+      return;
+    }
+
+    setIsExporting(format);
+
+    try {
+      const paths = await getPulsePaths();
+      const defaultPath = `${paths.exports.replace(/[\\/]$/, "")}/${getExportFileName(range, overview, format)}`;
+      const selectedPath = await save(getExportDialogOptions(format, defaultPath, t));
+      if (!selectedPath) return;
+      const exported = await exportUsage(range, format, selectedPath);
+      setScanMessage({
+        key: "hero.exported_message",
+        values: { range: getRangeLabel(range, t), path: exported.path },
+      });
+      setError(null);
+    } catch (exportError) {
+      setError(exportError instanceof Error ? exportError.message : "Export failed.");
+    } finally {
+      setIsExporting(null);
+    }
+  }
+
+  async function handleLaunchAtLoginChange(enabled: boolean) {
+    const previous = launchAtLogin;
+    setLaunchAtLogin(enabled);
+    setLaunchAtLoginError(null);
+    setIsLaunchAtLoginUpdating(true);
+
+    try {
+      if (enabled) {
+        await enableAutostart();
+      } else {
+        await disableAutostart();
+      }
+    } catch (autostartError) {
+      setLaunchAtLogin(previous);
+      setLaunchAtLoginError(errorMessage(autostartError, "Failed to update login item setting."));
+    } finally {
+      setIsLaunchAtLoginUpdating(false);
+    }
+  }
+
+  const handleDismissUpdate = () => {
+    if (updateInfo) {
+      localStorage.setItem("dismissed_update_tag", updateInfo.latestTag);
+      setIsUpdateDismissed(true);
+    }
+  };
+
+  const handleManualUpdateCheck = async () => {
+    setIsUpdateChecking(true);
+    setUpdateCheckError(null);
+    try {
+      const info = await checkForUpdates();
+      setUpdateInfo(info);
+
+      localStorage.setItem("last_update_check_time", Date.now().toString());
+      localStorage.setItem("last_update_check_result", JSON.stringify(info));
+      localStorage.removeItem("last_update_check_failed_time");
+
+      if (info.hasUpdate) {
+        setIsUpdateDismissed(false); // Reset dismissal on manual trigger
+        setUpdateInstallStatus("idle");
+        setUpdateInstallError(null);
+      }
+    } catch (e) {
+      setUpdateCheckError(errorMessage(e, "Failed to check for updates."));
+    } finally {
+      setIsUpdateChecking(false);
+    }
+  };
+
+  const handleUpgrade = async () => {
+    if (updateInstallStatus === "installed") {
+      try {
+        localStorage.removeItem("last_update_check_result");
+        localStorage.removeItem("last_update_check_time");
+        await restartApp();
+      } catch (e) {
+        setUpdateInstallError(errorMessage(e, "Failed to restart the app."));
+      }
+      return;
+    }
+
+    if (!updateInfo?.hasUpdate || updateInstallStatus === "downloading") {
+      return;
+    }
+
+    setUpdateInstallStatus("downloading");
+    setUpdateProgress(emptyUpdateProgress);
+    setUpdateInstallError(null);
+    try {
+      await downloadAndInstallUpdate();
+      setUpdateProgress((progress) => ({ ...progress, percent: 100, finished: true }));
+      setUpdateInstallStatus("installed");
+    } catch (e) {
+      setUpdateInstallStatus("idle");
+      setUpdateProgress(emptyUpdateProgress);
+      setUpdateInstallError(errorMessage(e, "Failed to download and install the update."));
+    }
+  };
+
+  const handleOpenUpdateRelease = async () => {
+    if (updateInfo?.releaseUrl) {
+      try {
+        await openUrl(updateInfo.releaseUrl);
+      } catch (e) {
+        console.error("Failed to open release URL", e);
+      }
+    }
+  };
+
+  const handleOpenResetCredits = async () => {
+    try {
+      await openUrl(CHATGPT_USAGE_URL);
+    } catch (e) {
+      console.error("Failed to open ChatGPT Usage URL", e);
+    }
+  };
+
+  return {
+    view,
+    range,
+    overview,
+    monthlyUsage,
+    codexLimits,
+    codexLimitsError,
+    isLimitsRefreshing,
+    isWindowActivating,
+    windowActivationStatus,
+    windowActivationError,
+    forecast,
+    isScanning,
+    hasScanned,
+    scanError,
+    diagnostics,
+    diagnosticsError,
+    isLimitsLoading,
+    isResetLoading,
+    resetError,
+    handleCodexHomeChange,
+    latestCodexReset,
+    recentCodexResets,
+    scanMessage: t(scanMessage.key, scanMessage.values),
+    error,
+    isLoading,
+    isMonthlyLoading,
+    isRefreshing,
+    isResetting,
+    isExporting,
+    lastRescanDurationMs,
+    updateInfo,
+    isUpdateChecking,
+    updateCheckError,
+    updateInstallStatus,
+    updateProgress,
+    updateInstallError,
+    isUpdateDismissed,
+    launchAtLogin,
+    launchAtLoginError,
+    isLaunchAtLoginUpdating,
+    showLogsTab,
+    setShowLogsTab,
+    showSessionCredits,
+    setShowSessionCredits,
+    autoRefreshIntervalMinutes,
+    setAutoRefreshIntervalMinutes,
+    sessions,
+    isSessionsLoading,
+    handleViewChange,
+    handleRangeChange,
+    handlePricingRefreshed,
+    handleLocalScanComplete,
+    handleRefresh,
+    handleLimitsRefresh,
+    handleActivateCodexWindow,
+    handleReset,
+    handleExport,
+    handleDismissUpdate,
+    handleManualUpdateCheck,
+    handleUpgrade,
+    handleOpenUpdateRelease,
+    handleOpenResetCredits,
+    handleLaunchAtLoginChange,
+    trayTitleShow,
+    handleTrayTitleShowChange,
+    trayMenuShow,
+    handleTrayMenuShowChange,
+    trayCountdownUnits,
+    handleTrayCountdownUnitChange,
+  };
+}
+
+function getTodayDateString(tz?: string) {
+  try {
+    const options: Intl.DateTimeFormatOptions = {
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    };
+    if (tz) {
+      options.timeZone = tz;
+    }
+    const formatter = new Intl.DateTimeFormat("en-US", options);
+    const parts = formatter.formatToParts(new Date());
+    const year = parts.find((p) => p.type === "year")?.value;
+    const month = parts.find((p) => p.type === "month")?.value;
+    const day = parts.find((p) => p.type === "day")?.value;
+    if (year && month && day) {
+      return `${year}-${month}-${day}`;
+    }
+  } catch (_) {}
+  return new Date().toLocaleDateString("sv-SE");
+}
+
+function errorMessage(error: unknown, fallback: string) {
+  if (error instanceof Error) {
+    return error.message;
+  }
+  if (typeof error === "string" && error.trim()) {
+    return error;
+  }
+
+  return fallback;
+}

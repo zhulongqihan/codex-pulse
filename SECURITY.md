@@ -11,9 +11,9 @@ Only the latest published version is targeted for fixes. No response-time guaran
 ## Data boundaries
 
 - Original Codex session logs are read-only. Codex Pulse writes its own aggregate cache and preferences.
-- Account capacity is obtained through the local official Codex app-server. Codex retains responsibility for its authentication lifecycle.
+- Account capacity is queried from official account endpoints in Rust using the existing local ChatGPT sign-in. Codex retains responsibility for sign-in and token renewal.
 - Credentials must never be exposed through renderer IPC, export files, application screenshots, or release assets.
-- Codex Pulse adds no analytics or telemetry. Account refreshes still require the existing Codex client's network access to OpenAI.
+- Codex Pulse adds no analytics or telemetry. Account refreshes contact OpenAI; optional reset information and model prices use their displayed third-party sources.
 - Local history and official account limits are separate sources. Missing or stale data must remain visibly unavailable, not silently become zero.
 
 ## Safe issue reports
@@ -24,6 +24,8 @@ Before reporting a problem, review screenshots and attachments for email address
 
 ## Contribution requirements
 
-Keep Electron's renderer isolated from Node, expose a narrow validated IPC surface, and open external URLs only through explicit allowed actions. Do not add a credential-upload endpoint, remote conversation collection, or authentication shortcuts.
+Keep credentials in the Rust process, expose a narrow Tauri capability surface, and open external URLs only through explicit HTTP/HTTPS actions. Do not execute recorded tools or shell text from replay content. Do not add a credential-upload endpoint, remote conversation collection, or authentication shortcuts.
+
+Portable updates require a manifest signed by the Pulse release key, an exact product/platform match and a verified SHA-256 package digest. The updater preserves the data directory and restores the prior executable when startup fails. Signing private keys are never included in the source or distribution.
 
 Changes affecting parsing, caching, IPC, exports, authentication integration, or file access need tests for their relevant boundary conditions. Release verification must inspect both Git-tracked files and packaged artifacts for private data.

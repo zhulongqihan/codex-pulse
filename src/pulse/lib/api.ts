@@ -1,0 +1,634 @@
+import { invoke } from "@tauri-apps/api/core";
+import { renderTrayIcon, type TrayQuotaIndicator, type TrayMetricIndicator } from "@/lib/tray-icon";
+import type { TrayPopoverData } from "@/lib/tray-popover";
+
+export type RangeKey = "1d" | "2d" | "7d" | "14d" | "30d" | "60d" | "90d" | "180d" | "365d" | string;
+export type ExportFormat = "xlsx" | "markdown";
+
+export type OverviewResponse = {
+  range: RangeKey;
+  days: number;
+  timezone: string;
+  startDate: string;
+  endDate: string;
+  updatedAt: string | null;
+  daily: Array<{
+    date: string;
+    inputTokens: number;
+    cachedInputTokens: number;
+    outputTokens: number;
+    totalTokens: number;
+    costUSD: number | null;
+    fiveHourPercent?: number | null;
+    weeklyPercent?: number | null;
+  }>;
+  totals: {
+    inputTokens: number;
+    cachedInputTokens: number;
+    outputTokens: number;
+    totalTokens: number;
+    costUSD: number | null;
+    avgTokensPerDay: number;
+    avgCostPerDay: number | null;
+    cacheHitRate: number;
+    costPerMillionTokens: number | null;
+  };
+  models: Array<{
+    model: string;
+    inputTokens: number;
+    cachedInputTokens: number;
+    outputTokens: number;
+    totalTokens: number;
+    costUSD: number | null;
+    pricingStatus: "priced" | "free" | "unavailable";
+    inputCostPerMillionTokens: number | null;
+    cachedInputCostPerMillionTokens: number | null;
+    outputCostPerMillionTokens: number | null;
+    effectiveCostPerMillionTokens: number | null;
+    fiveHourQuota?: ModelQuotaEstimate | null;
+    weeklyQuota?: ModelQuotaEstimate | null;
+  }>;
+  projects: Array<{
+    project: string;
+    displayName: string;
+    lastActiveDate?: string;
+    codexProjectId?: string;
+    codexProjectName?: string;
+    codexProjectRoot?: string;
+    inputTokens: number;
+    cachedInputTokens: number;
+    outputTokens: number;
+    totalTokens: number;
+    costUSD: number | null;
+  }>;
+  projectDaily?: Record<string, OverviewResponse["daily"]>;
+};
+
+export type ModelQuotaEstimate = {
+  percent: number;
+  lowerPercent: number;
+  upperPercent: number;
+  percentPerMillionTokens: number;
+  lowerPercentPerMillionTokens: number;
+  upperPercentPerMillionTokens: number;
+  sampledTokens: number;
+  samples: number;
+};
+
+export type ProjectAnalyticsResponse = {
+  project: string;
+  displayName: string;
+  codexProjectId?: string;
+  codexProjectName?: string;
+  codexProjectRoot?: string;
+  range: RangeKey;
+  startDate: string;
+  endDate: string;
+  timezone: string;
+  summary: OverviewResponse["projects"][number];
+  models: Array<{ model: string; totalTokens: number }>;
+  daily: OverviewResponse["daily"];
+};
+
+export type ModelPricingCatalogResponse = {
+  isLimited: boolean;
+  source?: string;
+  updatedAt?: string | null;
+  stale?: boolean;
+  models: Array<{
+    model: string;
+    provider: string;
+    pricingStatus: "priced" | "free" | "unavailable";
+    inputCostPerMillionTokens: number | null;
+    cachedInputCostPerMillionTokens: number | null;
+    outputCostPerMillionTokens: number | null;
+  }>;
+};
+
+export type MonthlyUsageResponse = {
+  timezone: string;
+  startMonth: string;
+  endMonth: string;
+  updatedAt: string | null;
+  retainedFrom?: string | null;
+  throughDate?: string;
+  monthly: Array<{
+    month: string;
+    inputTokens: number;
+    cachedInputTokens: number;
+    outputTokens: number;
+    totalTokens: number;
+    costUSD: number | null;
+    fiveHourPercent?: number | null;
+    weeklyPercent?: number | null;
+  }>;
+};
+
+export type ScanResponse = {
+  importedDays: number;
+  scannedAt: string;
+  timezone: string;
+  metrics?: {
+    totalMs: number;
+    pricingMs: number;
+    parseMs: number;
+    dbMs: number;
+    filesScanned: number;
+    filesParsed: number;
+    filesReused: number;
+    bytesRead: number;
+  };
+};
+
+export type ExportResponse = {
+  path: string;
+  format: ExportFormat;
+  range: RangeKey;
+  exportedAt: string;
+};
+
+export type CodexLimitWindow = {
+  usedPercent: number;
+  remainingPercent: number;
+  windowMinutes: number | null;
+  resetsAt: string | null;
+};
+
+export type CodexResetCredit = {
+  id: string;
+  expiresAt: string | null;
+};
+
+export type CodexCredits = {
+  hasCredits: boolean;
+  unlimited: boolean;
+  balance: string | null;
+};
+
+export type CodexLimitsResponse = {
+  session: CodexLimitWindow | null;
+  weekly: CodexLimitWindow | null;
+  credits?: CodexCredits | null;
+  creditsIsMock?: boolean;
+  resetCreditsAvailableCount?: number | null;
+  resetCredits?: CodexResetCredit[] | null;
+  updatedAt: string;
+  source: string;
+  account?: string | null;
+  membershipLevel?: string | null;
+  workspaceName?: string | null;
+  subscriptionExpiresAt?: string | null;
+  subscriptionWillRenew?: boolean | null;
+};
+
+export type CodexWindowActivationStatus = "started" | "alreadyActive" | "recentlyRequested";
+
+export type CodexWindowActivationResponse = {
+  status: CodexWindowActivationStatus;
+  limits: CodexLimitsResponse;
+};
+
+export type CodexQuotaForecastResponse = {
+  updatedAt: string;
+  lastResetAt: string | null;
+  hasOfficialSignal: boolean;
+  latestAlert: CodexForecastAlert | null;
+  recentPosts: CodexForecastPost[] | null;
+  evidencePosts: CodexForecastPost[] | null;
+  evidenceStale: boolean;
+  evidenceUpdatedAt: string | null;
+};
+
+export type CodexForecastPost = {
+  id: string;
+  text: string;
+  url: string;
+  at: string;
+  isReply: boolean;
+  replyToId: string | null;
+};
+
+export type CodexForecastAlert = {
+  id?: string | null;
+  kind?: "watch" | "reset" | (string & {}) | null;
+  state?: "active" | "expired" | "confirmed" | (string & {}) | null;
+  pending?: "done" | "on_its_way" | (string & {}) | null;
+  sourceAt?: string | null;
+  summary?: string | null;
+  localizedSummary?: string | null;
+  url?: string | null;
+  score?: number | null;
+  window?: { label?: string | null; startAt?: string | null; endAt?: string | null; timeZone?: string | null } | null;
+  observedAt?: string | null;
+  confirmedAt?: string | null;
+};
+
+export type CodexResetAnnouncement = {
+  id: string;
+  resetType: "regular" | "banked";
+  announcedAt: string;
+  text: string;
+  source: {
+    author?: string | null;
+    url: string;
+  };
+};
+
+export type UsageRefreshResponse = {
+  scan: ScanResponse;
+  limits: CodexLimitsResponse | null;
+  limitsError: string | null;
+  limitsSkipped: boolean;
+  refreshedAt: string;
+};
+
+export async function scanUsage(): Promise<ScanResponse> {
+  return invoke<ScanResponse>("scan_usage");
+}
+
+export type UsageDiagnostics = {
+  codexHome: string;
+  cachePath?: string;
+  runtime: string;
+  status: "ready" | "missingDirectory" | "unreadableDirectory" | "noSessions" | "noUsage" | "databaseError";
+  filesFound: number;
+  cachedDays: number;
+  error: string | null;
+};
+
+export function fetchUsageDiagnostics(): Promise<UsageDiagnostics> {
+  return invoke<UsageDiagnostics>("fetch_usage_diagnostics");
+}
+
+export function scheduleCacheRebuild(): Promise<string> {
+  return invoke<string>("schedule_cache_rebuild");
+}
+
+export function configureCodexHome(home: string | null): Promise<void> {
+  return invoke<void>("configure_codex_home", { home });
+}
+
+export async function refreshUsageData(forceLimits: boolean): Promise<UsageRefreshResponse> {
+  return invoke<UsageRefreshResponse>("refresh_usage_data", { forceLimits });
+}
+
+export async function setBackgroundRefreshInterval(minutes: number): Promise<void> {
+  return invoke<void>("set_background_refresh_interval", { minutes });
+}
+
+export async function fetchOverview(range: RangeKey): Promise<OverviewResponse> {
+  return invoke<OverviewResponse>("fetch_overview", { range });
+}
+
+export async function fetchProjectAnalytics(project: string, range: RangeKey): Promise<ProjectAnalyticsResponse> {
+  return invoke<ProjectAnalyticsResponse>("fetch_project_analytics", { project, range });
+}
+
+export async function fetchModelPricingCatalog(): Promise<ModelPricingCatalogResponse> {
+  return invoke<ModelPricingCatalogResponse>("fetch_model_pricing_catalog");
+}
+
+export async function refreshModelPricing(): Promise<ModelPricingCatalogResponse> {
+  return invoke<ModelPricingCatalogResponse>("refresh_model_pricing");
+}
+
+export async function fetchMonthlyUsage(): Promise<MonthlyUsageResponse> {
+  return invoke<MonthlyUsageResponse>("fetch_monthly_usage");
+}
+
+export async function fetchCodexLimits(): Promise<CodexLimitsResponse> {
+  return invoke<CodexLimitsResponse>("fetch_codex_limits");
+}
+
+export async function activateCodexWindow(): Promise<CodexWindowActivationResponse> {
+  return invoke<CodexWindowActivationResponse>("activate_codex_window");
+}
+
+export async function fetchCodexQuotaForecast(locale: string): Promise<CodexQuotaForecastResponse> {
+  return invoke<CodexQuotaForecastResponse>("fetch_codex_quota_forecast", { locale });
+}
+
+export async function fetchLatestCodexReset(): Promise<CodexResetAnnouncement | null> {
+  return invoke<CodexResetAnnouncement | null>("fetch_latest_codex_reset");
+}
+
+export async function fetchCodexResetHistory(days: number): Promise<CodexResetAnnouncement[]> {
+  return invoke<CodexResetAnnouncement[]>("fetch_codex_reset_history", { days });
+}
+
+export async function resetUsageState(): Promise<void> {
+  return invoke<void>("reset_usage_state");
+}
+
+export async function exportUsage(range: RangeKey, format: ExportFormat, path: string): Promise<ExportResponse> {
+  return invoke<ExportResponse>("export_usage", { range, format, path });
+}
+
+export type UpdateCheckResponse = {
+  hasUpdate: boolean;
+  currentVersion: string;
+  latestVersion: string;
+  latestTag: string;
+  releaseName: string | null;
+  releaseNotes: string | null;
+  releaseUrl: string;
+  etag?: string | null;
+  notModified?: boolean | null;
+};
+
+export type UpdateInstallResponse = {
+  version: string;
+};
+
+export type UpdateDownloadProgress = {
+  downloaded: number;
+  total: number | null;
+  finished: boolean;
+};
+
+export async function checkForUpdates(etag?: string | null): Promise<UpdateCheckResponse> {
+  if (etag) {
+    return invoke<UpdateCheckResponse>("check_for_updates", { etag });
+  }
+  return invoke<UpdateCheckResponse>("check_for_updates");
+}
+
+export async function downloadAndInstallUpdate(): Promise<UpdateInstallResponse> {
+  return invoke<UpdateInstallResponse>("download_and_install_update");
+}
+
+export async function restartApp(): Promise<void> {
+  return invoke<void>("restart_app");
+}
+
+export async function openUrl(url: string): Promise<void> {
+  return invoke<void>("open_url", { url });
+}
+
+export type SessionDailyUsageRow = {
+  date: string;
+  inputTokens: number;
+  cachedInputTokens: number;
+  outputTokens: number;
+  reasoningOutputTokens: number;
+  totalTokens: number;
+  costUSD: number | null;
+  models: string[];
+  projects: string[];
+  quotaUsage?: SessionQuotaUsage | null;
+};
+
+export type SessionQuotaWindowUsage = {
+  windowMinutes: number;
+  resetsAt: string | null;
+  observedStartAt: string;
+  observedEndAt: string;
+  observedStartPercent: number;
+  observedEndPercent: number;
+  observedDeltaPercent: number;
+  belowResolution: boolean;
+};
+
+export type SessionQuotaUsage = {
+  fiveHour: SessionQuotaWindowUsage[];
+  weekly: SessionQuotaWindowUsage[];
+};
+
+export type SessionDetailRow = {
+  threadId?: string | null;
+  turnCount: number;
+  path: string;
+  sessionId: string;
+  threadName: string | null;
+  agentSessionId?: string | null;
+  parentSessionId?: string | null;
+  agentDepth?: number;
+  agentPath?: string | null;
+  agentNickname?: string | null;
+  agentRole?: string | null;
+  modifiedAtMs: number;
+  sizeBytes: number;
+  inputTokens: number;
+  cachedInputTokens: number;
+  outputTokens: number;
+  reasoningOutputTokens: number;
+  totalTokens: number;
+  costUSD: number | null;
+  models: string[];
+  projects: string[];
+  projectReferences?: ProjectReference[];
+  dailyUsage: SessionDailyUsageRow[];
+  quotaUsage?: SessionQuotaUsage | null;
+};
+
+export type ProjectReference = {
+  path: string;
+  displayName: string;
+  codexProjectId?: string;
+  codexProjectName?: string;
+  codexProjectRoot?: string;
+};
+
+export async function fetchSessionDetails(): Promise<SessionDetailRow[]> {
+  return invoke<SessionDetailRow[]>("fetch_session_details");
+}
+
+export type ProjectSessionDay = {
+  date: string;
+  sessionCount: number;
+  totalTokens: number;
+  costUSD: number | null;
+};
+
+export type ProjectSessionDaysResponse = {
+  startDate: string;
+  endDate: string;
+  timezone: string;
+  totalSessions: number;
+  matchingSessions: number;
+  days: ProjectSessionDay[];
+  nextBefore: string | null;
+};
+
+export async function fetchProjectSessionDays(project: string, range: RangeKey, query: string, before: string | null = null): Promise<ProjectSessionDaysResponse> {
+  return invoke<ProjectSessionDaysResponse>("fetch_project_session_days", { project, range, query, before });
+}
+
+export async function fetchProjectDaySessions(project: string, range: RangeKey, date: string, query: string): Promise<SessionDetailRow[]> {
+  return invoke<SessionDetailRow[]>("fetch_project_day_sessions", { project, range, date, query });
+}
+
+export type SessionReplayDetail = {
+  path: string;
+  sessionId: string;
+  threadName: string | null;
+  modifiedAtMs: number;
+  sizeBytes: number;
+  rawJsonl: string;
+  agents: Array<{
+    path: string;
+    sessionId: string;
+    parentSessionId: string | null;
+    depth: number;
+    agentPath: string;
+    nickname: string | null;
+    role: string | null;
+    threadName: string | null;
+    inputTokens: number;
+    cachedInputTokens: number;
+    outputTokens: number;
+    costUSD: number | null;
+  }>;
+  summary: {
+    startTime: string | null;
+    endTime: string | null;
+    durationMs: number | null;
+    timeToFirstTokenMs: number | null;
+    cwd: string | null;
+    projects: string[];
+    models: string[];
+    cliVersion: string | null;
+    git: Record<string, string>;
+    inputTokens: number;
+    cachedInputTokens: number;
+    outputTokens: number;
+    reasoningOutputTokens: number;
+    totalTokens: number;
+    costUSD: number | null;
+    turnCount: number;
+    messageCount: number;
+    toolCallCount: number;
+    patchCount: number;
+    errorCount: number;
+  };
+  turns: Array<{
+    turnId: string;
+    startedAt: string | null;
+    completedAt: string | null;
+    durationMs: number | null;
+    systemMessages: Array<{ timestamp: string | null; kind: string; text: string }>;
+    userMessages: Array<{ timestamp: string | null; kind: string; text: string }>;
+    assistantMessages: Array<{ timestamp: string | null; kind: string; text: string }>;
+    reasoningSummaries: Array<{ timestamp: string | null; kind: string; text: string }>;
+    toolCalls: Array<{
+      callId: string | null;
+      name: string;
+      status: string | null;
+      arguments: string | null;
+      output: string | null;
+      stderr: string | null;
+      startedAt: string | null;
+      completedAt: string | null;
+      durationMs: number | null;
+      isError: boolean;
+      commandExecutions?: SessionReplayDetail["turns"][number]["toolCalls"];
+      nativeCommand?: boolean;
+    }>;
+    patchResults: Array<{
+      callId: string | null;
+      success: boolean | null;
+      output: string | null;
+      timestamp: string | null;
+      isError: boolean;
+    }>;
+    tokenEvents: Array<{
+      timestamp: string | null;
+      model: string;
+      inputTokens: number;
+      cachedInputTokens: number;
+      outputTokens: number;
+      reasoningOutputTokens: number;
+      totalTokens: number;
+    }>;
+    errors: string[];
+    items: Array<(
+      | { kind: "message"; timestamp: string | null; role: string; source: string; text: string }
+      | { kind: "reasoning"; timestamp: string | null; text: string }
+      | ({ kind: "toolCall" } & SessionReplayDetail["turns"][number]["toolCalls"][number])
+      | ({ kind: "patch" } & SessionReplayDetail["turns"][number]["patchResults"][number])
+      | ({ kind: "tokenUsage" } & SessionReplayDetail["turns"][number]["tokenEvents"][number])
+      | { kind: "error"; timestamp: string | null; text: string }
+      | { kind: "notice"; timestamp: string | null; label: string; text: string | null }
+    ) & { rawJsonlLineNumbers?: number[] }>;
+  }>;
+};
+
+export async function fetchSessionDetail(path: string): Promise<SessionReplayDetail> {
+  return invoke<SessionReplayDetail>("fetch_session_detail", { path });
+}
+
+export async function revealInFileManager(path: string): Promise<void> {
+  return invoke<void>("reveal_in_file_manager", { path });
+}
+
+export type TrayMenuItemDto = {
+  id: string;
+  text: string;
+  enabled: boolean;
+};
+
+export type TrayMenuUpdate = {
+  title: string;
+  items: TrayMenuItemDto[];
+  show_main_text?: string;
+  quit_text?: string;
+  indicators?: TrayQuotaIndicator[];
+  metrics?: TrayMetricIndicator[];
+  popover?: TrayPopoverData;
+};
+
+export async function updateTray(payload: TrayMenuUpdate): Promise<void> {
+  const { indicators, metrics = [], ...menu } = payload;
+  const icon = /Mac/.test(navigator.platform) && indicators && (indicators.length > 0 || metrics.length > 0)
+    ? renderTrayIcon(indicators, metrics)
+    : null;
+  return invoke<void>("update_tray", { payload: { ...menu, icon } });
+}
+
+export async function updateWidgetSnapshot(data: TrayPopoverData): Promise<void> {
+  return invoke<void>("update_widget_snapshot", { data });
+}
+
+export type PulsePaths = { data: string; logs: string; profile: string; temporary: string; exports: string };
+export async function getPulsePaths(): Promise<PulsePaths> {
+  return invoke<PulsePaths>("get_pulse_paths");
+}
+
+export type SessionRescanResponse = {
+  scan: ScanResponse;
+  session: SessionDetailRow;
+  detail: SessionReplayDetail;
+};
+
+export async function rescanSession(path: string): Promise<SessionRescanResponse> {
+  return invoke<SessionRescanResponse>("rescan_session", { path });
+}
+
+export async function rescanProject(project: string): Promise<ScanResponse> {
+  return invoke<ScanResponse>("rescan_project", { project });
+}
+
+export type SessionCreditThread = { threadId: string; modifiedAtMs: number };
+export type SessionCreditsRow = {
+  threadId: string;
+  dataStatus: "available" | "partial" | "unavailable" | null;
+  balanceUsageCredits: string | null;
+  usageSource: string | null;
+  dataAsOf: string | null;
+  fetchedAt: string;
+  stale: boolean;
+  isMock: boolean;
+};
+export type SessionCreditsResult = {
+  identity: string | null;
+  rows: SessionCreditsRow[];
+  requestStatus: string | null;
+  retryAt: number | null;
+};
+export function sessionCreditsIdentity() { return invoke<string>("session_credits_identity"); }
+export function setSessionCreditsScope(scope: string, revision: number, active: boolean) {
+  return invoke<void>("set_session_credits_scope", { scope, revision, active });
+}
+export function fetchSessionCredits(threads: SessionCreditThread[], force: boolean, cacheOnly: boolean, scope: string, revision: number) {
+  return invoke<SessionCreditsResult>("fetch_session_credits", { threads, force, cacheOnly, scope, revision });
+}

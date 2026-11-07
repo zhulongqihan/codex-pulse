@@ -1,0 +1,136 @@
+// @vitest-environment jsdom
+
+import { render, screen, within } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import { beforeAll, describe, expect, it, vi } from "vitest";
+import { ProjectUsageCard } from "./project-usage-card";
+import type { OverviewResponse } from "@/lib/api";
+
+vi.mock("./usage-trends-card", () => ({
+  UsageTrendsCard: ({ daily, title, compact }: { daily: OverviewResponse["daily"]; title: string; compact?: boolean }) => (
+    <div aria-label={title} data-compact={compact}>{daily.map((day) => `${day.date}: ${day.totalTokens}`).join(", ")}<button type="button">Token</button></div>
+  ),
+}));
+
+function project(displayName: string, totalTokens: number, costUSD: number): OverviewResponse["projects"][number] {
+  const outputTokens = Math.min(totalTokens, 20);
+  return { project: `/repo/${displayName}`, displayName, inputTokens: totalTokens - outputTokens, cachedInputTokens: Math.min(totalTokens - outputTokens, 20), outputTokens, totalTokens, costUSD };
+}
+
+beforeAll(() => {
+  window.HTMLElement.prototype.scrollIntoView = vi.fn();
+});
+
+describe("ProjectUsageCard", () => {
+  it("keeps embedded trend controls independent from opening project details", async () => {
+    const alpha = project("Alpha", 100, 3);
+    const onProjectClick = vi.fn();
+    render(<ProjectUsageCard projects={[alpha]} projectDaily={{ [alpha.project]: [] }} onProjectClick={onProjectClick} />);
+    const control = screen.getByRole("button", { name: /^Token$/ });
+    await userEvent.click(control);
+    await userEvent.keyboard("{Enter} ");
+    expect(onProjectClick).not.toHaveBeenCalled();
+    await userEvent.click(screen.getByText("Alpha"));
+    expect(onProjectClick).toHaveBeenCalledWith(alpha);
+  });
+  it("sorts, switches direction, and opens rows with keyboard", async () => {
+    const onProjectClick = vi.fn();
+    render(<ProjectUsageCard projects={[project("Alpha", 100, 3), project("Bravo", 200, 9)]} onProjectClick={onProjectClick} />);
+
+    const rows = () => screen.getAllByRole("button", { name: /Open analytics/ });
+    expect(rows()[0]).toHaveAccessibleName("Open analytics for Bravo");
+    screen.getByRole("combobox", { name: "Sort by" }).focus();
+    await userEvent.keyboard("[Enter][Home][ArrowDown][ArrowDown][Enter]");
+    expect(rows()[0]).toHaveAccessibleName("Open analytics for Alpha");
+    await userEvent.click(screen.getByRole("button", { name: "Ascending order" }));
+    expect(rows()[0]).toHaveAccessibleName("Open analytics for Bravo");
+    rows()[0].focus();
+    await userEvent.keyboard("{Enter}");
+    await userEvent.keyboard(" ");
+    expect(onProjectClick).toHaveBeenCalledTimes(2);
+  });
+
+  it("shows peak badges and relative cost tones", () => {
+    render(<ProjectUsageCard projects={[project("Zero", 0, 0), project("Low", 100, 3), project("Medium", 100, 6), project("High", 100, 9)]} />);
+    const row = (name: string) => screen.getByText(name).closest("tr")!;
+    expect(row("Zero").querySelector("[data-cost-tone='zero']")).toBeInTheDocument();
+    expect(row("Low").querySelector("[data-cost-tone='low']")).toBeInTheDocument();
+    expect(row("Medium").querySelector("[data-cost-tone='medium']")).toBeInTheDocument();
+    expect(row("High").querySelector("[data-cost-tone='high']")).toBeInTheDocument();
+    expect(within(row("Zero")).queryByText("Highest")).not.toBeInTheDocument();
+    expect(within(row("High")).getAllByText("Highest")).toHaveLength(1);
+    expect(within(row("High")).queryByText("100% of peak")).not.toBeInTheDocument();
+  });
+
+  it("aligns compact token parts while retaining exact values", () => {
+    const usage = { ...project("High", 2_000_000, 9), inputTokens: 1_900_000, cachedInputTokens: 1_600_000, outputTokens: 100_000 };
+    render(<ProjectUsageCard projects={[usage]} />);
+
+    const cell = screen.getByText("High").closest("tr")!.querySelectorAll("td")[2];
+    expect(within(cell).getByText("2M")).toHaveAttribute("title", "2,000,000");
+    expect(within(cell).getByText("300K")).toHaveAttribute("title", "300,000");
+    expect(within(cell).getByText("1.6M")).toHaveAttribute("title", "1,600,000");
+    expect(within(cell).getByText("100K")).toHaveAttribute("title", "100,000");
+    expect(within(cell).getByText("84.2%")).toBeInTheDocument();
+    expect(cell.querySelector("dl")?.children).toHaveLength(3);
+  });
+
+  it("sorts by recent activity", async () => {
+    render(<ProjectUsageCard projects={[
+      { ...project("Alpha", 100, 3), lastActiveDate: "2026-09-01" },
+      { ...project("Bravo", 200, 9), lastActiveDate: "2026-09-02" },
+    ]} onProjectClick={vi.fn()} />);
+
+    const rows = () => screen.getAllByRole("button", { name: /Open analytics/ });
+    screen.getByRole("combobox", { name: "Sort by" }).focus();
+    await userEvent.keyboard("[Enter][Home][ArrowDown][Enter]");
+    expect(rows()[0]).toHaveAccessibleName("Open analytics for Bravo");
+    await userEvent.click(screen.getByRole("button", { name: "Descending order" }));
+    expect(rows()[0]).toHaveAccessibleName("Open analytics for Alpha");
+  });
+
+  it("uses a Codex project name as an optional label without replacing the cwd", () => {
+    render(<ProjectUsageCard projects={[{
+      ...project("codex-usage-desktop", 100, 1),
+      codexProjectId: "local-app",
+      codexProjectName: "Codex Usage Desktop",
+      codexProjectRoot: "/repo/codex-usage-desktop",
+    }]} />);
+
+    expect(screen.getByText("Codex Usage Desktop")).toBeInTheDocument();
+    expect(screen.getByText("Codex project")).toBeInTheDocument();
+    expect(screen.getByText("/repo/codex-usage-desktop")).toBeInTheDocument();
+    expect(screen.queryByText("codex-usage-desktop", { selector: "p" })).not.toBeInTheDocument();
+  });
+
+  it("shows each project's daily values and updates them with the selected range", () => {
+    const alpha = project("Alpha", 100, 3);
+    const bravo = project("Bravo", 200, 9);
+    const daily = (date: string, totalTokens: number): OverviewResponse["daily"][number] => ({
+      date, inputTokens: totalTokens, cachedInputTokens: 0, outputTokens: 0, totalTokens, costUSD: 0,
+    });
+    const { rerender } = render(<ProjectUsageCard projects={[alpha, bravo]} projectDaily={{
+      [alpha.project]: [daily("2026-09-27", 10), daily("2026-09-28", 90)],
+      [bravo.project]: [daily("2026-09-27", 200), daily("2026-09-28", 0)],
+    }} />);
+
+    expect(screen.getByLabelText("Daily trend: Alpha")).toHaveTextContent("2026-09-27: 10, 2026-09-28: 90");
+    expect(screen.getByLabelText("Daily trend: Bravo")).toHaveTextContent("2026-09-27: 200, 2026-09-28: 0");
+    expect(screen.getAllByRole("columnheader").map((header) => header.textContent)).toEqual(["Project Directory", "Daily trend", "Tokens and cost"]);
+    const alphaCells = screen.getByText("Alpha").closest("tr")!.querySelectorAll("td");
+    expect(alphaCells).toHaveLength(3);
+    expect(alphaCells[1]).toContainElement(screen.getByLabelText("Daily trend: Alpha"));
+    expect(screen.getByLabelText("Daily trend: Alpha")).toHaveAttribute("data-compact", "true");
+    expect(alphaCells[2]).toHaveTextContent("100");
+    expect(alphaCells[2]).toHaveTextContent("$3.00");
+    expect(screen.getAllByRole("row")).toHaveLength(3);
+
+    rerender(<ProjectUsageCard projects={[alpha, bravo]} projectDaily={{
+      [alpha.project]: [daily("2026-09-28", 90)],
+      [bravo.project]: [daily("2026-09-28", 0)],
+    }} />);
+
+    expect(screen.getByLabelText("Daily trend: Alpha")).toHaveTextContent("2026-09-28: 90");
+    expect(screen.getByLabelText("Daily trend: Alpha")).not.toHaveTextContent("2026-09-27");
+  });
+});

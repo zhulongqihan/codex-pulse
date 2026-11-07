@@ -1,0 +1,194 @@
+// @vitest-environment jsdom
+import { fireEvent, render, screen } from "@testing-library/react";
+import { StrictMode } from "react";
+import dayjs from "dayjs";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { buildResetHistorySummary, CodexResetHistoryModal } from "./codex-reset-history";
+import { fetchCodexResetHistory, openUrl } from "@/lib/api";
+
+vi.mock("@/lib/api", () => ({
+  fetchCodexResetHistory: vi.fn(),
+  openUrl: vi.fn(),
+}));
+
+describe("CodexResetHistoryModal", () => {
+  beforeEach(() => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    vi.setSystemTime(new Date("2026-08-25T00:46:51.000Z"));
+    vi.mocked(fetchCodexResetHistory).mockResolvedValue([
+      {
+        id: "2091688655828246890",
+        resetType: "regular",
+        announcedAt: "2026-08-24T00:46:51.000Z",
+        text: "Reset has been propagated.",
+        source: {
+          author: "thsottiaux",
+          url: "https://x.com/thsottiaux/status/2091688655828246890",
+        },
+      },
+      {
+        id: "2",
+        resetType: "banked",
+        announcedAt: "2026-08-21T00:46:51.000Z",
+        text: "A banked reset is available.",
+        source: {
+          author: "thsottiaux",
+          url: "https://x.com/thsottiaux/status/2",
+        },
+      },
+      {
+        id: "3",
+        resetType: "regular",
+        announcedAt: "2026-08-18T00:46:51.000Z",
+        text: "Third reset announcement.",
+        source: { author: "thsottiaux", url: "https://x.com/thsottiaux/status/3" },
+      },
+      {
+        id: "4",
+        resetType: "regular",
+        announcedAt: "2026-08-15T00:46:51.000Z",
+        text: "Fourth reset announcement.",
+        source: { author: "thsottiaux", url: "https://x.com/thsottiaux/status/4" },
+      },
+      {
+        id: "5",
+        resetType: "regular",
+        announcedAt: "2026-08-12T00:46:51.000Z",
+        text: "Fifth reset announcement.",
+        source: { author: "thsottiaux", url: "https://x.com/thsottiaux/status/5" },
+      },
+      {
+        id: "6",
+        resetType: "regular",
+        announcedAt: "2026-08-09T00:46:51.000Z",
+        text: "Oldest reset announcement.",
+        source: { author: "thsottiaux", url: "https://x.com/thsottiaux/status/6" },
+      },
+    ]);
+    vi.mocked(openUrl).mockResolvedValue();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("loads and summarizes the last 30 days", async () => {
+    render(<StrictMode><CodexResetHistoryModal onClose={() => {}} /></StrictMode>);
+
+    expect(await screen.findByText(/\d+ days? ago/)).toBeInTheDocument();
+    expect(screen.queryByText(/codex-reset\.com/)).not.toBeInTheDocument();
+    expect(fetchCodexResetHistory).toHaveBeenCalledWith(30);
+    expect(fetchCodexResetHistory).toHaveBeenCalledTimes(1);
+    expect(screen.getByText("Resets").nextElementSibling).toHaveTextContent("5");
+    expect(screen.getByText("Average interval").nextElementSibling).toHaveTextContent("3.8d");
+    expect(screen.getAllByTestId("reset-history-day")).toHaveLength(30);
+    expect(document.querySelectorAll('[data-reset-type="regular"]').length).toBeGreaterThan(0);
+    expect(document.querySelectorAll('[data-reset-type="banked"]')).toHaveLength(1);
+    expect(screen.getByText("Reset has been propagated.")).toBeInTheDocument();
+    expect(screen.getByText("Fifth reset announcement.")).toBeInTheDocument();
+    expect(screen.queryByText("Oldest reset announcement.")).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Show all" }));
+    expect(screen.getByText("Oldest reset announcement.")).toBeInTheDocument();
+    expect(screen.getByText("Showing 6 of 6 announcements")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Show less" }));
+    expect(screen.queryByText("Oldest reset announcement.")).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "@thsottiaux" }));
+    expect(openUrl).toHaveBeenCalledWith("https://x.com/thsottiaux/status/2091688655828246890");
+  });
+
+  it("renders source links when an observed reset has no author", async () => {
+    vi.mocked(fetchCodexResetHistory).mockResolvedValue([{
+      id: "observed-20260825T143200Z",
+      resetType: "regular",
+      announcedAt: "2026-08-25T14:30:00.000Z",
+      text: "Observed reset.",
+      source: { url: "https://x.com/thsottiaux/status/2092311059197808936" },
+    }]);
+
+    render(<CodexResetHistoryModal onClose={() => {}} />);
+
+    const sourceLinks = await screen.findAllByRole("button", { name: "View source" });
+    expect(sourceLinks).toHaveLength(2);
+    expect(screen.queryByText("@undefined")).not.toBeInTheDocument();
+
+    fireEvent.click(sourceLinks[0]);
+    expect(openUrl).toHaveBeenCalledWith("https://x.com/thsottiaux/status/2092311059197808936");
+  });
+
+  it("keeps a newer banked grant out of the latest reset and cadence", async () => {
+    vi.mocked(fetchCodexResetHistory).mockResolvedValue([
+      {
+        id: "grant", resetType: "banked", announcedAt: "2026-08-25T00:00:00Z",
+        text: "Banked grant", source: { url: "https://codex-reset.com/" },
+      },
+      {
+        id: "reset", resetType: "regular", announcedAt: "2026-08-24T00:00:00Z",
+        text: "Confirmed reset", source: { url: "https://x.com/thsottiaux/status/1" },
+      },
+    ]);
+
+    render(<CodexResetHistoryModal onClose={() => {}} />);
+    expect(await screen.findByText("Banked grant")).toBeInTheDocument();
+    expect(screen.getByText("Resets").nextElementSibling).toHaveTextContent("1");
+    expect(screen.getByText("Average interval").nextElementSibling).toHaveTextContent("—");
+    fireEvent.click(screen.getAllByRole("button", { name: "View source" })[0]);
+    expect(openUrl).toHaveBeenCalledWith("https://x.com/thsottiaux/status/1");
+  });
+
+  it("calculates adjacent reset intervals and mixed days", () => {
+    const summary = buildResetHistorySummary([
+      {
+        id: "1",
+        resetType: "regular",
+        announcedAt: "2026-08-24T12:00:00.000Z",
+        text: "Regular reset",
+        source: { author: "source", url: "https://example.com/1" },
+      },
+      {
+        id: "2",
+        resetType: "banked",
+        announcedAt: "2026-08-24T00:00:00.000Z",
+        text: "Banked reset",
+        source: { author: "source", url: "https://example.com/2" },
+      },
+      {
+        id: "3",
+        resetType: "regular",
+        announcedAt: "2026-08-20T00:00:00.000Z",
+        text: "Earlier reset",
+        source: { author: "source", url: "https://example.com/3" },
+      },
+    ], dayjs("2026-08-25T00:46:51.000Z"));
+
+    expect(summary.averageIntervalDays).toBe(4.5);
+    expect(summary.longestIntervalDays).toBe(4.5);
+    expect(summary.calendarDays.find((day) => day.date.format("YYYY-MM-DD") === "2026-08-24")?.resetType).toBe("mixed");
+  });
+
+  it("groups reset announcements by the same local date shown in the list", () => {
+    const originalTimezone = process.env.TZ;
+    process.env.TZ = "Asia/Shanghai";
+
+    try {
+      const summary = buildResetHistorySummary([
+        {
+          id: "1",
+          resetType: "banked",
+          announcedAt: "2026-08-21T23:40:12.000Z",
+          text: "A banked reset is available.",
+          source: { author: "source", url: "https://example.com/1" },
+        },
+      ], dayjs("2026-08-26T07:00:00.000+08:00"));
+
+      expect(summary.calendarDays.find((day) => day.date.format("YYYY-MM-DD") === "2026-08-21")?.resetType).toBeNull();
+      expect(summary.calendarDays.find((day) => day.date.format("YYYY-MM-DD") === "2026-08-22")?.resetType).toBe("banked");
+      expect([...summary.calendarDays].reverse().find((day) => day.inRange)?.date.format("YYYY-MM-DD")).toBe("2026-08-26");
+    } finally {
+      if (originalTimezone === undefined) delete process.env.TZ;
+      else process.env.TZ = originalTimezone;
+    }
+  });
+});

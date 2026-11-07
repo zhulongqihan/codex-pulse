@@ -1,0 +1,29 @@
+{
+  "build": {
+    "beforeBuildCommand": "pnpm build --mode e2e"
+  },
+  "app": {
+    "withGlobalTauri": true,
+    "security": {
+      "capabilities": [
+        "default",
+        "tray",
+        {
+          "identifier": "e2e",
+          "windows": [
+            "main",
+            "tray",
+            "widget"
+          ],
+          "permissions": [
+            "wdio:default",
+            "wdio-webdriver:default",
+            "core:window:allow-set-focus",
+            "core:window:allow-close",
+            "core:window:allow-hide"
+          ]
+        }
+      ]
+    }
+  }
+}

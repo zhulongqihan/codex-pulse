@@ -15,13 +15,16 @@ concurrency:
 
 jobs:
   test-and-build:
-    name: Node 24 · Windows
+    name: React + Rust · Windows
     runs-on: windows-latest
-    timeout-minutes: 25
+    timeout-minutes: 60
     env:
       CI: "true"
       npm_config_cache: ${{ github.workspace }}/.local/cache/npm
-      ELECTRON_CACHE: ${{ github.workspace }}/.local/cache/electron
+      CARGO_HOME: ${{ github.workspace }}/.local/cache/cargo
+      CARGO_TARGET_DIR: ${{ github.workspace }}/.local/target
+      TEMP: ${{ github.workspace }}/.local/tmp
+      TMP: ${{ github.workspace }}/.local/tmp
     steps:
       - name: Check out source
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -30,13 +33,24 @@ jobs:
       - name: Set up Node.js
         uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
-          node-version: "24"
-          cache: npm
+          node-version: "24.15.0"
+      - name: Prepare workspace caches
+        run: New-Item -ItemType Directory -Force $env:TEMP,$env:CARGO_HOME,$env:CARGO_TARGET_DIR | Out-Null
+      - name: Set up pnpm
+        run: npm install --global pnpm@10.20.0
+      - name: Set up Rust
+        run: |
+          rustup toolchain install 1.94.1 --profile minimal
+          rustup default 1.94.1
       - name: Install locked dependencies
-        run: npm ci
+        run: pnpm install --frozen-lockfile --store-dir .local/cache/pnpm
+      - name: Check TypeScript contracts
+        run: pnpm typecheck
       - name: Run tests
-        run: npm test
+        run: pnpm test
+      - name: Test Rust engine and desktop contracts
+        run: cargo test --locked --manifest-path src-tauri/Cargo.toml --lib
       - name: Build application
-        run: npm run build
-      - name: Verify renderer state and failed-range recovery
-        run: node scripts/renderer-smoke.mjs
+        run: pnpm exec tauri build --debug --no-bundle --features e2e --config src-tauri/tauri.e2e.conf.json
+      - name: Verify native windows using synthetic sources
+        run: pnpm exec wdio run ./wdio.pulse.conf.ts

@@ -1,0 +1,1319 @@
+mod cache_recovery;
+mod codex_auth;
+mod codex_environment;
+mod codex_forecast;
+mod codex_limits;
+mod codex_projects;
+mod codex_resets;
+mod date;
+mod db;
+mod exporter;
+mod overview;
+mod pricing;
+mod pulse_desktop;
+mod pulse_update;
+mod project_sessions;
+mod scanner;
+mod session_credits;
+mod session_file;
+mod session_index;
+mod session_replay;
+mod tray_popover;
+mod types;
+mod usage_diagnostics;
+
+use std::io::ErrorKind;
+use std::path::{Path, PathBuf};
+use std::sync::{
+    Arc, Condvar, Mutex,
+};
+use std::time::{Duration, Instant};
+use tauri::menu::{Menu, MenuItem, MenuItemKind};
+use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
+use tauri::{Emitter, Manager};
+use types::{
+    CodexLimitsResponse, CodexQuotaForecastResponse, CodexResetAnnouncement,
+    CodexWindowActivationResponse, ExportResponse, ModelPricingCatalogResponse,
+    MonthlyUsageResponse, OverviewResponse, ProjectAnalyticsResponse, ScanResponse,
+    SessionDetailRow, SessionReplayDetail, UpdateCheckResponse,
+    UpdateInstallResponse, UsageRefreshResponse,
+};
+
+const DEFAULT_BACKGROUND_RESCAN_INTERVAL: Duration = Duration::from_secs(5 * 60);
+const ALLOWED_BACKGROUND_RESCAN_MINUTES: [u64; 9] = [1, 2, 3, 4, 5, 10, 15, 30, 60];
+
+struct AppState {
+    database_path: PathBuf,
+    pricing_cache_path: PathBuf,
+    window_activation_marker_path: PathBuf,
+    codex_home_path: PathBuf,
+}
+
+#[tauri::command]
+async fn fetch_usage_diagnostics(
+    state: tauri::State<'_, AppState>,
+) -> Result<usage_diagnostics::UsageDiagnostics, String> {
+    let database_path = state.database_path.clone();
+    tauri::async_runtime::spawn_blocking(move || usage_diagnostics::inspect(&database_path))
+        .await
+        .map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+async fn schedule_cache_rebuild(state: tauri::State<'_, AppState>) -> Result<String, String> {
+    let database = state.database_path.clone();
+    tauri::async_runtime::spawn_blocking(move || cache_recovery::schedule(&database))
+        .await
+        .map_err(|error| error.to_string())?
+}
+
+#[tauri::command]
+async fn configure_codex_home(
+    state: tauri::State<'_, AppState>,
+    home: Option<String>,
+) -> Result<(), String> {
+    let settings_path = state.codex_home_path.clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        usage_diagnostics::configure(&settings_path, home.map(PathBuf::from))
+    })
+    .await
+    .map_err(|error| error.to_string())?
+}
+
+struct BackgroundRefreshSchedule {
+    interval: Mutex<Duration>,
+    changed: Condvar,
+}
+
+impl BackgroundRefreshSchedule {
+    fn new() -> Self {
+        Self {
+            interval: Mutex::new(DEFAULT_BACKGROUND_RESCAN_INTERVAL),
+            changed: Condvar::new(),
+        }
+    }
+}
+
+fn background_refresh_interval(minutes: u64) -> Result<Duration, String> {
+    if ALLOWED_BACKGROUND_RESCAN_MINUTES.contains(&minutes) {
+        Ok(Duration::from_secs(minutes * 60))
+    } else {
+        Err(format!(
+            "Unsupported background refresh interval: {minutes} minutes"
+        ))
+    }
+}
+
+fn scan_usage_blocking(
+    database_path: &Path,
+    pricing_cache_path: &Path,
+) -> Result<ScanResponse, String> {
+    let mut db = db::open_database(database_path)?;
+    let pricing_started = Instant::now();
+    let pricing_source =
+        pricing::PricingSource::load_cached_or_embedded(Some(pricing_cache_path.to_path_buf()));
+    let pricing_ms = pricing_started.elapsed().as_millis();
+    let mut response = scanner::scan_codex_usage(&mut db, &pricing_source, None, None)?;
+    let models = db::pricing_models(&db)?;
+    let pricing_source =
+        pricing::PricingSource::load_for_models(Some(pricing_cache_path.to_path_buf()), models);
+    if pricing_source.was_refreshed() {
+        db::recalculate_daily_costs(&mut db, &pricing_source)?;
+    }
+    response.metrics.pricing_ms = pricing_started.elapsed().as_millis().max(pricing_ms);
+    Ok(response)
+}
+
+fn load_usage_pricing(
+    db: &mut rusqlite::Connection,
+    pricing_cache_path: &Path,
+) -> Result<pricing::PricingSource, String> {
+    let models = db::pricing_models(db)?;
+    let pricing_source =
+        pricing::PricingSource::load_for_models(Some(pricing_cache_path.to_path_buf()), models);
+    if pricing_source.was_refreshed() {
+        db::recalculate_daily_costs(db, &pricing_source)?;
+    }
+    Ok(pricing_source)
+}
+
+fn refresh_usage_data_with<S, L>(
+    force_limits: bool,
+    scan_fn: S,
+    limits_fn: L,
+) -> Result<UsageRefreshResponse, String>
+where
+    S: FnOnce() -> Result<ScanResponse, String>,
+    L: FnOnce() -> Result<CodexLimitsResponse, String>,
+{
+    log::info!("Background rescan started. force_limits={force_limits}");
+    let scan = scan_fn().map_err(|error| {
+        log::warn!("Background rescan failed: {error}");
+        error
+    })?;
+    let files_scanned = scan.metrics.files_scanned;
+    let files_parsed = scan.metrics.files_parsed;
+    let files_reused = scan.metrics.files_reused;
+    log::info!(
+        "Background rescan completed. filesScanned={files_scanned} filesParsed={files_parsed} filesReused={files_reused}"
+    );
+
+    let should_fetch_limits = force_limits || files_parsed > 0;
+    let (limits, limits_error, limits_skipped) = if should_fetch_limits {
+        log::info!("Starting fetch_codex_limits after rescan.");
+        match limits_fn() {
+            Ok(limits) => {
+                log::info!("Completed fetch_codex_limits after rescan.");
+                (Some(limits), None, false)
+            }
+            Err(error) => {
+                log::warn!("fetch_codex_limits failed after rescan: {error}");
+                (None, Some(error), false)
+            }
+        }
+    } else {
+        log::info!("Skipping fetch_codex_limits because no Codex session files changed.");
+        (None, None, true)
+    };
+
+    Ok(UsageRefreshResponse {
+        scan,
+        limits,
+        limits_error,
+        limits_skipped,
+        refreshed_at: chrono::Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Millis, true),
+    })
+}
+
+fn refresh_usage_data_blocking(
+    database_path: &Path,
+    pricing_cache_path: &Path,
+    force_limits: bool,
+) -> Result<UsageRefreshResponse, String> {
+    refresh_usage_data_with(
+        force_limits,
+        || scan_usage_blocking(database_path, pricing_cache_path),
+        codex_limits::fetch_codex_limits,
+    )
+}
+
+#[tauri::command]
+async fn scan_usage(state: tauri::State<'_, AppState>) -> Result<ScanResponse, String> {
+    let database_path = state.database_path.clone();
+    let pricing_cache_path = state.pricing_cache_path.clone();
+
+    tauri::async_runtime::spawn_blocking(move || {
+        scan_usage_blocking(&database_path, &pricing_cache_path)
+    })
+    .await
+    .map_err(|error| error.to_string())?
+}
+
+#[tauri::command]
+async fn rescan_session(
+    state: tauri::State<'_, AppState>,
+    path: String,
+) -> Result<types::SessionRescanResponse, String> {
+    let database_path = state.database_path.clone();
+    let pricing_cache_path = state.pricing_cache_path.clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        let mut db = db::open_database(&database_path)?;
+        let pricing = pricing::PricingSource::load_cached_or_embedded(Some(pricing_cache_path));
+        scanner::rescan_session(&mut db, &pricing, None, None, &path)
+    })
+    .await
+    .map_err(|error| error.to_string())?
+}
+
+#[tauri::command]
+async fn rescan_project(
+    state: tauri::State<'_, AppState>,
+    project: String,
+) -> Result<ScanResponse, String> {
+    let database_path = state.database_path.clone();
+    let pricing_cache_path = state.pricing_cache_path.clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        let mut db = db::open_database(&database_path)?;
+        let pricing = pricing::PricingSource::load_cached_or_embedded(Some(pricing_cache_path));
+        scanner::rescan_project(&mut db, &pricing, None, None, &project)
+    })
+    .await
+    .map_err(|error| error.to_string())?
+}
+
+#[tauri::command]
+async fn refresh_usage_data(
+    state: tauri::State<'_, AppState>,
+    force_limits: bool,
+) -> Result<UsageRefreshResponse, String> {
+    let database_path = state.database_path.clone();
+    let pricing_cache_path = state.pricing_cache_path.clone();
+
+    tauri::async_runtime::spawn_blocking(move || {
+        refresh_usage_data_blocking(&database_path, &pricing_cache_path, force_limits)
+    })
+    .await
+    .map_err(|error| error.to_string())?
+}
+
+#[tauri::command]
+fn set_background_refresh_interval(
+    state: tauri::State<'_, Arc<BackgroundRefreshSchedule>>,
+    minutes: u64,
+) -> Result<(), String> {
+    let interval = background_refresh_interval(minutes)?;
+    *state.interval.lock().map_err(|error| error.to_string())? = interval;
+    state.changed.notify_all();
+    Ok(())
+}
+
+#[tauri::command]
+async fn fetch_overview(
+    state: tauri::State<'_, AppState>,
+    range: String,
+) -> Result<OverviewResponse, String> {
+    let database_path = state.database_path.clone();
+    let pricing_cache_path = state.pricing_cache_path.clone();
+
+    tauri::async_runtime::spawn_blocking(move || {
+        let mut db = db::open_database(&database_path)?;
+        let pricing_source = load_usage_pricing(&mut db, &pricing_cache_path)?;
+        let mut overview = overview::get_overview(&db, &range, None, &pricing_source)?;
+        codex_projects::CodexProjectCatalog::load(&scanner::default_codex_home())
+            .enrich_overview(&mut overview);
+        Ok(overview)
+    })
+    .await
+    .map_err(|error| error.to_string())?
+}
+
+#[tauri::command]
+async fn fetch_project_analytics(
+    state: tauri::State<'_, AppState>,
+    project: String,
+    range: String,
+) -> Result<ProjectAnalyticsResponse, String> {
+    let database_path = state.database_path.clone();
+    let pricing_cache_path = state.pricing_cache_path.clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        let mut db = db::open_database(&database_path)?;
+        let pricing_source = load_usage_pricing(&mut db, &pricing_cache_path)?;
+        let mut analytics =
+            overview::get_project_analytics(&db, &project, &range, None, &pricing_source)?;
+        codex_projects::CodexProjectCatalog::load(&scanner::default_codex_home())
+            .enrich_analytics(&mut analytics);
+        Ok(analytics)
+    })
+    .await
+    .map_err(|error| error.to_string())?
+}
+
+#[tauri::command]
+async fn fetch_model_pricing_catalog(
+    state: tauri::State<'_, AppState>,
+) -> Result<ModelPricingCatalogResponse, String> {
+    let pricing_cache_path = state.pricing_cache_path.clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        Ok(pricing::PricingSource::load(Some(pricing_cache_path)).catalog())
+    })
+    .await
+    .map_err(|error| error.to_string())?
+}
+
+#[tauri::command]
+async fn refresh_model_pricing(
+    state: tauri::State<'_, AppState>,
+) -> Result<ModelPricingCatalogResponse, String> {
+    let database_path = state.database_path.clone();
+    let pricing_cache_path = state.pricing_cache_path.clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        let pricing_source = pricing::PricingSource::refresh(Some(pricing_cache_path))?;
+        let mut db = db::open_database(&database_path)?;
+        db::recalculate_daily_costs(&mut db, &pricing_source)?;
+        Ok(pricing_source.catalog())
+    })
+    .await
+    .map_err(|error| error.to_string())?
+}
+
+#[tauri::command]
+async fn fetch_monthly_usage(
+    state: tauri::State<'_, AppState>,
+) -> Result<MonthlyUsageResponse, String> {
+    let database_path = state.database_path.clone();
+
+    tauri::async_runtime::spawn_blocking(move || {
+        let db = db::open_database(&database_path)?;
+        overview::get_monthly_usage(&db, None)
+    })
+    .await
+    .map_err(|error| error.to_string())?
+}
+
+#[tauri::command]
+async fn fetch_codex_limits() -> Result<CodexLimitsResponse, String> {
+    tauri::async_runtime::spawn_blocking(codex_limits::fetch_codex_limits)
+        .await
+        .map_err(|error| error.to_string())?
+}
+
+#[tauri::command]
+async fn activate_codex_window(
+    state: tauri::State<'_, AppState>,
+) -> Result<CodexWindowActivationResponse, String> {
+    let marker_path = state.window_activation_marker_path.clone();
+    tauri::async_runtime::spawn_blocking(move || codex_limits::activate_codex_window(&marker_path))
+        .await
+        .map_err(|error| error.to_string())?
+}
+
+#[tauri::command]
+async fn fetch_codex_quota_forecast(
+    locale: Option<String>,
+) -> Result<CodexQuotaForecastResponse, String> {
+    tauri::async_runtime::spawn_blocking(move || codex_forecast::fetch(locale.as_deref().unwrap_or("en")))
+        .await
+        .map_err(|error| error.to_string())?
+}
+
+#[tauri::command]
+async fn fetch_latest_codex_reset() -> Result<Option<CodexResetAnnouncement>, String> {
+    tauri::async_runtime::spawn_blocking(codex_resets::fetch_latest_reset)
+        .await
+        .map_err(|error| error.to_string())?
+}
+
+#[tauri::command]
+async fn fetch_codex_reset_history(days: u32) -> Result<Vec<CodexResetAnnouncement>, String> {
+    tauri::async_runtime::spawn_blocking(move || codex_resets::fetch_reset_history(days))
+        .await
+        .map_err(|error| error.to_string())?
+}
+
+#[tauri::command]
+async fn fetch_project_session_days(
+    state: tauri::State<'_, AppState>,
+    project: String,
+    range: String,
+    query: String,
+    before: Option<String>,
+) -> Result<types::ProjectSessionDaysResponse, String> {
+    let database_path = state.database_path.clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        let db = db::open_database(&database_path)?;
+        let timezone = project_sessions::prepare_index(&db)?;
+        project_sessions::query_days(&db, &project, &range, &query, before.as_deref(), &timezone)
+    })
+    .await
+    .map_err(|error| error.to_string())?
+}
+
+#[tauri::command]
+async fn fetch_project_day_sessions(
+    state: tauri::State<'_, AppState>,
+    project: String,
+    range: String,
+    date: String,
+    query: String,
+) -> Result<Vec<SessionDetailRow>, String> {
+    let database_path = state.database_path.clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        let db = db::open_database(&database_path)?;
+        let timezone = project_sessions::prepare_index(&db)?;
+        project_sessions::query_day_sessions(&db, &project, &range, &date, &query, &timezone)
+    })
+    .await
+    .map_err(|error| error.to_string())?
+}
+
+#[tauri::command]
+fn set_session_credits_scope(scope: String, revision: u64, active: bool) -> Result<(), String> {
+    session_credits::set_scope(scope, revision, active)
+}
+
+#[tauri::command]
+fn session_credits_identity() -> Result<String, String> {
+    session_credits::identity()
+}
+
+#[tauri::command]
+async fn fetch_session_credits(
+    state: tauri::State<'_, AppState>,
+    threads: Vec<session_credits::CreditThread>,
+    force: bool,
+    cache_only: bool,
+    scope: String,
+    revision: u64,
+) -> Result<session_credits::CreditResult, String> {
+    let database = state.database_path.clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        session_credits::fetch(&database, threads, force, cache_only, &scope, revision)
+    }).await.map_err(|error| error.to_string())?
+}
+
+#[tauri::command]
+async fn fetch_session_details(
+    state: tauri::State<'_, AppState>,
+) -> Result<Vec<SessionDetailRow>, String> {
+    let database_path = state.database_path.clone();
+
+    tauri::async_runtime::spawn_blocking(move || {
+        let db = db::open_database(&database_path)?;
+        let mut sessions = db::query_session_details(&db)?;
+        let names = session_index::load_thread_names();
+        let agents = session_replay::load_session_agents(&db)?
+            .into_iter()
+            .map(|agent| (agent.path.clone(), agent))
+            .collect::<std::collections::BTreeMap<_, _>>();
+        for session in &mut sessions {
+            session.thread_name = session_index::resolve_thread_name(
+                &session.path,
+                session.thread_name.take(),
+                &names,
+            );
+            if let Some(agent) = agents.get(&session.path) {
+                session.agent_session_id = Some(agent.session_id.clone());
+                session.parent_session_id = agent.parent_session_id.clone();
+                session.agent_depth = agent.depth;
+                session.agent_path = Some(agent.agent_path.clone());
+                session.agent_nickname = agent.nickname.clone();
+                session.agent_role = agent.role.clone();
+            }
+        }
+        codex_projects::CodexProjectCatalog::load(&scanner::default_codex_home())
+            .enrich_sessions(&mut sessions);
+        Ok(sessions)
+    })
+    .await
+    .map_err(|error| error.to_string())?
+}
+
+#[tauri::command]
+async fn fetch_session_detail(
+    state: tauri::State<'_, AppState>,
+    path: String,
+) -> Result<SessionReplayDetail, String> {
+    let database_path = state.database_path.clone();
+
+    tauri::async_runtime::spawn_blocking(move || {
+        let db = db::open_database(&database_path)?;
+        let mut detail = session_replay::fetch_session_detail(&db, &path)?;
+        let names = session_index::load_thread_names();
+        detail.thread_name =
+            session_index::resolve_thread_name(&detail.path, detail.thread_name.take(), &names);
+        Ok(detail)
+    })
+    .await
+    .map_err(|error| error.to_string())?
+}
+
+#[tauri::command]
+async fn reset_usage_state(state: tauri::State<'_, AppState>) -> Result<(), String> {
+    let database_path = state.database_path.clone();
+    let pricing_cache_path = state.pricing_cache_path.clone();
+
+    tauri::async_runtime::spawn_blocking(move || {
+        session_credits::reset(&database_path)?;
+        delete_pricing_cache(&pricing_cache_path)
+    })
+    .await
+    .map_err(|error| error.to_string())?
+}
+
+#[tauri::command]
+async fn export_usage(
+    state: tauri::State<'_, AppState>,
+    range: String,
+    format: String,
+    path: String,
+) -> Result<ExportResponse, String> {
+    let database_path = state.database_path.clone();
+    let pricing_cache_path = state.pricing_cache_path.clone();
+
+    tauri::async_runtime::spawn_blocking(move || {
+        let mut db = db::open_database(&database_path)?;
+        let pricing_source = load_usage_pricing(&mut db, &pricing_cache_path)?;
+        let mut overview = overview::get_overview(&db, &range, None, &pricing_source)?;
+        codex_projects::CodexProjectCatalog::load(&scanner::default_codex_home())
+            .enrich_overview(&mut overview);
+        exporter::export_overview(&overview, &format, PathBuf::from(path).as_path())
+    })
+    .await
+    .map_err(|error| error.to_string())?
+}
+
+fn parse_version(v: &str) -> Option<(u32, u32, u32)> {
+    let clean = v.trim_start_matches("app-v").trim_start_matches('v');
+    let parts: Vec<&str> = clean.split('.').collect();
+    if parts.len() >= 3 {
+        let major = parts[0].parse::<u32>().ok()?;
+        let minor = parts[1].parse::<u32>().ok()?;
+        let patch_clean: String = parts[2]
+            .chars()
+            .take_while(|c| c.is_ascii_digit())
+            .collect();
+        let patch = patch_clean.parse::<u32>().ok()?;
+        Some((major, minor, patch))
+    } else {
+        None
+    }
+}
+
+fn is_newer(current: &str, latest: &str) -> bool {
+    match (parse_version(current), parse_version(latest)) {
+        (Some((c_maj, c_min, c_pat)), Some((l_maj, l_min, l_pat))) => {
+            if l_maj != c_maj {
+                l_maj > c_maj
+            } else if l_min != c_min {
+                l_min > c_min
+            } else {
+                l_pat > c_pat
+            }
+        }
+        _ => false,
+    }
+}
+
+#[tauri::command]
+async fn check_for_updates(
+    app: tauri::AppHandle,
+    etag: Option<String>,
+) -> Result<UpdateCheckResponse, String> {
+    let _ = etag;
+    let version = app.package_info().version.to_string();
+    tauri::async_runtime::spawn_blocking(move || pulse_update::check(&version))
+        .await.map_err(|error| error.to_string())?
+}
+
+#[tauri::command]
+async fn download_and_install_update(
+    app: tauri::AppHandle,
+) -> Result<UpdateInstallResponse, String> {
+    let data = app.state::<pulse_desktop::PulsePaths>().data.clone();
+    tauri::async_runtime::spawn_blocking(move || pulse_update::stage(&app, &data))
+        .await.map_err(|error| error.to_string())?
+}
+
+#[tauri::command]
+async fn restart_app(app: tauri::AppHandle) -> Result<(), String> {
+    pulse_desktop::save_widget_position(&app);
+    let data = app.state::<pulse_desktop::PulsePaths>().data.clone();
+    if pulse_update::restart_if_staged(&app, &data)? { return Ok(()); }
+    #[cfg(target_os = "macos")]
+    {
+        let executable = tauri::process::current_binary(&app.env())
+            .map_err(|e| format!("Failed to find app executable: {e}"))?;
+        if let Some(bundle) = macos_app_bundle(&executable) {
+            // launchd cleans up a LaunchAgent's children when it exits, so hand
+            // the new instance to Launch Services before closing this process.
+            let output = std::process::Command::new("/usr/bin/open")
+                .arg("-n")
+                .arg(bundle)
+                .output()
+                .map_err(|e| format!("Failed to relaunch app: {e}"))?;
+            if !output.status.success() {
+                return Err(format!(
+                    "Failed to relaunch app ({}): {}",
+                    output.status,
+                    String::from_utf8_lossy(&output.stderr).trim()
+                ));
+            }
+            log::info!("Requested app relaunch from {}.", bundle.display());
+            app.exit(0);
+            return Ok(());
+        }
+    }
+
+    app.request_restart();
+    Ok(())
+}
+
+#[cfg(target_os = "macos")]
+fn macos_app_bundle(executable: &Path) -> Option<&Path> {
+    let macos_dir = executable.parent()?;
+    let contents_dir = macos_dir.parent()?;
+    let bundle = contents_dir.parent()?;
+    (macos_dir.file_name()? == "MacOS"
+        && contents_dir.file_name()? == "Contents"
+        && bundle.extension()? == "app")
+        .then_some(bundle)
+}
+
+#[tauri::command]
+async fn open_url(url: String) -> Result<(), String> {
+    let parsed = reqwest::Url::parse(&url).map_err(|_| "Invalid web URL")?;
+    if !["https", "http"].contains(&parsed.scheme()) || parsed.host_str().is_none() {
+        return Err("Only HTTP and HTTPS links can be opened".into());
+    }
+    #[cfg(target_os = "macos")]
+    {
+        std::process::Command::new("open")
+            .arg(&url)
+            .status()
+            .map_err(|e| e.to_string())?;
+    }
+    #[cfg(target_os = "windows")]
+    {
+        // Avoid cmd.exe: URLs from recorded messages can contain shell syntax.
+        std::process::Command::new("explorer.exe")
+            .arg(parsed.as_str())
+            .spawn()
+            .map_err(|e| e.to_string())?;
+    }
+    #[cfg(target_os = "linux")]
+    {
+        std::process::Command::new("xdg-open")
+            .arg(&url)
+            .spawn()
+            .map_err(|e| e.to_string())?;
+    }
+    Ok(())
+}
+
+#[tauri::command]
+async fn reveal_in_file_manager(path: String) -> Result<(), String> {
+    #[cfg(target_os = "macos")]
+    std::process::Command::new("open")
+        .args(["-R", &path])
+        .status()
+        .map_err(|error| error.to_string())?;
+
+    #[cfg(target_os = "windows")]
+    std::process::Command::new("explorer")
+        .args(["/select,", &path])
+        .spawn()
+        .map_err(|error| error.to_string())?;
+
+    #[cfg(target_os = "linux")]
+    {
+        let parent = std::path::Path::new(&path)
+            .parent()
+            .ok_or_else(|| "Session file has no parent directory".to_string())?;
+        std::process::Command::new("xdg-open")
+            .arg(parent)
+            .spawn()
+            .map_err(|error| error.to_string())?;
+    }
+
+    Ok(())
+}
+
+#[cfg(not(any(target_os = "macos", target_os = "windows")))]
+#[derive(serde::Deserialize)]
+struct TrayMenuItemDto {
+    id: String,
+    text: String,
+    enabled: bool,
+}
+
+#[cfg(target_os = "macos")]
+#[derive(serde::Deserialize)]
+struct TrayIconBitmap {
+    rgba: Vec<u8>,
+    width: u32,
+    height: u32,
+}
+
+#[derive(serde::Deserialize)]
+struct TrayMenuUpdate {
+    title: String,
+    #[cfg(not(any(target_os = "macos", target_os = "windows")))]
+    items: Vec<TrayMenuItemDto>,
+    #[cfg(not(any(target_os = "macos", target_os = "windows")))]
+    show_main_text: Option<String>,
+    #[cfg(not(any(target_os = "macos", target_os = "windows")))]
+    quit_text: Option<String>,
+    popover: Option<serde_json::Value>,
+    #[cfg(target_os = "macos")]
+    icon: Option<TrayIconBitmap>,
+}
+
+#[tauri::command]
+fn update_tray(app: tauri::AppHandle, payload: TrayMenuUpdate) -> Result<(), String> {
+    if let Some(data) = payload.popover {
+        tray_popover::update(&app, data)?;
+    }
+    if let Some(tray) = app.tray_by_id("main") {
+        #[cfg(target_os = "macos")]
+        {
+            if let Some(icon) = payload.icon {
+                if icon.width == 0
+                    || icon.height == 0
+                    || u64::from(icon.width) * u64::from(icon.height) * 4 != icon.rgba.len() as u64
+                {
+                    return Err("Invalid tray icon dimensions".to_string());
+                }
+                let icon = tauri::image::Image::new_owned(
+                    icon.rgba,
+                    icon.width,
+                    icon.height,
+                )
+                .try_into()
+                .map_err(|error: tauri::Error| error.to_string())?;
+                // Set the image and template flag together to avoid a color flash.
+                tray.with_inner_tray_icon(move |tray| {
+                    tray.set_icon_with_as_template(Some(icon), true)
+                })
+                .map_err(|error| error.to_string())?
+                .map_err(|error| error.to_string())?;
+                tray.set_title(Some(""))
+                    .map_err(|error| error.to_string())?;
+            } else {
+                tray.set_icon(None).map_err(|error| error.to_string())?;
+                tray.set_title(Some(&payload.title))
+                    .map_err(|error| error.to_string())?;
+            }
+            tray.set_tooltip(Some(&payload.title))
+                .map_err(|error| error.to_string())?;
+        }
+        #[cfg(not(target_os = "macos"))]
+        let _ = tray.set_tooltip(Some(if payload.title.is_empty() {
+            "Codex Pulse".to_string()
+        } else {
+            payload.title.clone()
+        }));
+
+        #[cfg(not(any(target_os = "macos", target_os = "windows")))]
+        {
+            let mut menu_builder = tauri::menu::MenuBuilder::new(&app);
+
+            for item in payload.items {
+                if item.id == "separator" {
+                    menu_builder = menu_builder.separator();
+                } else {
+                    let menu_item = tauri::menu::MenuItemBuilder::with_id(&item.id, &item.text)
+                        .enabled(item.enabled)
+                        .build(&app)
+                        .map_err(|e| e.to_string())?;
+                    menu_builder = menu_builder.item(&menu_item);
+                }
+            }
+
+            let show_main_label = payload
+                .show_main_text
+                .unwrap_or_else(|| "显示主窗口 / Show Main Window".to_string());
+            let quit_label = payload
+                .quit_text
+                .unwrap_or_else(|| "退出 / Quit".to_string());
+
+            menu_builder = menu_builder
+                .separator()
+                .item(
+                    &tauri::menu::MenuItemBuilder::with_id("show_main", &show_main_label)
+                        .build(&app)
+                        .map_err(|e| e.to_string())?,
+                )
+                .item(
+                    &tauri::menu::MenuItemBuilder::with_id("quit", &quit_label)
+                        .build(&app)
+                        .map_err(|e| e.to_string())?,
+                );
+
+            let menu = menu_builder.build().map_err(|e| e.to_string())?;
+            let _ = tray.set_menu(Some(menu));
+        }
+    }
+    Ok(())
+}
+
+fn handle_tray_click(app: &tauri::AppHandle, button: MouseButton, _rect: Option<tauri::Rect>) {
+    #[cfg(any(target_os = "macos", target_os = "windows"))]
+    if button == MouseButton::Right {
+        if let Err(error) = tray_popover::toggle(app, _rect) {
+            log::warn!("Failed to show tray popover: {error}");
+        }
+        return;
+    }
+    if button != MouseButton::Left {
+        return;
+    }
+    #[cfg(target_os = "macos")]
+    let popover_visible = app
+        .get_webview_window("tray")
+        .is_some_and(|window| window.is_visible().unwrap_or(false));
+    if let Err(error) = tray_popover::dismiss(app) {
+        log::warn!("Failed to dismiss tray popover: {error}");
+    }
+    #[cfg(target_os = "macos")]
+    if popover_visible {
+        return;
+    }
+    if let Some(window) = app.get_webview_window("main") {
+        let _ = window.show();
+        let _ = window.unminimize();
+        let _ = window.set_focus();
+    }
+}
+
+fn delete_pricing_cache(path: &Path) -> Result<(), String> {
+    match std::fs::remove_file(path) {
+        Ok(()) => Ok(()),
+        Err(error) if error.kind() == ErrorKind::NotFound => Ok(()),
+        Err(error) => Err(error.to_string()),
+    }
+}
+
+fn setup_app_menu(app: &mut tauri::App) -> tauri::Result<()> {
+    let menu = Menu::default(app.handle())?;
+    let reload_item = MenuItem::with_id(app, "reload_page", "Reload", true, Some("CmdOrCtrl+R"))?;
+    #[cfg(debug_assertions)]
+    let inspect_item = MenuItem::with_id(
+        app,
+        "inspect_page",
+        "Inspect",
+        true,
+        Some(if cfg!(target_os = "macos") {
+            "CmdOrCtrl+Option+I"
+        } else {
+            "Ctrl+Shift+I"
+        }),
+    )?;
+
+    for item in menu.items()? {
+        if let MenuItemKind::Submenu(submenu) = item {
+            if submenu.text()? == "View" {
+                #[cfg(debug_assertions)]
+                submenu.prepend(&inspect_item)?;
+                submenu.prepend(&reload_item)?;
+                break;
+            }
+        }
+    }
+
+    app.set_menu(menu)?;
+    Ok(())
+}
+
+#[cfg_attr(mobile, tauri::mobile_entry_point)]
+pub fn run() {
+    let paths = pulse_desktop::prepare_paths().expect("Cannot prepare portable Codex Pulse data directory");
+    let log_directory = paths.logs.clone();
+    let builder = tauri::Builder::default()
+        .plugin(
+            tauri_plugin_log::Builder::new()
+                .targets([
+                    tauri_plugin_log::Target::new(tauri_plugin_log::TargetKind::Stdout),
+                    tauri_plugin_log::Target::new(tauri_plugin_log::TargetKind::Folder {
+                        path: log_directory,
+                        file_name: Some("codex-pulse".into()),
+                    }),
+                    tauri_plugin_log::Target::new(tauri_plugin_log::TargetKind::Webview),
+                ])
+                .level(log::LevelFilter::Info)
+                .build(),
+        )
+        .plugin(tauri_plugin_dialog::init());
+    #[cfg(feature = "e2e")]
+    let builder = builder
+        .plugin(tauri_plugin_wdio_webdriver::init())
+        .plugin(tauri_plugin_wdio::init());
+
+    builder
+        .on_window_event(|window, event| {
+            if window.label() == "widget" && matches!(event, tauri::WindowEvent::Resized(_) | tauri::WindowEvent::ScaleFactorChanged { .. }) {
+                let _ = pulse_desktop::keep_widget_visible(window.app_handle());
+            }
+            if window.label() == "tray" {
+                #[cfg(target_os = "windows")]
+                if matches!(event, tauri::WindowEvent::Resized(_)) {
+                    if let Err(error) = tray_popover::position_windows(window.app_handle(), None) {
+                        log::warn!("Failed to position tray popover: {error}");
+                    }
+                }
+                if matches!(event, tauri::WindowEvent::Focused(false)) {
+                    #[cfg(any(target_os = "macos", target_os = "windows"))]
+                    if let Err(error) = tray_popover::dismiss_on_focus_loss(window.app_handle()) {
+                        log::warn!("Failed to dismiss tray popover: {error}");
+                    }
+                    #[cfg(not(any(target_os = "macos", target_os = "windows")))]
+                    let _ = window.hide();
+                }
+                if let tauri::WindowEvent::CloseRequested { api, .. } = event {
+                    let _ = tray_popover::dismiss(window.app_handle());
+                    api.prevent_close();
+                }
+            }
+            if let tauri::WindowEvent::CloseRequested { api, .. } = event {
+                if window.label() == "main" {
+                    let _ = window.hide();
+                    api.prevent_close();
+                } else if window.label() == "widget" {
+                    pulse_desktop::save_widget_position(window.app_handle());
+                    let _ = pulse_desktop::widget_action(window.app_handle().clone(), "hide".into());
+                    api.prevent_close();
+                }
+            }
+        })
+        .on_menu_event(|app, event| match event.id.as_ref() {
+            "reload_page" => {
+                if let Some(window) = app.get_webview_window("main") {
+                    let _ = window.reload();
+                }
+            }
+            #[cfg(debug_assertions)]
+            "inspect_page" => {
+                if let Some(window) = app.get_webview_window("main") {
+                    window.open_devtools();
+                }
+            }
+            _ => {}
+        })
+        .setup(move |app| {
+            #[cfg(desktop)]
+            app.handle().plugin(tauri_plugin_autostart::init(
+                tauri_plugin_autostart::MacosLauncher::LaunchAgent,
+                Some(vec!["--hidden"]),
+            ))?;
+
+            let app_data_dir = paths.data.clone();
+            let store = pulse_desktop::PreferenceStore::load(&app_data_dir);
+            let preferences = store.value.lock().unwrap().clone();
+            app.manage(paths.clone());
+            app.manage(store);
+            app.manage(tray_popover::TrayPopoverState::default());
+            app.manage(pulse_desktop::WidgetSnapshot::default());
+            let database_path = app_data_dir.join("codex-pulse.db");
+            if let Err(error) = cache_recovery::apply_on_start(&database_path) {
+                log::error!("Cache recovery failed: {error}");
+            }
+            let codex_home_path = app_data_dir.join("codex-home.json");
+            usage_diagnostics::load_selection(&codex_home_path);
+            let pricing_cache_path = app_data_dir.join("codex-pricing-cache.json");
+            app.manage(AppState {
+                database_path: database_path.clone(),
+                pricing_cache_path: pricing_cache_path.clone(),
+                window_activation_marker_path: app_data_dir.join("codex-window-activation.json"),
+                codex_home_path,
+            });
+            let background_refresh_schedule = Arc::new(BackgroundRefreshSchedule::new());
+            app.manage(background_refresh_schedule.clone());
+
+            tauri::WebviewWindowBuilder::new(app, "main", tauri::WebviewUrl::App("index.html".into()))
+                .title("Codex Pulse").data_directory(paths.profile.clone())
+                .inner_size(1440.0, 960.0).min_inner_size(760.0, 540.0)
+                .visible(!std::env::args().any(|arg| arg == "--hidden"))
+                .build()?;
+            pulse_desktop::setup_widget(app, &paths, &preferences)?;
+            setup_app_menu(app)?;
+            #[cfg(any(target_os = "macos", target_os = "windows"))]
+            tray_popover::setup(app)?;
+
+
+            // Set up the menu bar / system tray item
+            #[cfg(not(target_os = "macos"))]
+            let tray_icon_bytes = include_bytes!("../icons/tray_icon.png");
+            #[cfg(not(target_os = "macos"))]
+            let tray_icon_image =
+                tauri::image::Image::from_bytes(tray_icon_bytes).map_err(|e| e.to_string())?;
+
+            let tray_builder = TrayIconBuilder::with_id("main")
+                .tooltip("Codex Pulse")
+                .on_menu_event(|app, event| match event.id.as_ref() {
+                    "show_main" => {
+                        if let Some(window) = app.get_webview_window("main") {
+                            let _ = window.show();
+                            let _ = window.set_focus();
+                        }
+                    }
+                    "quit" => {
+                        app.exit(0);
+                    }
+                    _ => {}
+                })
+                .on_tray_icon_event(|tray, event| {
+                    if let TrayIconEvent::Click {
+                        button,
+                        rect: _rect,
+                        button_state: MouseButtonState::Up,
+                        ..
+                    } = event
+                    {
+                        handle_tray_click(tray.app_handle(), button, Some(_rect));
+                    }
+                });
+            #[cfg(not(target_os = "macos"))]
+            let tray_builder = tray_builder.icon(tray_icon_image);
+            #[cfg(any(target_os = "windows", target_os = "macos"))]
+            let tray_builder = tray_builder.show_menu_on_left_click(false);
+
+            let _tray = tray_builder.build(app).map_err(|e| e.to_string())?;
+
+            if std::env::args().any(|arg| arg == "--hidden") {
+                if let Some(window) = app.get_webview_window("main") {
+                    let _ = window.hide();
+                }
+            }
+
+            let database_path = database_path.clone();
+            let pricing_cache_path = pricing_cache_path.clone();
+            let app_handle = app.handle().clone();
+
+            tauri::async_runtime::spawn_blocking(move || loop {
+                let interval = background_refresh_schedule.interval.lock().unwrap();
+                let interval_duration = *interval;
+                let (interval, wait_result) = background_refresh_schedule
+                    .changed
+                    .wait_timeout(interval, interval_duration)
+                    .unwrap();
+                if !wait_result.timed_out() {
+                    continue;
+                }
+                drop(interval);
+
+                match refresh_usage_data_blocking(&database_path, &pricing_cache_path, false) {
+                    Ok(refresh_response) => {
+                        let _ = app_handle.emit("background-refresh-completed", refresh_response);
+                    }
+                    Err(error) => {
+                        log::warn!("Background usage refresh failed: {error}");
+                        let _ = app_handle.emit("background-refresh-failed", error);
+                    }
+                }
+            });
+
+            pulse_update::confirm_startup(&app_data_dir);
+            Ok(())
+        })
+        .invoke_handler(tauri::generate_handler![
+            pulse_desktop::get_pulse_preferences,
+            pulse_desktop::get_legacy_preferences,
+            pulse_desktop::set_pulse_preferences,
+            pulse_desktop::widget_action,
+            pulse_desktop::get_pulse_paths,
+            pulse_desktop::open_pulse_data_dir,
+            pulse_desktop::get_widget_snapshot,
+            pulse_desktop::update_widget_snapshot,
+            fetch_usage_diagnostics,
+            schedule_cache_rebuild,
+            configure_codex_home,
+            scan_usage,
+            rescan_session,
+            rescan_project,
+            refresh_usage_data,
+            set_background_refresh_interval,
+            fetch_overview,
+            fetch_project_analytics,
+            fetch_model_pricing_catalog,
+            refresh_model_pricing,
+            fetch_monthly_usage,
+            fetch_codex_limits,
+            activate_codex_window,
+            fetch_codex_quota_forecast,
+            fetch_latest_codex_reset,
+            fetch_codex_reset_history,
+            reset_usage_state,
+            export_usage,
+            check_for_updates,
+            download_and_install_update,
+            restart_app,
+            open_url,
+            reveal_in_file_manager,
+            fetch_session_details,
+            set_session_credits_scope,
+            session_credits_identity,
+            fetch_session_credits,
+            fetch_project_session_days,
+            fetch_project_day_sessions,
+            fetch_session_detail,
+            update_tray,
+            tray_popover::get_tray_popover,
+            tray_popover::tray_popover_action
+        ])
+        .build(tauri::generate_context!())
+        .expect("error while building tauri application")
+        .run(|app, event| {
+            if matches!(event, tauri::RunEvent::Exit) {
+                pulse_desktop::save_widget_position(app);
+            }
+            #[cfg(target_os = "macos")]
+            if let tauri::RunEvent::Reopen { .. } = event {
+                if let Some(window) = app.get_webview_window("main") {
+                    let _ = window.show();
+                    let _ = window.set_focus();
+                }
+            }
+        });
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use chrono::Utc;
+    use std::cell::Cell;
+
+    fn scan_response(files_parsed: usize) -> ScanResponse {
+        ScanResponse {
+            imported_days: 1,
+            scanned_at: "2026-06-11T00:00:00.000Z".to_string(),
+            timezone: "UTC".to_string(),
+            metrics: types::ScanMetrics {
+                files_scanned: 2,
+                files_parsed,
+                files_reused: 2usize.saturating_sub(files_parsed),
+                ..types::ScanMetrics::default()
+            },
+        }
+    }
+
+    fn limits_response() -> CodexLimitsResponse {
+        CodexLimitsResponse {
+            session: None,
+            weekly: None,
+            credits: None,
+            credits_is_mock: false,
+            reset_credits_available_count: None,
+            reset_credits: None,
+            updated_at: "2026-06-11T00:00:00.000Z".to_string(),
+            source: "test".to_string(),
+            account: None,
+            membership_level: None,
+            workspace_name: None,
+            subscription_expires_at: None,
+            subscription_will_renew: None,
+        }
+    }
+
+    #[test]
+    fn delete_pricing_cache_removes_existing_file() {
+        let path = std::env::temp_dir().join(format!(
+            "codex-pricing-cache-reset-{}.json",
+            Utc::now().timestamp_nanos_opt().unwrap_or_default()
+        ));
+        std::fs::write(&path, "{}").unwrap();
+
+        delete_pricing_cache(&path).unwrap();
+
+        assert!(!path.exists());
+    }
+
+    #[test]
+    fn delete_pricing_cache_allows_missing_file() {
+        let path = std::env::temp_dir().join(format!(
+            "codex-pricing-cache-missing-{}.json",
+            Utc::now().timestamp_nanos_opt().unwrap_or_default()
+        ));
+
+        delete_pricing_cache(&path).unwrap();
+    }
+
+    #[test]
+    fn test_parse_version() {
+        assert_eq!(parse_version("0.4.0"), Some((0, 4, 0)));
+        assert_eq!(parse_version("v0.4.0"), Some((0, 4, 0)));
+        assert_eq!(parse_version("app-v0.4.0"), Some((0, 4, 0)));
+        assert_eq!(parse_version("app-v1.12.3-beta"), Some((1, 12, 3)));
+        assert_eq!(parse_version("invalid"), None);
+    }
+
+    #[test]
+    fn test_is_newer() {
+        assert!(is_newer("0.4.0", "0.5.0"));
+        assert!(is_newer("0.4.0", "v0.4.1"));
+        assert!(is_newer("0.4.0", "app-v1.0.0"));
+        assert!(!is_newer("0.4.0", "0.4.0"));
+        assert!(!is_newer("0.4.0", "0.3.9"));
+        assert!(!is_newer("0.4.0", "invalid"));
+    }
+
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn restart_uses_the_installed_app_bundle() {
+        let executable =
+            Path::new("/Applications/Codex Usage Desktop.app/Contents/MacOS/codex-usage-desktop");
+        assert_eq!(
+            macos_app_bundle(executable),
+            Some(Path::new("/Applications/Codex Usage Desktop.app"))
+        );
+        assert_eq!(
+            macos_app_bundle(Path::new("/tmp/codex-usage-desktop")),
+            None
+        );
+    }
+
+    #[test]
+    fn refresh_skips_limits_when_scan_has_no_changed_files() {
+        let limits_called = Cell::new(false);
+
+        let response = refresh_usage_data_with(
+            false,
+            || Ok(scan_response(0)),
+            || {
+                limits_called.set(true);
+                Ok(limits_response())
+            },
+        )
+        .unwrap();
+
+        assert!(!limits_called.get());
+        assert!(response.limits.is_none());
+        assert!(response.limits_error.is_none());
+        assert!(response.limits_skipped);
+    }
+
+    #[test]
+    fn refresh_fetches_limits_when_scan_has_changed_files() {
+        let limits_called = Cell::new(false);
+
+        let response = refresh_usage_data_with(
+            false,
+            || Ok(scan_response(1)),
+            || {
+                limits_called.set(true);
+                Ok(limits_response())
+            },
+        )
+        .unwrap();
+
+        assert!(limits_called.get());
+        assert!(response.limits.is_some());
+        assert!(response.limits_error.is_none());
+        assert!(!response.limits_skipped);
+    }
+
+    #[test]
+    fn refresh_force_mode_always_fetches_limits() {
+        let limits_called = Cell::new(false);
+
+        let response = refresh_usage_data_with(
+            true,
+            || Ok(scan_response(0)),
+            || {
+                limits_called.set(true);
+                Ok(limits_response())
+            },
+        )
+        .unwrap();
+
+        assert!(limits_called.get());
+        assert!(response.limits.is_some());
+        assert!(response.limits_error.is_none());
+        assert!(!response.limits_skipped);
+    }
+
+    #[test]
+    fn refresh_returns_scan_when_limits_fetch_fails() {
+        let response = refresh_usage_data_with(
+            true,
+            || Ok(scan_response(0)),
+            || Err("limits unavailable".to_string()),
+        )
+        .unwrap();
+
+        assert_eq!(response.scan.metrics.files_parsed, 0);
+        assert!(response.limits.is_none());
+        assert_eq!(response.limits_error.as_deref(), Some("limits unavailable"));
+        assert!(!response.limits_skipped);
+    }
+
+    #[test]
+    fn background_refresh_interval_accepts_only_supported_values() {
+        for minutes in [1, 2, 3, 4, 5, 10, 15, 30, 60] {
+            assert_eq!(
+                background_refresh_interval(minutes).unwrap(),
+                Duration::from_secs(minutes * 60)
+            );
+        }
+        assert!(background_refresh_interval(0).is_err());
+        assert!(background_refresh_interval(11).is_err());
+    }
+}

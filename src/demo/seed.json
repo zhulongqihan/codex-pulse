@@ -1,0 +1,1044 @@
+{
+  "referenceDate": "2026-11-06",
+  "sessions": [
+    {
+      "agentDepth": 0,
+      "agentNickname": null,
+      "agentPath": "/root",
+      "agentRole": null,
+      "agentSessionId": "11111111-1111-4111-8111-000000000016",
+      "cachedInputTokens": 24375,
+      "costUSD": 0.11465625,
+      "dailyUsage": [
+        {
+          "cachedInputTokens": 24375,
+          "costUSD": 0.11465625,
+          "date": "2026-10-22",
+          "inputTokens": 37500,
+          "models": [
+            "gpt-5.4"
+          ],
+          "outputTokens": 5050,
+          "projects": [
+            "F:/Demo/Research/Atlas"
+          ],
+          "quotaUsage": null,
+          "reasoningOutputTokens": 0,
+          "totalTokens": 42550
+        }
+      ],
+      "inputTokens": 37500,
+      "models": [
+        "gpt-5.4"
+      ],
+      "modifiedAtMs": 1793970000000,
+      "outputTokens": 5050,
+      "parentSessionId": null,
+      "path": "F:/Demo/Codex/sessions/rollout-11111111-1111-4111-8111-000000000016.jsonl",
+      "projectReferences": [
+        {
+          "displayName": "Atlas",
+          "path": "F:/Demo/Research/Atlas"
+        }
+      ],
+      "projects": [
+        "F:/Demo/Research/Atlas"
+      ],
+      "quotaUsage": {
+        "fiveHour": [],
+        "weekly": []
+      },
+      "reasoningOutputTokens": 0,
+      "sessionId": "rollout-11111111-1111-4111-8111-000000000016.jsonl",
+      "sizeBytes": 1718,
+      "threadId": "11111111-1111-4111-8111-000000000016",
+      "threadName": "合成演示 · 完善日期统计 16",
+      "totalTokens": 42550,
+      "turnCount": 2
+    },
+    {
+      "agentDepth": 0,
+      "agentNickname": null,
+      "agentPath": "/root",
+      "agentRole": null,
+      "agentSessionId": "11111111-1111-4111-8111-000000000017",
+      "cachedInputTokens": 25480,
+      "costUSD": 0.11987,
+      "dailyUsage": [
+        {
+          "cachedInputTokens": 25480,
+          "costUSD": 0.11987,
+          "date": "2026-10-21",
+          "inputTokens": 39200,
+          "models": [
+            "gpt-5"
+          ],
+          "outputTokens": 5280,
+          "projects": [
+            "F:/Demo/Studio/Atlas"
+          ],
+          "quotaUsage": null,
+          "reasoningOutputTokens": 0,
+          "totalTokens": 44480
+        }
+      ],
+      "inputTokens": 39200,
+      "models": [
+        "gpt-5"
+      ],
+      "modifiedAtMs": 1793970000000,
+      "outputTokens": 5280,
+      "parentSessionId": null,
+      "path": "F:/Demo/Codex/sessions/rollout-11111111-1111-4111-8111-000000000017.jsonl",
+      "projectReferences": [
+        {
+          "displayName": "Atlas",
+          "path": "F:/Demo/Studio/Atlas"
+        }
+      ],
+      "projects": [
+        "F:/Demo/Studio/Atlas"
+      ],
+      "quotaUsage": {
+        "fiveHour": [],
+        "weekly": []
+      },
+      "reasoningOutputTokens": 0,
+      "sessionId": "rollout-11111111-1111-4111-8111-000000000017.jsonl",
+      "sizeBytes": 1712,
+      "threadId": "11111111-1111-4111-8111-000000000017",
+      "threadName": "合成演示 · 检查模型定价 17",
+      "totalTokens": 44480,
+      "turnCount": 2
+    },
+    {
+      "agentDepth": 0,
+      "agentNickname": null,
+      "agentPath": "/root",
+      "agentRole": null,
+      "agentSessionId": "11111111-1111-4111-8111-000000000018",
+      "cachedInputTokens": 26585,
+      "costUSD": 0.12508375,
+      "dailyUsage": [
+        {
+          "cachedInputTokens": 26585,
+          "costUSD": 0.12508375,
+          "date": "2026-10-20",
+          "inputTokens": 40900,
+          "models": [
+            "gpt-5.4"
+          ],
+          "outputTokens": 5510,
+          "projects": [
+            "F:/Demo/Pulse"
+          ],
+          "quotaUsage": null,
+          "reasoningOutputTokens": 0,
+          "totalTokens": 46410
+        }
+      ],
+      "inputTokens": 40900,
+      "models": [
+        "gpt-5.4"
+      ],
+      "modifiedAtMs": 1793970000000,
+      "outputTokens": 5510,
+      "parentSessionId": null,
+      "path": "F:/Demo/Codex/sessions/rollout-11111111-1111-4111-8111-000000000018.jsonl",
+      "projectReferences": [
+        {
+          "displayName": "Pulse",
+          "path": "F:/Demo/Pulse"
+        }
+      ],
+      "projects": [
+        "F:/Demo/Pulse"
+      ],
+      "quotaUsage": {
+        "fiveHour": [],
+        "weekly": []
+      },
+      "reasoningOutputTokens": 0,
+      "sessionId": "rollout-11111111-1111-4111-8111-000000000018.jsonl",
+      "sizeBytes": 1700,
+      "threadId": "11111111-1111-4111-8111-000000000018",
+      "threadName": "合成演示 · 整理会话回放 18",
+      "totalTokens": 46410,
+      "turnCount": 2
+    },
+    {
+      "agentDepth": 0,
+      "agentNickname": null,
+      "agentPath": "/root",
+      "agentRole": null,
+      "agentSessionId": "11111111-1111-4111-8111-000000000013",
+      "cachedInputTokens": 21060,
+      "costUSD": 0.099015,
+      "dailyUsage": [
+        {
+          "cachedInputTokens": 21060,
+          "costUSD": 0.099015,
+          "date": "2026-10-25",
+          "inputTokens": 32400,
+          "models": [
+            "gpt-5"
+          ],
+          "outputTokens": 4360,
+          "projects": [
+            "F:/Demo/Research/Atlas"
+          ],
+          "quotaUsage": null,
+          "reasoningOutputTokens": 0,
+          "totalTokens": 36760
+        }
+      ],
+      "inputTokens": 32400,
+      "models": [
+        "gpt-5"
+      ],
+      "modifiedAtMs": 1793970000000,
+      "outputTokens": 4360,
+      "parentSessionId": null,
+      "path": "F:/Demo/Codex/sessions/rollout-11111111-1111-4111-8111-000000000013.jsonl",
+      "projectReferences": [
+        {
+          "displayName": "Atlas",
+          "path": "F:/Demo/Research/Atlas"
+        }
+      ],
+      "projects": [
+        "F:/Demo/Research/Atlas"
+      ],
+      "quotaUsage": {
+        "fiveHour": [],
+        "weekly": []
+      },
+      "reasoningOutputTokens": 0,
+      "sessionId": "rollout-11111111-1111-4111-8111-000000000013.jsonl",
+      "sizeBytes": 1716,
+      "threadId": "11111111-1111-4111-8111-000000000013",
+      "threadName": "合成演示 · 完善日期统计 13",
+      "totalTokens": 36760,
+      "turnCount": 2
+    },
+    {
+      "agentDepth": 0,
+      "agentNickname": null,
+      "agentPath": "/root",
+      "agentRole": null,
+      "agentSessionId": "11111111-1111-4111-8111-000000000014",
+      "cachedInputTokens": 22165,
+      "costUSD": 0.10422875,
+      "dailyUsage": [
+        {
+          "cachedInputTokens": 22165,
+          "costUSD": 0.10422875,
+          "date": "2026-10-24",
+          "inputTokens": 34100,
+          "models": [
+            "gpt-5.4"
+          ],
+          "outputTokens": 4590,
+          "projects": [
+            "F:/Demo/Studio/Atlas"
+          ],
+          "quotaUsage": null,
+          "reasoningOutputTokens": 0,
+          "totalTokens": 38690
+        }
+      ],
+      "inputTokens": 34100,
+      "models": [
+        "gpt-5.4"
+      ],
+      "modifiedAtMs": 1793970000000,
+      "outputTokens": 4590,
+      "parentSessionId": null,
+      "path": "F:/Demo/Codex/sessions/rollout-11111111-1111-4111-8111-000000000014.jsonl",
+      "projectReferences": [
+        {
+          "displayName": "Atlas",
+          "path": "F:/Demo/Studio/Atlas"
+        }
+      ],
+      "projects": [
+        "F:/Demo/Studio/Atlas"
+      ],
+      "quotaUsage": {
+        "fiveHour": [],
+        "weekly": []
+      },
+      "reasoningOutputTokens": 0,
+      "sessionId": "rollout-11111111-1111-4111-8111-000000000014.jsonl",
+      "sizeBytes": 1714,
+      "threadId": "11111111-1111-4111-8111-000000000014",
+      "threadName": "合成演示 · 检查模型定价 14",
+      "totalTokens": 38690,
+      "turnCount": 2
+    },
+    {
+      "agentDepth": 0,
+      "agentNickname": null,
+      "agentPath": "/root",
+      "agentRole": null,
+      "agentSessionId": "11111111-1111-4111-8111-000000000015",
+      "cachedInputTokens": 23270,
+      "costUSD": 0.10944249999999998,
+      "dailyUsage": [
+        {
+          "cachedInputTokens": 23270,
+          "costUSD": 0.10944249999999998,
+          "date": "2026-10-23",
+          "inputTokens": 35800,
+          "models": [
+            "gpt-5"
+          ],
+          "outputTokens": 4820,
+          "projects": [
+            "F:/Demo/Pulse"
+          ],
+          "quotaUsage": null,
+          "reasoningOutputTokens": 0,
+          "totalTokens": 40620
+        }
+      ],
+      "inputTokens": 35800,
+      "models": [
+        "gpt-5"
+      ],
+      "modifiedAtMs": 1793970000000,
+      "outputTokens": 4820,
+      "parentSessionId": null,
+      "path": "F:/Demo/Codex/sessions/rollout-11111111-1111-4111-8111-000000000015.jsonl",
+      "projectReferences": [
+        {
+          "displayName": "Pulse",
+          "path": "F:/Demo/Pulse"
+        }
+      ],
+      "projects": [
+        "F:/Demo/Pulse"
+      ],
+      "quotaUsage": {
+        "fiveHour": [],
+        "weekly": []
+      },
+      "reasoningOutputTokens": 0,
+      "sessionId": "rollout-11111111-1111-4111-8111-000000000015.jsonl",
+      "sizeBytes": 1698,
+      "threadId": "11111111-1111-4111-8111-000000000015",
+      "threadName": "合成演示 · 整理会话回放 15",
+      "totalTokens": 40620,
+      "turnCount": 2
+    },
+    {
+      "agentDepth": 0,
+      "agentNickname": null,
+      "agentPath": "/root",
+      "agentRole": null,
+      "agentSessionId": "11111111-1111-4111-8111-000000000010",
+      "cachedInputTokens": 17745,
+      "costUSD": 0.08337375,
+      "dailyUsage": [
+        {
+          "cachedInputTokens": 17745,
+          "costUSD": 0.08337375,
+          "date": "2026-10-28",
+          "inputTokens": 27300,
+          "models": [
+            "gpt-5.4"
+          ],
+          "outputTokens": 3670,
+          "projects": [
+            "F:/Demo/Research/Atlas"
+          ],
+          "quotaUsage": null,
+          "reasoningOutputTokens": 0,
+          "totalTokens": 30970
+        }
+      ],
+      "inputTokens": 27300,
+      "models": [
+        "gpt-5.4"
+      ],
+      "modifiedAtMs": 1793970000000,
+      "outputTokens": 3670,
+      "parentSessionId": null,
+      "path": "F:/Demo/Codex/sessions/rollout-11111111-1111-4111-8111-000000000010.jsonl",
+      "projectReferences": [
+        {
+          "displayName": "Atlas",
+          "path": "F:/Demo/Research/Atlas"
+        }
+      ],
+      "projects": [
+        "F:/Demo/Research/Atlas"
+      ],
+      "quotaUsage": {
+        "fiveHour": [],
+        "weekly": []
+      },
+      "reasoningOutputTokens": 0,
+      "sessionId": "rollout-11111111-1111-4111-8111-000000000010.jsonl",
+      "sizeBytes": 1714,
+      "threadId": "11111111-1111-4111-8111-000000000010",
+      "threadName": "合成演示 · 完善日期统计 10",
+      "totalTokens": 30970,
+      "turnCount": 2
+    },
+    {
+      "agentDepth": 0,
+      "agentNickname": null,
+      "agentPath": "/root",
+      "agentRole": null,
+      "agentSessionId": "11111111-1111-4111-8111-000000000011",
+      "cachedInputTokens": 18850,
+      "costUSD": 0.08858749999999999,
+      "dailyUsage": [
+        {
+          "cachedInputTokens": 18850,
+          "costUSD": 0.08858749999999999,
+          "date": "2026-10-27",
+          "inputTokens": 29000,
+          "models": [
+            "gpt-5"
+          ],
+          "outputTokens": 3900,
+          "projects": [
+            "F:/Demo/Studio/Atlas"
+          ],
+          "quotaUsage": null,
+          "reasoningOutputTokens": 0,
+          "totalTokens": 32900
+        }
+      ],
+      "inputTokens": 29000,
+      "models": [
+        "gpt-5"
+      ],
+      "modifiedAtMs": 1793970000000,
+      "outputTokens": 3900,
+      "parentSessionId": null,
+      "path": "F:/Demo/Codex/sessions/rollout-11111111-1111-4111-8111-000000000011.jsonl",
+      "projectReferences": [
+        {
+          "displayName": "Atlas",
+          "path": "F:/Demo/Studio/Atlas"
+        }
+      ],
+      "projects": [
+        "F:/Demo/Studio/Atlas"
+      ],
+      "quotaUsage": {
+        "fiveHour": [],
+        "weekly": []
+      },
+      "reasoningOutputTokens": 0,
+      "sessionId": "rollout-11111111-1111-4111-8111-000000000011.jsonl",
+      "sizeBytes": 1712,
+      "threadId": "11111111-1111-4111-8111-000000000011",
+      "threadName": "合成演示 · 检查模型定价 11",
+      "totalTokens": 32900,
+      "turnCount": 2
+    },
+    {
+      "agentDepth": 0,
+      "agentNickname": null,
+      "agentPath": "/root",
+      "agentRole": null,
+      "agentSessionId": "11111111-1111-4111-8111-000000000012",
+      "cachedInputTokens": 19955,
+      "costUSD": 0.09380125,
+      "dailyUsage": [
+        {
+          "cachedInputTokens": 19955,
+          "costUSD": 0.09380125,
+          "date": "2026-10-26",
+          "inputTokens": 30700,
+          "models": [
+            "gpt-5.4"
+          ],
+          "outputTokens": 4130,
+          "projects": [
+            "F:/Demo/Pulse"
+          ],
+          "quotaUsage": null,
+          "reasoningOutputTokens": 0,
+          "totalTokens": 34830
+        }
+      ],
+      "inputTokens": 30700,
+      "models": [
+        "gpt-5.4"
+      ],
+      "modifiedAtMs": 1793970000000,
+      "outputTokens": 4130,
+      "parentSessionId": null,
+      "path": "F:/Demo/Codex/sessions/rollout-11111111-1111-4111-8111-000000000012.jsonl",
+      "projectReferences": [
+        {
+          "displayName": "Pulse",
+          "path": "F:/Demo/Pulse"
+        }
+      ],
+      "projects": [
+        "F:/Demo/Pulse"
+      ],
+      "quotaUsage": {
+        "fiveHour": [],
+        "weekly": []
+      },
+      "reasoningOutputTokens": 0,
+      "sessionId": "rollout-11111111-1111-4111-8111-000000000012.jsonl",
+      "sizeBytes": 1700,
+      "threadId": "11111111-1111-4111-8111-000000000012",
+      "threadName": "合成演示 · 整理会话回放 12",
+      "totalTokens": 34830,
+      "turnCount": 2
+    },
+    {
+      "agentDepth": 0,
+      "agentNickname": null,
+      "agentPath": "/root",
+      "agentRole": null,
+      "agentSessionId": "11111111-1111-4111-8111-000000000008",
+      "cachedInputTokens": 15535,
+      "costUSD": 0.07294625,
+      "dailyUsage": [
+        {
+          "cachedInputTokens": 15535,
+          "costUSD": 0.07294625,
+          "date": "2026-10-30",
+          "inputTokens": 23900,
+          "models": [
+            "gpt-5.4"
+          ],
+          "outputTokens": 3210,
+          "projects": [
+            "F:/Demo/Studio/Atlas"
+          ],
+          "quotaUsage": null,
+          "reasoningOutputTokens": 0,
+          "totalTokens": 27110
+        }
+      ],
+      "inputTokens": 23900,
+      "models": [
+        "gpt-5.4"
+      ],
+      "modifiedAtMs": 1793970000000,
+      "outputTokens": 3210,
+      "parentSessionId": null,
+      "path": "F:/Demo/Codex/sessions/rollout-11111111-1111-4111-8111-000000000008.jsonl",
+      "projectReferences": [
+        {
+          "displayName": "Atlas",
+          "path": "F:/Demo/Studio/Atlas"
+        }
+      ],
+      "projects": [
+        "F:/Demo/Studio/Atlas"
+      ],
+      "quotaUsage": {
+        "fiveHour": [],
+        "weekly": []
+      },
+      "reasoningOutputTokens": 0,
+      "sessionId": "rollout-11111111-1111-4111-8111-000000000008.jsonl",
+      "sizeBytes": 1709,
+      "threadId": "11111111-1111-4111-8111-000000000008",
+      "threadName": "合成演示 · 检查模型定价 8",
+      "totalTokens": 27110,
+      "turnCount": 2
+    },
+    {
+      "agentDepth": 0,
+      "agentNickname": null,
+      "agentPath": "/root",
+      "agentRole": null,
+      "agentSessionId": "11111111-1111-4111-8111-000000000009",
+      "cachedInputTokens": 16640,
+      "costUSD": 0.07816,
+      "dailyUsage": [
+        {
+          "cachedInputTokens": 16640,
+          "costUSD": 0.07816,
+          "date": "2026-10-29",
+          "inputTokens": 25600,
+          "models": [
+            "gpt-5"
+          ],
+          "outputTokens": 3440,
+          "projects": [
+            "F:/Demo/Pulse"
+          ],
+          "quotaUsage": null,
+          "reasoningOutputTokens": 0,
+          "totalTokens": 29040
+        }
+      ],
+      "inputTokens": 25600,
+      "models": [
+        "gpt-5"
+      ],
+      "modifiedAtMs": 1793970000000,
+      "outputTokens": 3440,
+      "parentSessionId": null,
+      "path": "F:/Demo/Codex/sessions/rollout-11111111-1111-4111-8111-000000000009.jsonl",
+      "projectReferences": [
+        {
+          "displayName": "Pulse",
+          "path": "F:/Demo/Pulse"
+        }
+      ],
+      "projects": [
+        "F:/Demo/Pulse"
+      ],
+      "quotaUsage": {
+        "fiveHour": [],
+        "weekly": []
+      },
+      "reasoningOutputTokens": 0,
+      "sessionId": "rollout-11111111-1111-4111-8111-000000000009.jsonl",
+      "sizeBytes": 1693,
+      "threadId": "11111111-1111-4111-8111-000000000009",
+      "threadName": "合成演示 · 整理会话回放 9",
+      "totalTokens": 29040,
+      "turnCount": 2
+    },
+    {
+      "agentDepth": 0,
+      "agentNickname": null,
+      "agentPath": "/root",
+      "agentRole": null,
+      "agentSessionId": "11111111-1111-4111-8111-000000000006",
+      "cachedInputTokens": 13325,
+      "costUSD": 0.06251875,
+      "dailyUsage": [
+        {
+          "cachedInputTokens": 13325,
+          "costUSD": 0.06251875,
+          "date": "2026-11-01",
+          "inputTokens": 20500,
+          "models": [
+            "gpt-5.4"
+          ],
+          "outputTokens": 2750,
+          "projects": [
+            "F:/Demo/Pulse"
+          ],
+          "quotaUsage": null,
+          "reasoningOutputTokens": 0,
+          "totalTokens": 23250
+        }
+      ],
+      "inputTokens": 20500,
+      "models": [
+        "gpt-5.4"
+      ],
+      "modifiedAtMs": 1793970000000,
+      "outputTokens": 2750,
+      "parentSessionId": null,
+      "path": "F:/Demo/Codex/sessions/rollout-11111111-1111-4111-8111-000000000006.jsonl",
+      "projectReferences": [
+        {
+          "displayName": "Pulse",
+          "path": "F:/Demo/Pulse"
+        }
+      ],
+      "projects": [
+        "F:/Demo/Pulse"
+      ],
+      "quotaUsage": {
+        "fiveHour": [],
+        "weekly": []
+      },
+      "reasoningOutputTokens": 0,
+      "sessionId": "rollout-11111111-1111-4111-8111-000000000006.jsonl",
+      "sizeBytes": 1695,
+      "threadId": "11111111-1111-4111-8111-000000000006",
+      "threadName": "合成演示 · 整理会话回放 6",
+      "totalTokens": 23250,
+      "turnCount": 2
+    },
+    {
+      "agentDepth": 0,
+      "agentNickname": null,
+      "agentPath": "/root",
+      "agentRole": null,
+      "agentSessionId": "11111111-1111-4111-8111-000000000007",
+      "cachedInputTokens": 14430,
+      "costUSD": 0.0677325,
+      "dailyUsage": [
+        {
+          "cachedInputTokens": 14430,
+          "costUSD": 0.0677325,
+          "date": "2026-10-31",
+          "inputTokens": 22200,
+          "models": [
+            "gpt-5"
+          ],
+          "outputTokens": 2980,
+          "projects": [
+            "F:/Demo/Research/Atlas"
+          ],
+          "quotaUsage": null,
+          "reasoningOutputTokens": 0,
+          "totalTokens": 25180
+        }
+      ],
+      "inputTokens": 22200,
+      "models": [
+        "gpt-5"
+      ],
+      "modifiedAtMs": 1793970000000,
+      "outputTokens": 2980,
+      "parentSessionId": null,
+      "path": "F:/Demo/Codex/sessions/rollout-11111111-1111-4111-8111-000000000007.jsonl",
+      "projectReferences": [
+        {
+          "displayName": "Atlas",
+          "path": "F:/Demo/Research/Atlas"
+        }
+      ],
+      "projects": [
+        "F:/Demo/Research/Atlas"
+      ],
+      "quotaUsage": {
+        "fiveHour": [],
+        "weekly": []
+      },
+      "reasoningOutputTokens": 0,
+      "sessionId": "rollout-11111111-1111-4111-8111-000000000007.jsonl",
+      "sizeBytes": 1711,
+      "threadId": "11111111-1111-4111-8111-000000000007",
+      "threadName": "合成演示 · 完善日期统计 7",
+      "totalTokens": 25180,
+      "turnCount": 2
+    },
+    {
+      "agentDepth": 0,
+      "agentNickname": null,
+      "agentPath": "/root",
+      "agentRole": null,
+      "agentSessionId": "11111111-1111-4111-8111-000000000004",
+      "cachedInputTokens": 11115,
+      "costUSD": 0.05209125,
+      "dailyUsage": [
+        {
+          "cachedInputTokens": 11115,
+          "costUSD": 0.05209125,
+          "date": "2026-11-03",
+          "inputTokens": 17100,
+          "models": [
+            "gpt-5.4"
+          ],
+          "outputTokens": 2290,
+          "projects": [
+            "F:/Demo/Research/Atlas"
+          ],
+          "quotaUsage": null,
+          "reasoningOutputTokens": 0,
+          "totalTokens": 19390
+        }
+      ],
+      "inputTokens": 17100,
+      "models": [
+        "gpt-5.4"
+      ],
+      "modifiedAtMs": 1793970000000,
+      "outputTokens": 2290,
+      "parentSessionId": null,
+      "path": "F:/Demo/Codex/sessions/rollout-11111111-1111-4111-8111-000000000004.jsonl",
+      "projectReferences": [
+        {
+          "displayName": "Atlas",
+          "path": "F:/Demo/Research/Atlas"
+        }
+      ],
+      "projects": [
+        "F:/Demo/Research/Atlas"
+      ],
+      "quotaUsage": {
+        "fiveHour": [],
+        "weekly": []
+      },
+      "reasoningOutputTokens": 0,
+      "sessionId": "rollout-11111111-1111-4111-8111-000000000004.jsonl",
+      "sizeBytes": 1713,
+      "threadId": "11111111-1111-4111-8111-000000000004",
+      "threadName": "合成演示 · 完善日期统计 4",
+      "totalTokens": 19390,
+      "turnCount": 2
+    },
+    {
+      "agentDepth": 0,
+      "agentNickname": null,
+      "agentPath": "/root",
+      "agentRole": null,
+      "agentSessionId": "11111111-1111-4111-8111-000000000005",
+      "cachedInputTokens": 12220,
+      "costUSD": 0.057304999999999995,
+      "dailyUsage": [
+        {
+          "cachedInputTokens": 12220,
+          "costUSD": 0.057304999999999995,
+          "date": "2026-11-02",
+          "inputTokens": 18800,
+          "models": [
+            "gpt-5"
+          ],
+          "outputTokens": 2520,
+          "projects": [
+            "F:/Demo/Studio/Atlas"
+          ],
+          "quotaUsage": null,
+          "reasoningOutputTokens": 0,
+          "totalTokens": 21320
+        }
+      ],
+      "inputTokens": 18800,
+      "models": [
+        "gpt-5"
+      ],
+      "modifiedAtMs": 1793970000000,
+      "outputTokens": 2520,
+      "parentSessionId": null,
+      "path": "F:/Demo/Codex/sessions/rollout-11111111-1111-4111-8111-000000000005.jsonl",
+      "projectReferences": [
+        {
+          "displayName": "Atlas",
+          "path": "F:/Demo/Studio/Atlas"
+        }
+      ],
+      "projects": [
+        "F:/Demo/Studio/Atlas"
+      ],
+      "quotaUsage": {
+        "fiveHour": [],
+        "weekly": []
+      },
+      "reasoningOutputTokens": 0,
+      "sessionId": "rollout-11111111-1111-4111-8111-000000000005.jsonl",
+      "sizeBytes": 1707,
+      "threadId": "11111111-1111-4111-8111-000000000005",
+      "threadName": "合成演示 · 检查模型定价 5",
+      "totalTokens": 21320,
+      "turnCount": 2
+    },
+    {
+      "agentDepth": 0,
+      "agentNickname": null,
+      "agentPath": "/root",
+      "agentRole": null,
+      "agentSessionId": "11111111-1111-4111-8111-000000000001",
+      "cachedInputTokens": 7800,
+      "costUSD": 0.03645,
+      "dailyUsage": [
+        {
+          "cachedInputTokens": 7800,
+          "costUSD": 0.03645,
+          "date": "2026-11-06",
+          "inputTokens": 12000,
+          "models": [
+            "gpt-5"
+          ],
+          "outputTokens": 1600,
+          "projects": [
+            "F:/Demo/Research/Atlas"
+          ],
+          "quotaUsage": null,
+          "reasoningOutputTokens": 0,
+          "totalTokens": 13600
+        }
+      ],
+      "inputTokens": 12000,
+      "models": [
+        "gpt-5"
+      ],
+      "modifiedAtMs": 1793970000000,
+      "outputTokens": 1600,
+      "parentSessionId": null,
+      "path": "F:/Demo/Codex/sessions/rollout-11111111-1111-4111-8111-000000000001.jsonl",
+      "projectReferences": [
+        {
+          "displayName": "Atlas",
+          "path": "F:/Demo/Research/Atlas"
+        }
+      ],
+      "projects": [
+        "F:/Demo/Research/Atlas"
+      ],
+      "quotaUsage": {
+        "fiveHour": [],
+        "weekly": []
+      },
+      "reasoningOutputTokens": 0,
+      "sessionId": "rollout-11111111-1111-4111-8111-000000000001.jsonl",
+      "sizeBytes": 1709,
+      "threadId": "11111111-1111-4111-8111-000000000001",
+      "threadName": "合成演示 · 完善日期统计 1",
+      "totalTokens": 13600,
+      "turnCount": 2
+    },
+    {
+      "agentDepth": 0,
+      "agentNickname": null,
+      "agentPath": "/root",
+      "agentRole": null,
+      "agentSessionId": "11111111-1111-4111-8111-000000000002",
+      "cachedInputTokens": 8905,
+      "costUSD": 0.04166375,
+      "dailyUsage": [
+        {
+          "cachedInputTokens": 8905,
+          "costUSD": 0.04166375,
+          "date": "2026-11-05",
+          "inputTokens": 13700,
+          "models": [
+            "gpt-5.4"
+          ],
+          "outputTokens": 1830,
+          "projects": [
+            "F:/Demo/Studio/Atlas"
+          ],
+          "quotaUsage": null,
+          "reasoningOutputTokens": 0,
+          "totalTokens": 15530
+        }
+      ],
+      "inputTokens": 13700,
+      "models": [
+        "gpt-5.4"
+      ],
+      "modifiedAtMs": 1793970000000,
+      "outputTokens": 1830,
+      "parentSessionId": null,
+      "path": "F:/Demo/Codex/sessions/rollout-11111111-1111-4111-8111-000000000002.jsonl",
+      "projectReferences": [
+        {
+          "displayName": "Atlas",
+          "path": "F:/Demo/Studio/Atlas"
+        }
+      ],
+      "projects": [
+        "F:/Demo/Studio/Atlas"
+      ],
+      "quotaUsage": {
+        "fiveHour": [],
+        "weekly": []
+      },
+      "reasoningOutputTokens": 0,
+      "sessionId": "rollout-11111111-1111-4111-8111-000000000002.jsonl",
+      "sizeBytes": 1707,
+      "threadId": "11111111-1111-4111-8111-000000000002",
+      "threadName": "合成演示 · 检查模型定价 2",
+      "totalTokens": 15530,
+      "turnCount": 2
+    },
+    {
+      "agentDepth": 0,
+      "agentNickname": null,
+      "agentPath": "/root",
+      "agentRole": null,
+      "agentSessionId": "11111111-1111-4111-8111-000000000003",
+      "cachedInputTokens": 10110,
+      "costUSD": 0.0494025,
+      "dailyUsage": [
+        {
+          "cachedInputTokens": 10010,
+          "costUSD": 0.0468775,
+          "date": "2026-11-04",
+          "inputTokens": 15400,
+          "models": [
+            "gpt-5"
+          ],
+          "outputTokens": 2060,
+          "projects": [
+            "F:/Demo/Pulse"
+          ],
+          "quotaUsage": null,
+          "reasoningOutputTokens": 0,
+          "totalTokens": 17460
+        },
+        {
+          "cachedInputTokens": 100,
+          "costUSD": 0.0025250000000000003,
+          "date": "2026-11-05",
+          "inputTokens": 500,
+          "models": [
+            "gpt-5.4"
+          ],
+          "outputTokens": 100,
+          "projects": [
+            "F:/Demo/Pulse"
+          ],
+          "quotaUsage": null,
+          "reasoningOutputTokens": 0,
+          "totalTokens": 600
+        }
+      ],
+      "inputTokens": 15900,
+      "models": [
+        "gpt-5",
+        "gpt-5.4"
+      ],
+      "modifiedAtMs": 1793970000000,
+      "outputTokens": 2160,
+      "parentSessionId": null,
+      "path": "F:/Demo/Codex/sessions/rollout-11111111-1111-4111-8111-000000000003.jsonl",
+      "projectReferences": [
+        {
+          "displayName": "Pulse",
+          "path": "F:/Demo/Pulse"
+        }
+      ],
+      "projects": [
+        "F:/Demo/Pulse"
+      ],
+      "quotaUsage": {
+        "fiveHour": [],
+        "weekly": []
+      },
+      "reasoningOutputTokens": 0,
+      "sessionId": "rollout-11111111-1111-4111-8111-000000000003.jsonl",
+      "sizeBytes": 2172,
+      "threadId": "11111111-1111-4111-8111-000000000003",
+      "threadName": "合成演示 · 整理会话回放 3",
+      "totalTokens": 18060,
+      "turnCount": 2
+    }
+  ],
+  "modelPrices": [
+    {
+      "cachedInputCostPerMillionTokens": 0.25,
+      "cachedInputTokens": 159805,
+      "costUSD": 0.75288875,
+      "effectiveCostPerMillionTokens": 2.695337951526868,
+      "fiveHourQuota": null,
+      "inputCostPerMillionTokens": 2.5,
+      "inputTokens": 246200,
+      "model": "gpt-5.4",
+      "outputCostPerMillionTokens": 15,
+      "outputTokens": 33130,
+      "pricingStatus": "priced",
+      "totalTokens": 279330,
+      "weeklyQuota": null
+    },
+    {
+      "cachedInputCostPerMillionTokens": 0.25,
+      "cachedInputTokens": 149760,
+      "costUSD": 0.7034400000000001,
+      "effectiveCostPerMillionTokens": 2.691460055096419,
+      "fiveHourQuota": null,
+      "inputCostPerMillionTokens": 2.5,
+      "inputTokens": 230400,
+      "model": "gpt-5",
+      "outputCostPerMillionTokens": 15,
+      "outputTokens": 30960,
+      "pricingStatus": "priced",
+      "totalTokens": 261360,
+      "weeklyQuota": null
+    }
+  ]
+}

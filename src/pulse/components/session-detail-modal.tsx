@@ -1,0 +1,1784 @@
+import { sumKnownCosts } from "@/lib/costs";
+import {
+  buildSessionConversation, cleanExecOutput, formatJsonForDisplay, formatToolArgumentValue,
+  parseToolContentBlocks, parseUserInputAnswers, processSignal, splitWebSearchResults, summarizeOutput,
+  type ConversationBlock, type DisplayTokenUsageItem, type ExecOutput, type NestedActivity, type ReplayItem, type TimelineEntry, type TokenUsageItem, type ToolActivity, type UserInputQuestion, type WebSearchResult,
+} from "@/lib/session-conversation";
+import { lazy, memo, Suspense, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { flushSync } from "react-dom";
+import { AlertTriangle, ArrowDownToLine, ArrowUpToLine, Bot, Check, ChevronDown, ChevronRight, Clipboard, Clock3, Coins, Database, FileDiff, FileJson, FolderOpen, GitBranch, Info, List, Loader2, RefreshCcw, MessageSquare, Search, Terminal, Wrench, X } from "lucide-react";
+import { useTranslation } from "react-i18next";
+import { Button } from "@/components/ui/button";
+import { fetchSessionDetail, rescanSession, revealInFileManager, type ScanResponse, type SessionDetailRow, type SessionReplayDetail } from "@/lib/api";
+import { formatCurrency, formatNumber, formatPercent } from "@/lib/formatters";
+import { projectLabel, sessionProjectReferences } from "@/lib/project-reference";
+import { SessionQuotaUsageView } from "./session-quota-usage";
+import { SessionArchivedBadge } from "./session-archived-badge";
+import { MetricBadge } from "./metric-badge";
+import { useModalFocus } from "@/hooks/use-modal-focus";
+import { useSessionCredits } from "@/hooks/use-session-credits";
+import { SessionCredits } from "./session-credits";
+import { SessionSearchContext, SessionSearchTarget, SessionSearchText, SessionSearchToolbar, useSessionSearchExpansion, type SessionSearchHandle, type SessionSearchState } from "./session-search";
+import type { SessionSearchHit } from "@/lib/session-search";
+
+type SessionDetailModalProps = {
+  session: SessionDetailRow;
+  isActive?: boolean;
+  showSessionCredits?: boolean;
+  onClose: () => void;
+  onScanComplete?: (session: SessionDetailRow, previousPath: string, scan: ScanResponse) => Promise<void>;
+};
+
+type TabKey = "timeline" | "raw";
+
+const LONG_TEXT_THRESHOLD = 2000;
+const TEXT_PREVIEW_LENGTH = 1200;
+const RAW_PREVIEW_LINES = 12;
+const RAW_PREVIEW_LINE_LENGTH = 240;
+const COLLAPSED_PREVIEW_LINE_LENGTH = 240;
+const COLLAPSED_AGENT_LIMIT = 3;
+const NESTED_TOOL_NAMES: Record<NestedActivity["kind"], string> = {
+  command: "exec_command", terminal: "write_stdin", patch: "apply_patch", image: "view_image", webSearch: "web__run", webOpen: "web__run",
+};
+const DISCLOSURE_BUTTON_CLASS = "rounded-md focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background";
+const MarkdownContent = lazy(() => import("./markdown-content").then((module) => ({ default: module.MarkdownContent })));
+
+const ITEM_TONES = {
+  system: "border-zinc-300/70 bg-zinc-100/60 dark:border-zinc-700/70 dark:bg-zinc-900/40",
+  developer: "border-violet-300/70 bg-violet-50/70 dark:border-violet-800/70 dark:bg-violet-950/30",
+  user: "border-blue-300/70 bg-blue-50/70 dark:border-blue-800/70 dark:bg-blue-950/30",
+  assistant: "border-emerald-300/70 bg-emerald-50/70 dark:border-emerald-800/70 dark:bg-emerald-950/30",
+  reasoning: "border-amber-300/70 bg-amber-50/70 dark:border-amber-800/70 dark:bg-amber-950/30",
+  tool: "border-cyan-300/70 bg-cyan-50/70 dark:border-cyan-800/70 dark:bg-cyan-950/30",
+  patch: "border-green-300/70 bg-green-50/70 dark:border-green-800/70 dark:bg-green-950/30",
+  error: "border-error/40 bg-error/5",
+  notice: "border-sky-300/70 bg-sky-50/70 dark:border-sky-800/70 dark:bg-sky-950/30",
+} as const;
+
+const ITEM_TITLE_TONES = {
+  reasoning: "text-amber-700 dark:text-amber-300",
+  tool: "text-cyan-700 dark:text-cyan-300",
+  patch: "text-green-700 dark:text-green-300",
+  error: "text-error",
+  notice: "text-sky-700 dark:text-sky-300",
+} as const;
+
+function cleanSessionId(sessionId: string) {
+  return sessionId.replace(/\.jsonl(?:\.zst)?$/, "");
+}
+
+function formatDuration(ms: number | null | undefined) {
+  if (ms == null) return "--";
+  if (ms < 1000) return `${ms}ms`;
+  const seconds = Math.round(ms / 1000);
+  if (seconds < 60) return `${seconds}s`;
+  const minutes = Math.floor(seconds / 60);
+  const remaining = seconds % 60;
+  return `${minutes}m ${remaining}s`;
+}
+
+function formatTimestamp(value: string | null) {
+  if (!value) return "--";
+  return new Date(value).toLocaleString();
+}
+
+function formatBytes(bytes: number) {
+  if (bytes < 1024) return `${bytes} B`;
+  const kb = bytes / 1024;
+  if (kb < 1024) return `${kb.toFixed(1)} KB`;
+  return `${(kb / 1024).toFixed(1)} MB`;
+}
+
+function buildRawPreview(rawJsonl: string) {
+  return rawJsonl
+    .split("\n")
+    .slice(0, RAW_PREVIEW_LINES)
+    .map((line) => (line.length > RAW_PREVIEW_LINE_LENGTH ? `${line.slice(0, RAW_PREVIEW_LINE_LENGTH)}...` : line))
+    .join("\n");
+}
+
+function buildCollapsedPreview(text: string, lines: number) {
+  const preview = text.split("\n").slice(0, lines).join("\n");
+  const maxLength = lines * COLLAPSED_PREVIEW_LINE_LENGTH;
+  const isTruncated = preview.length < text.length || preview.length > maxLength;
+  return isTruncated ? `${preview.slice(0, maxLength)}...` : preview;
+}
+
+function countMessages(turn: SessionReplayDetail["turns"][number]) {
+  return turn.systemMessages.length + turn.userMessages.length + turn.assistantMessages.length + turn.reasoningSummaries.length;
+}
+
+function firstUserPreview(turn: SessionReplayDetail["turns"][number]) {
+  const text = turn.userMessages.find((message) => message.text.trim().length > 0)?.text.trim();
+  if (!text) return "";
+  const normalized = text.replace(/\s+/g, " ");
+  return normalized.length > 140 ? `${normalized.slice(0, 140)}...` : normalized;
+}
+
+function formatCompactTokenCount(value: number) {
+  if (Math.abs(value) < 1_000) return formatNumber(value);
+  if (Math.abs(value) < 1_000_000) return `${Number((value / 1_000).toFixed(1))}k`;
+  return `${Number((value / 1_000_000).toFixed(1))}m`;
+}
+
+function tokenDeltaTone(deltaTokens: number) {
+  if (deltaTokens <= 0) return "text-muted-foreground";
+  if (deltaTokens < 1_000) return "text-emerald-600 dark:text-emerald-400";
+  if (deltaTokens < 10_000) return "text-sky-600 dark:text-sky-400";
+  if (deltaTokens < 50_000) return "text-amber-600 dark:text-amber-400";
+  return "text-red-600 dark:text-red-400";
+}
+
+function TokenMetadata({ usage }: { usage: DisplayTokenUsageItem }) {
+  const { t } = useTranslation();
+  const tooltip = [
+    `${t("common.model")}: ${usage.model}`,
+    `${t("sessions.input_including_cache")}: ${formatNumber(usage.inputTokens)}`,
+    `${t("sessions.cached")}: ${formatNumber(usage.cachedInputTokens)}`,
+    `${t("sessions.output")}: ${formatNumber(usage.outputTokens)}`,
+    `${t("sessions.detail.reasoning_tokens")}: ${formatNumber(usage.reasoningOutputTokens)}`,
+    `${t("sessions.total_tokens")}: ${formatNumber(usage.totalTokens)}`,
+    `${t("common.time")}: ${formatTimestamp(usage.timestamp)}`,
+  ].join("\n");
+
+  return (
+    <span className="inline-flex flex-col items-end gap-0.5 normal-case tracking-normal">
+      <span
+        className="shrink-0 font-sans text-[11px] font-medium tabular-nums text-violet-500/80 dark:text-violet-300/75"
+        data-testid="token-metadata"
+        title={tooltip}
+      >
+        {formatCompactTokenCount(usage.totalTokens)}
+        {usage.deltaTokens === undefined ? null : (
+          <span className={`font-semibold ${tokenDeltaTone(usage.deltaTokens)}`}>
+            {` (${usage.deltaTokens >= 0 ? "+" : ""}${formatCompactTokenCount(usage.deltaTokens)})`}
+          </span>
+        )} tokens
+      </span>
+      <span className="font-sans text-[10px] font-normal text-muted-foreground" title={tooltip}>
+        {t("sessions.detail.token_breakdown", {
+          input: formatCompactTokenCount(usage.inputTokens),
+          cached: formatCompactTokenCount(usage.cachedInputTokens),
+          output: formatCompactTokenCount(usage.outputTokens),
+        })}
+      </span>
+    </span>
+  );
+}
+
+function RawJsonlDisclosure({ rawJsonl }: { rawJsonl: string[] }) {
+  const { t } = useTranslation();
+  const [isRawVisible, setIsRawVisible] = useState(false);
+
+  if (rawJsonl.length === 0) return null;
+
+  return (
+    <div className="mt-2 w-full space-y-1">
+      <div className="flex justify-end">
+        <button
+          type="button"
+          className={`flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] font-semibold text-muted-foreground hover:bg-muted hover:text-foreground ${DISCLOSURE_BUTTON_CLASS}`}
+          aria-expanded={isRawVisible}
+          onClick={() => setIsRawVisible((value) => !value)}
+        >
+          <FileJson className="h-3 w-3" />
+          {isRawVisible ? t("sessions.detail.hide_item_raw_jsonl") : t("sessions.detail.show_item_raw_jsonl")}
+        </button>
+      </div>
+      {isRawVisible ? (
+        <pre className="max-h-80 overflow-auto rounded-lg border border-border/60 bg-surface p-3 whitespace-pre-wrap break-words font-mono text-xs leading-relaxed text-foreground">
+          {rawJsonl.join("\n")}
+        </pre>
+      ) : null}
+    </div>
+  );
+}
+
+function CopyContentButton({ content }: { content: string }) {
+  const { t } = useTranslation();
+  const [copied, setCopied] = useState(false);
+
+  async function copyContent() {
+    if (!navigator.clipboard) return;
+    await navigator.clipboard.writeText(content);
+    setCopied(true);
+    window.setTimeout(() => setCopied(false), 1400);
+  }
+
+  return (
+    <button
+      type="button"
+      className={`flex h-7 shrink-0 items-center gap-1 rounded px-1.5 text-[10px] font-semibold text-muted-foreground hover:bg-muted hover:text-foreground ${DISCLOSURE_BUTTON_CLASS}`}
+      title={t(copied ? "sessions.detail.content_copied" : "sessions.detail.copy_content")}
+      aria-label={t(copied ? "sessions.detail.content_copied" : "sessions.detail.copy_content")}
+      onClick={() => void copyContent()}
+    >
+      {copied ? <Check className="h-3 w-3" /> : <Clipboard className="h-3 w-3" />}
+      {t(copied ? "sessions.detail.copied" : "sessions.detail.copy")}
+    </button>
+  );
+}
+
+function AgentHierarchy({
+  agents,
+  activePath,
+  onSelect,
+}: {
+  agents: SessionReplayDetail["agents"];
+  activePath: string;
+  onSelect: (path: string) => void;
+}) {
+  const { t } = useTranslation();
+  const [isExpanded, setIsExpanded] = useState(false);
+  if (agents.length <= 1) return null;
+
+  const bySessionId = new Map(agents.map((agent) => [agent.sessionId, agent]));
+  const children = new Map<string, typeof agents>();
+  for (const agent of agents) {
+    if (!agent.parentSessionId || !bySessionId.has(agent.parentSessionId)) continue;
+    const siblings = children.get(agent.parentSessionId) ?? [];
+    siblings.push(agent);
+    children.set(agent.parentSessionId, siblings);
+  }
+  const orderedAgents: typeof agents = [];
+  const visited = new Set<string>();
+  const visit = (agent: (typeof agents)[number]) => {
+    if (visited.has(agent.sessionId)) return;
+    visited.add(agent.sessionId);
+    orderedAgents.push(agent);
+    for (const child of children.get(agent.sessionId) ?? []) visit(child);
+  };
+  for (const agent of agents) {
+    if (!agent.parentSessionId || !bySessionId.has(agent.parentSessionId)) visit(agent);
+  }
+  for (const agent of agents) visit(agent);
+
+  const collapsedAgents = orderedAgents.slice(0, COLLAPSED_AGENT_LIMIT);
+  const activeAgent = orderedAgents.find((agent) => agent.path === activePath);
+  if (activeAgent && !collapsedAgents.includes(activeAgent)) {
+    collapsedAgents[collapsedAgents.length - 1] = activeAgent;
+  }
+  const visibleAgents = isExpanded ? orderedAgents : collapsedAgents;
+  const visibleSessionIds = new Set(visibleAgents.map((agent) => agent.sessionId));
+  const subagentCount = agents.filter((agent) => agent.parentSessionId !== null).length;
+  const totalInputTokens = agents.reduce((sum, agent) => sum + agent.inputTokens, 0);
+  const totalCachedInputTokens = agents.reduce((sum, agent) => sum + agent.cachedInputTokens, 0);
+  const totalOutputTokens = agents.reduce((sum, agent) => sum + agent.outputTokens, 0);
+  const totalCost = sumKnownCosts(agents.map(agent => agent.costUSD));
+
+  const hasFollowingVisibleSibling = (agent: (typeof agents)[number]) => {
+    if (!agent.parentSessionId) return false;
+    const siblings = children.get(agent.parentSessionId) ?? [];
+    return siblings.slice(siblings.indexOf(agent) + 1).some((sibling) => visibleSessionIds.has(sibling.sessionId));
+  };
+
+  return (
+    <section className="rounded-lg border border-border/60 bg-surface p-3" aria-label={t("sessions.subagent_count", { count: subagentCount })}>
+      <button
+        type="button"
+        className={`mb-2 flex w-full items-center gap-2 rounded-md text-left text-sm font-bold ${DISCLOSURE_BUTTON_CLASS}`}
+        aria-expanded={isExpanded}
+        onClick={() => setIsExpanded((value) => !value)}
+      >
+        {isExpanded ? <ChevronDown className="h-4 w-4 text-primary" /> : <ChevronRight className="h-4 w-4 text-primary" />}
+        <GitBranch className="h-4 w-4 text-primary" />
+        <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] font-semibold text-muted-foreground">
+          {t("sessions.subagent_count", { count: subagentCount })}
+        </span>
+        <span className="ml-auto flex flex-wrap items-center justify-end gap-x-3 gap-y-1 text-xs font-medium text-muted-foreground">
+          <span>{t("sessions.input_including_cache")} <strong className="tabular-nums text-foreground" data-testid="agent-group-input">{formatNumber(totalInputTokens)}</strong></span>
+          <span>{t("sessions.cached")} <strong className="tabular-nums text-foreground" data-testid="agent-group-cache">{formatNumber(totalCachedInputTokens)}</strong></span>
+          <span>{t("sessions.output")} <strong className="tabular-nums text-foreground" data-testid="agent-group-output">{formatNumber(totalOutputTokens)}</strong></span>
+          <span>{t("sessions.group_total_cost")} <strong className="tabular-nums text-foreground" data-testid="agent-group-cost">{formatCurrency(totalCost)}</strong></span>
+        </span>
+        <span className="text-xs font-semibold text-primary">{isExpanded ? t("sessions.detail.collapse") : t("sessions.detail.expand")}</span>
+      </button>
+      <div className="overflow-hidden">
+        {visibleAgents.map((agent) => {
+          const isActive = agent.path === activePath;
+          const pathName = agent.agentPath.split("/").filter(Boolean).at(-1) || "root";
+          const name = agent.parentSessionId && pathName === "root"
+            ? agent.nickname || agent.role || t("sessions.detail.subagent")
+            : pathName;
+          const nickname = agent.nickname === name ? null : agent.nickname;
+          const lineage = [agent];
+          while (lineage[0].parentSessionId) {
+            const parent = bySessionId.get(lineage[0].parentSessionId);
+            if (!parent) break;
+            lineage.unshift(parent);
+          }
+          return (
+            <button
+              key={agent.path}
+              type="button"
+              className={`relative flex w-full items-center gap-2 rounded-md border py-1.5 pr-2 text-left transition [&+&]:mt-1 ${isActive ? "border-primary/50 bg-primary/10 text-foreground" : "border-transparent text-muted-foreground hover:border-border hover:bg-muted/60 hover:text-foreground"}`}
+              style={{ paddingLeft: `${8 + agent.depth * 24}px` }}
+              aria-current={isActive ? "true" : undefined}
+              onClick={() => onSelect(agent.path)}
+            >
+              {children.get(agent.sessionId)?.some((child) => visibleSessionIds.has(child.sessionId)) ? (
+                <span
+                  className="pointer-events-none absolute -bottom-0.5 top-1/2 w-px bg-primary/30"
+                  style={{ left: `${15 + agent.depth * 24}px` }}
+                  data-testid="agent-tree-trunk"
+                  aria-hidden="true"
+                />
+              ) : null}
+              {Array.from({ length: agent.depth }, (_, levelIndex) => {
+                const level = levelIndex + 1;
+                const branchAgent = lineage[level];
+                const isCurrentLevel = level === agent.depth;
+                if (!branchAgent || (!isCurrentLevel && !hasFollowingVisibleSibling(branchAgent))) return null;
+                const left = 15 + levelIndex * 24;
+                const continuesToNextSibling = hasFollowingVisibleSibling(branchAgent);
+                return (
+                  <span
+                    key={level}
+                    className={`pointer-events-none absolute -top-0.5 w-px bg-primary/30 ${continuesToNextSibling ? "-bottom-0.5" : "bottom-1/2"}`}
+                    style={{ left: `${left}px` }}
+                    data-testid="agent-tree-connector"
+                    aria-hidden="true"
+                  >
+                    {isCurrentLevel ? (
+                      <span className={`absolute left-0 h-px w-[17px] -translate-y-px bg-primary/30 ${continuesToNextSibling ? "top-1/2" : "top-full"}`} />
+                    ) : null}
+                  </span>
+                );
+              })}
+              <Bot className={`h-3.5 w-3.5 shrink-0 ${isActive ? "text-primary" : ""}`} />
+              <span className="font-mono text-xs font-semibold text-foreground">{name}</span>
+              {nickname ? <span className="text-[10px]">· {nickname}</span> : null}
+              {agent.threadName ? <span className="min-w-0 flex-1 truncate text-xs" title={agent.threadName}>{agent.threadName}</span> : <span className="flex-1" />}
+              <span className="shrink-0 rounded bg-muted px-1.5 py-0.5 text-[10px] font-semibold">
+                {agent.parentSessionId ? t("sessions.detail.subagent") : t("sessions.detail.root_agent")}
+              </span>
+              {isActive ? <span className="shrink-0 text-[10px] font-bold text-primary">{t("sessions.detail.current_agent")}</span> : null}
+            </button>
+          );
+        })}
+      </div>
+    </section>
+  );
+}
+
+function TextBlock({
+  title,
+  text,
+  defaultCollapsed = false,
+  markdown = false,
+  titleClassName = "text-muted-foreground",
+}: {
+  title: string;
+  text: string;
+  defaultCollapsed?: boolean;
+  markdown?: boolean;
+  titleClassName?: string;
+}) {
+  const { t } = useTranslation();
+  const [isFullVisible, setIsFullVisible] = useSessionSearchExpansion(!defaultCollapsed && text.length <= LONG_TEXT_THRESHOLD);
+  const isLong = text.length > LONG_TEXT_THRESHOLD;
+  const preview = isLong ? `${text.slice(0, TEXT_PREVIEW_LENGTH)}...` : text;
+
+  return (
+    <div className="py-2">
+      <div className={`mb-1 text-[10px] font-semibold uppercase tracking-[0.12em] ${titleClassName}`}>{title}</div>
+      {markdown ? (
+        <SessionSearchText text={text}><Suspense fallback={<pre className="whitespace-pre-wrap break-words text-sm leading-relaxed text-foreground">{text}</pre>}>
+          <MarkdownContent content={isFullVisible ? text : preview} />
+        </Suspense></SessionSearchText>
+      ) : (
+        <pre className="whitespace-pre-wrap break-words font-mono text-xs leading-relaxed text-foreground">
+          <SessionSearchText text={text}>{isFullVisible ? text : preview}</SessionSearchText>
+        </pre>
+      )}
+      {isLong ? (
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          className="mt-2 h-7 px-2 text-xs"
+          onClick={() => setIsFullVisible((value) => !value)}
+        >
+          {isFullVisible ? t("sessions.detail.hide_full_text") : t("sessions.detail.show_full_text")}
+        </Button>
+      ) : null}
+    </div>
+  );
+}
+
+function MessageItem({ item, tokenUsage, rawJsonl }: { item: Extract<ReplayItem, { kind: "message" }>; tokenUsage?: TokenUsageItem; rawJsonl: string[] }) {
+  const { t } = useTranslation();
+  const isConversation = item.role === "user" || item.role === "assistant";
+  const [isExpanded, setIsExpanded] = useSessionSearchExpansion(isConversation);
+  const toneKey = item.role === "user" || item.role === "assistant" || item.role === "developer" ? item.role : "system";
+  const title = t(`sessions.detail.${toneKey}`);
+
+  return (
+    <article className={`${item.role === "user" ? "my-5" : ""} rounded-lg border p-3 ${ITEM_TONES[toneKey]}`}>
+      <button
+        type="button"
+        className={`mb-2 flex w-full items-center justify-between gap-3 text-left text-xs font-medium text-muted-foreground ${DISCLOSURE_BUTTON_CLASS}`}
+        aria-expanded={isExpanded}
+        onClick={() => setIsExpanded((value) => !value)}
+      >
+        <span>{title}</span>
+        <span className="flex flex-wrap items-center justify-end gap-3">
+          {tokenUsage ? <TokenMetadata usage={tokenUsage} /> : null}
+          <span title={formatTimestamp(item.timestamp)} className="text-[10px]">{item.timestamp ? new Date(item.timestamp).toLocaleTimeString() : "--"}</span>
+          {isExpanded ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
+          <span className="sr-only">{isExpanded ? t("sessions.detail.collapse") : t("sessions.detail.expand")}</span>
+        </span>
+      </button>
+      {isExpanded ? (
+        <SessionSearchText text={item.text}><Suspense fallback={<p className="whitespace-pre-wrap break-words text-sm leading-relaxed">{item.text}</p>}>
+          <MarkdownContent content={item.text} />
+        </Suspense></SessionSearchText>
+      ) : <p className="line-clamp-3 whitespace-pre-wrap break-words text-sm text-muted-foreground">{buildCollapsedPreview(item.text, 3)}</p>}
+      <div className="mt-2 flex justify-end"><CopyContentButton content={item.text} /></div>
+      <RawJsonlDisclosure rawJsonl={rawJsonl} />
+    </article>
+  );
+}
+
+function ToolTextBlock({ title, text }: { title: string; text: string }) {
+  const displayText = formatJsonForDisplay(text);
+  return (
+    <div className="py-2">
+      <div className="mb-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">{title}</div>
+      <pre className="whitespace-pre-wrap break-words font-mono text-xs leading-relaxed text-foreground"><SessionSearchText text={displayText} /></pre>
+    </div>
+  );
+}
+
+function ToolPreview({ title, text, lines }: { title: string; text: string; lines: 1 | 5 }) {
+  const displayText = formatJsonForDisplay(text);
+  return (
+    <div className="min-w-0 py-2">
+      <div className="mb-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">{title}</div>
+      <pre className={`${lines === 1 ? "line-clamp-1" : "line-clamp-5"} whitespace-pre-wrap break-words font-mono text-xs leading-relaxed text-foreground`}>
+        {buildCollapsedPreview(displayText, lines)}
+      </pre>
+    </div>
+  );
+}
+
+type PatchDiffFile = {
+  action: "added" | "edited" | "deleted";
+  path: string;
+  lines: string[];
+  additions: number;
+  deletions: number;
+};
+
+function parsePatchDiff(patch: string): PatchDiffFile[] {
+  const files: PatchDiffFile[] = [];
+  let current: PatchDiffFile | null = null;
+
+  for (const line of patch.split("\n")) {
+    const fileMatch = line.match(/^\*\*\* (Add|Update|Delete) File: (.+)$/);
+    if (fileMatch) {
+      const action = fileMatch[1] === "Add" ? "added" : fileMatch[1] === "Delete" ? "deleted" : "edited";
+      current = { action, path: fileMatch[2], lines: [], additions: 0, deletions: 0 };
+      files.push(current);
+      continue;
+    }
+    if (!current || line === "*** Begin Patch" || line === "*** End Patch") continue;
+    current.lines.push(line);
+    if (line.startsWith("+") && !line.startsWith("+++")) current.additions += 1;
+    if (line.startsWith("-") && !line.startsWith("---")) current.deletions += 1;
+  }
+
+  return files;
+}
+
+function patchSummary(patch: string, t: ReturnType<typeof useTranslation>["t"]) {
+  const files = parsePatchDiff(patch);
+  const additions = files.reduce((total, file) => total + file.additions, 0);
+  const deletions = files.reduce((total, file) => total + file.deletions, 0);
+  const label = files.length === 1
+    ? t(`sessions.detail.patch_${files[0].action}`, { path: files[0].path })
+    : t("sessions.detail.edited_files", { count: files.length });
+  return { files, additions, deletions, label };
+}
+
+function numberPatchLines(lines: string[]) {
+  let oldLine: number | null = null;
+  let newLine: number | null = null;
+
+  return lines.map((text) => {
+    const hunk = text.match(/^@@ -(\d+)(?:,\d+)? \+(\d+)(?:,\d+)? @@/);
+    if (hunk) {
+      oldLine = Number(hunk[1]);
+      newLine = Number(hunk[2]);
+      return { text, lineNumber: null };
+    }
+    if (text.startsWith("@@")) {
+      oldLine = null;
+      newLine = null;
+      return { text, lineNumber: null };
+    }
+
+    const lineNumber = text.startsWith("-") ? oldLine : newLine;
+    if (!text.startsWith("+") && oldLine !== null) oldLine += 1;
+    if (!text.startsWith("-") && newLine !== null) newLine += 1;
+    return { text, lineNumber };
+  });
+}
+
+function PatchDiffBlock({ patch, expanded, hideHeader = false }: { patch: string; expanded: boolean; hideHeader?: boolean }) {
+  const { t } = useTranslation();
+  const matches = useContext(SessionSearchContext);
+  const { files, additions, deletions, label } = patchSummary(patch, t);
+
+  if (matches.some((hit) => hit.length === patch.length && (hit.field === "patch_input" || hit.field === "command"))) {
+    return <ToolTextBlock title={t("sessions.detail.patch_input")} text={patch} />;
+  }
+  if (files.length === 0) {
+    return expanded
+      ? <ToolTextBlock title={t("sessions.detail.patch_input")} text={patch} />
+      : <ToolPreview title={t("sessions.detail.patch_input")} text={patch} lines={1} />;
+  }
+
+  return (
+    <div className="overflow-hidden rounded-lg border border-border/60 bg-background/70 font-mono text-xs">
+      {!hideHeader ? <div className="flex items-center gap-2 border-b border-border/60 px-3 py-2 font-semibold">
+        <FileDiff className="h-3.5 w-3.5 text-muted-foreground" />
+        <span className="min-w-0 truncate">{label}</span>
+        <span className="text-green-600 dark:text-green-400">+{additions}</span>
+        <span className="text-red-600 dark:text-red-400">-{deletions}</span>
+      </div> : null}
+      {expanded ? files.map((file) => (
+        <section key={file.path}>
+          <div className="flex items-center gap-2 border-b border-border/50 bg-muted/40 px-3 py-2 font-semibold">
+            <span className="text-muted-foreground">└</span>
+            <span className="min-w-0 flex-1 break-all">{file.path}</span>
+            <span className="text-green-600 dark:text-green-400">+{file.additions}</span>
+            <span className="text-red-600 dark:text-red-400">-{file.deletions}</span>
+          </div>
+          <div className="overflow-x-auto py-1">
+            {numberPatchLines(file.lines).map(({ text: line, lineNumber }, index) => {
+              const isAddition = line.startsWith("+") && !line.startsWith("+++");
+              const isDeletion = line.startsWith("-") && !line.startsWith("---");
+              const isHunk = line.startsWith("@@");
+              const tone = isAddition
+                ? "bg-green-500/15 text-green-950 dark:text-green-100"
+                : isDeletion
+                  ? "bg-red-500/15 text-red-950 dark:text-red-100"
+                  : isHunk
+                    ? "text-muted-foreground"
+                    : "text-foreground";
+              return (
+                <div key={`${index}-${line}`} className={`flex min-w-max w-full ${tone}`}>
+                  <span className="w-10 shrink-0 select-none border-r border-border/40 px-2 text-right text-muted-foreground/60">{lineNumber ?? ""}</span>
+                  <span className="whitespace-pre px-3">{line || " "}</span>
+                </div>
+              );
+            })}
+          </div>
+        </section>
+      )) : null}
+    </div>
+  );
+}
+
+function ActivityOutput({ text, expanded, tone, field = "output" }: { text: string; expanded: boolean; tone: string; field?: string }) {
+  const { t } = useTranslation();
+  const preview = summarizeOutput(text);
+  const output = expanded ? text : [
+    ...preview.head,
+    ...(preview.omitted ? [t("sessions.detail.omitted_lines", { count: preview.omitted })] : []),
+    ...preview.tail,
+  ].join("\n");
+  return <pre className={`mt-1 whitespace-pre-wrap break-words border-l border-border/60 pl-4 ${tone}`}>└ <SessionSearchText text={text} field={field}>{output}</SessionSearchText></pre>;
+}
+
+function SearchSourceField({ field, text }: { field: string; text: string | null | undefined }) {
+  const matches = useContext(SessionSearchContext);
+  const { t } = useTranslation();
+  return text && matches.some((hit) => hit.field === field && text.length === hit.length && text.slice(hit.windowStart, hit.windowStart + hit.text.length) === hit.text)
+    ? <ToolTextBlock title={t(`sessions.detail.${field}`)} text={text} /> : null;
+}
+
+function ExecResultItem({ output, index }: { output: ExecOutput; index: number }) {
+  const { t } = useTranslation();
+  const [expanded, setExpanded] = useSessionSearchExpansion();
+  const failed = output.rejected || (output.exitCode !== null && output.exitCode !== 0);
+  return <div className={`rounded-md border p-2 ${failed ? ITEM_TONES.error : "border-border/50"}`}>
+    <button type="button" className={`flex w-full items-center justify-between text-left ${DISCLOSURE_BUTTON_CLASS}`} aria-expanded={expanded} onClick={() => setExpanded((value) => !value)}>
+      <span className={failed ? "font-semibold text-error" : "font-semibold"}>{t("sessions.detail.output")} #{index + 1}</span>
+      {expanded ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
+    </button>
+    {output.stdout ? <ActivityOutput text={cleanExecOutput(output.stdout)} expanded={expanded} tone={failed ? "text-error" : "text-muted-foreground"} /> : null}
+    {output.stderr ? <ActivityOutput field="stderr" text={output.stderr} expanded={expanded} tone="text-error" /> : null}
+  </div>;
+}
+
+function NestedActivityItem({ activity }: { activity: NestedActivity }) {
+  const { t } = useTranslation();
+  const [expanded, setExpanded] = useSessionSearchExpansion();
+
+  if (activity.kind === "terminal") {
+    const text = [activity.output?.stdout, activity.output?.stderr].filter(Boolean).join("\n");
+    return <div>
+      <BackgroundTerminalItem input={activity.input} output={text ? cleanExecOutput(text) : null} result={activity.output} rawJsonl={[]} />
+    </div>;
+  }
+
+  if (activity.kind === "webSearch") {
+    return <WebSearchItem output={activity.output} status={activity.output === null ? null : "completed"} isError={false} queries={activity.queries} structuredResults={null} rawJsonl={[]} />;
+  }
+
+  if (activity.kind === "webOpen") {
+    return <WebSearchItem action="open" output={activity.output} status={activity.output === null ? null : "completed"} isError={false} queries={activity.references} structuredResults={null} rawJsonl={[]} />;
+  }
+
+  if (activity.kind === "patch") {
+    const { files, additions, deletions, label } = patchSummary(activity.patch, t);
+    return <div className="py-1.5">
+      <button type="button" className={`flex w-full items-start justify-between gap-3 text-left ${DISCLOSURE_BUTTON_CLASS}`} aria-expanded={expanded} onClick={() => setExpanded((value) => !value)}>
+        <span className="flex min-w-0 items-center gap-1.5 font-semibold text-foreground">
+          <span className="text-muted-foreground">•</span><span className="min-w-0 break-all">{label}</span>
+          {files.length ? <><span className="text-green-600 dark:text-green-400">+{additions}</span><span className="text-red-600 dark:text-red-400">-{deletions}</span></> : null}
+        </span>
+        <span className="flex shrink-0 items-center gap-2 text-muted-foreground">{expanded ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}</span>
+      </button>
+      {expanded ? <div className="ml-4 mt-2"><PatchDiffBlock patch={activity.patch} expanded hideHeader /></div> : null}
+    </div>;
+  }
+
+  if (activity.kind === "image") {
+    return <div className="py-1.5">
+      <button type="button" className={`flex w-full items-start justify-between gap-3 text-left ${DISCLOSURE_BUTTON_CLASS}`} aria-expanded={expanded} onClick={() => setExpanded((value) => !value)}>
+        <span className="min-w-0"><span className="font-semibold"><span className="mr-1.5 text-muted-foreground">•</span>{t("sessions.detail.viewed_image")}</span><span className="mt-1 block break-all border-l border-border/60 pl-4 text-muted-foreground">└ <SessionSearchText text={activity.path} field="file_path" /></span></span>
+        <span className="flex shrink-0 items-center gap-2 text-muted-foreground">{activity.imageUrl ? expanded ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" /> : null}</span>
+      </button>
+      {expanded && activity.imageUrl ? <img src={activity.imageUrl} alt={activity.path} loading="lazy" className="ml-4 mt-2 max-h-80 max-w-[calc(100%-1rem)] rounded-md border border-border/60 bg-background object-contain" /> : null}
+    </div>;
+  }
+
+  const failed = activity.status === "failed" || activity.status === "declined" || activity.output?.rejected || (activity.output?.exitCode != null && activity.output.exitCode !== 0);
+  const stdout = activity.output?.stdout ? cleanExecOutput(activity.output.stdout) : null;
+  return <div className="py-1.5">
+    <SearchSourceField field="working_directory" text={activity.workdir} />
+    <button type="button" className={`flex w-full min-w-0 items-start justify-between gap-3 text-left ${DISCLOSURE_BUTTON_CLASS}`} aria-expanded={expanded} onClick={() => setExpanded((value) => !value)}>
+      <span className="flex min-w-0 gap-1.5"><span className={failed ? "shrink-0 text-error" : "shrink-0 text-muted-foreground"}>•</span><span className="min-w-0 whitespace-pre-wrap break-words"><span className="font-semibold">{t(activity.status === "running" ? "sessions.detail.activity_running" : "sessions.detail.activity_ran")}</span> {expanded ? <SessionSearchText text={activity.command} field="command" /> : buildCollapsedPreview(activity.command, 1)}</span></span>
+      <span className="flex shrink-0 items-center gap-2 text-muted-foreground">{expanded ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}</span>
+    </button>
+    {stdout ? <ActivityOutput text={stdout} expanded={expanded} tone={failed ? "text-error" : "text-muted-foreground"} /> : null}
+    {activity.output?.stderr ? <ActivityOutput field="stderr" text={activity.output.stderr} expanded={expanded} tone="text-error" /> : null}
+  </div>;
+}
+
+function UserInputItem({ item, questions, tokenUsage, rawJsonl }: { item: Extract<ReplayItem, { kind: "toolCall" }>; questions: UserInputQuestion[]; tokenUsage?: TokenUsageItem; rawJsonl: string[] }) {
+  const { t } = useTranslation();
+  const answers = parseUserInputAnswers(item.output);
+
+  return (
+    <div className={`rounded-lg border p-3 ${ITEM_TONES.tool}`}>
+      <div className={`flex items-center justify-between gap-3 text-xs font-semibold ${ITEM_TITLE_TONES.tool}`}>
+        <span className="flex items-center gap-1">
+          <MessageSquare className="h-3.5 w-3.5 shrink-0" />
+          <span>{t("sessions.detail.user_input_request")}</span>
+        </span>
+        {tokenUsage ? <TokenMetadata usage={tokenUsage} /> : null}
+      </div>
+      <div className="mt-3 space-y-3">
+        {questions.map((question) => {
+          const selectedAnswers = answers[question.id] ?? [];
+          const customAnswers = selectedAnswers.filter((answer) => !question.options.some((option) => option.label === answer));
+
+          return (
+            <section key={question.id} className="py-2">
+              {question.header ? <div className="text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground"><SessionSearchText text={question.header} /></div> : null}
+              <div className="mt-1 whitespace-pre-wrap break-words text-sm text-foreground">
+                <Suspense fallback={question.question}>
+                  <SessionSearchText text={question.question}><MarkdownContent content={question.question} /></SessionSearchText>
+                </Suspense>
+              </div>
+              {question.options.length > 0 ? <ol className="mt-3 space-y-2">
+                {question.options.map((option, index) => {
+                  const isSelected = selectedAnswers.includes(option.label);
+                  return (
+                    <li
+                      key={`${question.id}-${option.label}`}
+                      className={`flex gap-3 rounded-md border px-3 py-2 ${isSelected ? "border-primary/50 bg-primary/10" : "border-border/60 bg-background/60"}`}
+                    >
+                      <span className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full border text-[10px] font-bold ${isSelected ? "border-primary bg-primary text-primary-foreground" : "border-border text-muted-foreground"}`}>
+                        {isSelected ? <Check className="h-3 w-3" /> : index + 1}
+                      </span>
+                      <span className="min-w-0">
+                        <span className="block text-sm font-medium text-foreground"><SessionSearchText text={option.label} /></span>
+                        {option.description ? <span className="mt-0.5 block text-xs leading-relaxed text-muted-foreground"><SessionSearchText text={option.description} /></span> : null}
+                      </span>
+                    </li>
+                  );
+                })}
+              </ol> : null}
+              {customAnswers.map((answer) => (
+                <div key={answer} className="mt-2 flex gap-3 rounded-md border border-primary/50 bg-primary/10 px-3 py-2">
+                  <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full border border-primary bg-primary text-primary-foreground">
+                    <Check className="h-3 w-3" />
+                  </span>
+                  <span className="min-w-0">
+                    <span className="block text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">{t("sessions.detail.custom_answer")}</span>
+                    <span className="mt-0.5 block whitespace-pre-wrap break-words text-sm text-foreground"><SessionSearchText text={answer} /></span>
+                  </span>
+                </div>
+              ))}
+            </section>
+          );
+        })}
+      </div>
+      <RawJsonlDisclosure rawJsonl={rawJsonl} />
+    </div>
+  );
+}
+
+function WebSearchItem({
+  action = "search",
+  output,
+  status,
+  isError,
+  queries,
+  structuredResults,
+  tokenUsage,
+  rawJsonl,
+}: {
+  action?: "search" | "open";
+  output: string | null;
+  status: string | null;
+  isError: boolean;
+  queries: string[];
+  structuredResults: WebSearchResult[] | null;
+  tokenUsage?: TokenUsageItem;
+  rawJsonl: string[];
+}) {
+  const { t } = useTranslation();
+  const [isExpanded, setIsExpanded] = useSessionSearchExpansion();
+  const contentBlocks = parseToolContentBlocks(output);
+  const matches = useContext(SessionSearchContext);
+  const text = contentBlocks?.text ?? output;
+  const results = text ? splitWebSearchResults(text) : [];
+  const searchLabel = action === "open"
+    ? t(status === "completed" ? "sessions.detail.web_open_completed" : "sessions.detail.web_open_running")
+    : t(status === "completed" ? "sessions.detail.web_search_completed" : "sessions.detail.web_search_running");
+  const displayQueries = queries.length > 0 ? queries : [null];
+
+  return (
+    <div className={`rounded-lg border p-3 font-mono text-xs leading-relaxed ${isError ? ITEM_TONES.error : ITEM_TONES.tool}`}>
+      <button
+        type="button"
+        className={`flex w-full items-start justify-between gap-3 text-left ${isError ? ITEM_TITLE_TONES.error : "text-foreground"} ${DISCLOSURE_BUTTON_CLASS}`}
+        aria-expanded={isExpanded}
+        onClick={() => setIsExpanded((value) => !value)}
+      >
+        <span className="min-w-0 space-y-1">
+          {displayQueries.map((query, index) => (
+            <span key={`${index}-${query ?? "web-search"}`} className="flex min-w-0 gap-1.5">
+              <span className="shrink-0 text-muted-foreground">•</span>
+              <span className="min-w-0 break-words">
+                <span className="font-semibold">{query ? searchLabel : t("sessions.detail.web_search")}</span>
+                {query ? <> <SessionSearchText text={query} field="arguments" /></> : null}
+              </span>
+            </span>
+          ))}
+        </span>
+        <span className="flex shrink-0 items-center gap-3 font-sans text-muted-foreground">
+          {tokenUsage ? <TokenMetadata usage={tokenUsage} /> : null}
+          {isExpanded ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
+          <span className="sr-only">{isExpanded ? t("sessions.detail.collapse") : t("sessions.detail.expand")}</span>
+        </span>
+      </button>
+      {isExpanded ? <div className="ml-4 mt-2 space-y-2">
+        {matches.some((hit) => hit.field === "output") && text ? <ToolTextBlock title={t("sessions.detail.output")} text={cleanExecOutput(text)} /> : structuredResults ? (
+          <div className="space-y-2">
+            {structuredResults.map((result, index) => (
+              <article key={`${index}-${result.url ?? result.title}`} className="py-2">
+                {result.url ? (
+                  <a href={result.url} target="_blank" rel="noreferrer" className="block break-words text-sm font-semibold text-primary hover:underline"><SessionSearchText text={result.title} /></a>
+                ) : <div className="break-words text-sm font-semibold text-foreground"><SessionSearchText text={result.title} /></div>}
+                {result.domain ? <div className="mt-1 text-xs text-muted-foreground">{result.domain}</div> : null}
+                {matches.some((hit) => hit.field === "search_result") && result.url ? <SessionSearchText text={result.url} /> : null}
+                {result.snippet ? <p className="mt-2 whitespace-pre-wrap break-words text-xs leading-relaxed text-muted-foreground"><SessionSearchText text={result.snippet} /></p> : null}
+              </article>
+            ))}
+          </div>
+        ) : results.length > 0 ? (
+          <div className="space-y-2">
+            {results.map((result, index) => (
+              <ToolTextBlock key={`${index}-${result.slice(0, 80)}`} title={t(action === "open" ? "sessions.detail.opened_page" : "sessions.detail.search_result", { index: index + 1 })} text={result} />
+            ))}
+          </div>
+        ) : null}
+        <RawJsonlDisclosure rawJsonl={rawJsonl} />
+      </div> : null}
+    </div>
+  );
+}
+
+function BackgroundTerminalItem({ input, output, result, tokenUsage, rawJsonl }: { input: string; output: string | null; result?: ExecOutput | null; tokenUsage?: TokenUsageItem; rawJsonl: string[] }) {
+  const { t } = useTranslation();
+  const [isExpanded, setIsExpanded] = useSessionSearchExpansion();
+  const waitedOnly = input.length === 0;
+  const failed = result?.rejected || (result?.exitCode != null && result.exitCode !== 0);
+  const running = !failed && result?.exitCode == null && result?.sessionId != null;
+  const statusTone = failed ? "text-error" : result?.exitCode === 0 ? "text-emerald-700 dark:text-emerald-300" : "text-muted-foreground";
+
+  return (
+    <div className={`rounded-lg border p-3 font-mono text-xs leading-relaxed ${failed ? ITEM_TONES.error : ITEM_TONES.tool}`}>
+      <button
+        type="button"
+        className={`flex w-full items-start justify-between gap-3 text-left text-foreground ${DISCLOSURE_BUTTON_CLASS}`}
+        aria-expanded={isExpanded}
+        disabled={!output}
+        onClick={() => setIsExpanded((value) => !value)}
+      >
+        <span className="flex min-w-0 gap-1.5">
+          <span className={`shrink-0 ${statusTone}`} title={result?.exitCode != null ? t(failed ? "sessions.detail.exit_failure_tooltip" : "sessions.detail.exit_success_tooltip") : undefined}>{waitedOnly ? "•" : "↳"}</span>
+          <span className="font-semibold">
+            {t(waitedOnly ? "sessions.detail.waited_for_background_terminal" : "sessions.detail.interacted_with_background_terminal")}
+          </span>
+        </span>
+        <span className="flex shrink-0 items-center gap-2 text-muted-foreground">
+          {failed || running ? <span className={statusTone}>{t(failed ? "sessions.detail.activity_failed" : "sessions.detail.activity_running")}</span> : null}
+          {tokenUsage ? <TokenMetadata usage={tokenUsage} /> : null}
+          {output ? isExpanded ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" /> : null}
+        </span>
+      </button>
+      {!waitedOnly ? <pre className="mt-1 whitespace-pre-wrap break-words border-l border-border/60 pl-4 text-muted-foreground">└ <SessionSearchText text={input} field="command" /></pre> : null}
+      {isExpanded && output ? <ActivityOutput text={output} expanded tone={failed ? "text-error" : "text-muted-foreground"} /> : null}
+      <RawJsonlDisclosure rawJsonl={rawJsonl} />
+    </div>
+  );
+}
+
+function SleepItem({ activity, tokenUsage, rawJsonl }: { activity: ToolActivity; tokenUsage?: TokenUsageItem; rawJsonl: string[] }) {
+  const { t } = useTranslation();
+  const [expanded, setExpanded] = useSessionSearchExpansion();
+  const sleep = activity.sleep!;
+  const duration = sleep.durationMs === null ? null : t("sessions.detail.sleep_seconds", {
+    seconds: (sleep.durationMs / 1000).toLocaleString(undefined, { maximumFractionDigits: 3 }),
+  });
+  const summary = sleep.state === "completed"
+    ? duration ? t("sessions.detail.sleep_completed_duration", { duration }) : t("sessions.detail.sleep_completed")
+    : sleep.state === "pending"
+      ? `${duration ? t("sessions.detail.sleep_requested", { duration }) : t("sessions.detail.sleep_waiting")} · ${t("sessions.detail.sleep_incomplete")}`
+      : sleep.state === "ended"
+        ? `${t("sessions.detail.sleep_ended")}${duration ? ` · ${t("sessions.detail.sleep_requested", { duration })}` : ""}`
+        : t(`sessions.detail.sleep_${sleep.state}`);
+  const failed = sleep.state === "failed";
+
+  return (
+    <div className={`rounded-lg border p-3 text-xs ${failed ? ITEM_TONES.error : ITEM_TONES.tool}`}>
+      <button type="button" className={`flex w-full items-start justify-between gap-3 text-left ${DISCLOSURE_BUTTON_CLASS}`} aria-expanded={expanded} onClick={() => setExpanded((value) => !value)}>
+        <span className={`flex min-w-0 items-center gap-1.5 font-semibold ${failed ? ITEM_TITLE_TONES.error : "text-foreground"}`}>
+          <Clock3 className="h-3.5 w-3.5 shrink-0" />
+          <span>{summary}</span>
+        </span>
+        <span className="flex shrink-0 items-center gap-3 text-muted-foreground">
+          {tokenUsage ? <TokenMetadata usage={tokenUsage} /> : null}
+          {expanded ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
+        </span>
+      </button>
+      {expanded ? <div className="mt-3 space-y-1">
+        <div><span className="font-semibold text-muted-foreground">{t("sessions.detail.sleep_tool")}: </span><span className="font-mono">clock.sleep</span></div>
+        {duration ? <div><span className="font-semibold text-muted-foreground">{t("sessions.detail.sleep_requested_label")}: </span>{duration}</div> : null}
+        {activity.argumentsText ? <ToolTextBlock title={t("sessions.detail.arguments")} text={activity.argumentsText} /> : null}
+        {activity.outputText ? <ToolTextBlock title={t("sessions.detail.output")} text={activity.outputText} /> : null}
+        {activity.stderrText ? <ToolTextBlock title={t("sessions.detail.stderr")} text={activity.stderrText} /> : null}
+      </div> : null}
+      <RawJsonlDisclosure rawJsonl={rawJsonl} />
+    </div>
+  );
+}
+
+function ToolCallItem({ item, activity, tokenUsage, rawJsonl }: { activity: ToolActivity; item: Extract<ReplayItem, { kind: "toolCall" }>; tokenUsage?: TokenUsageItem; rawJsonl: string[] }) {
+  const { t } = useTranslation();
+  const [isExpanded, setIsExpanded] = useSessionSearchExpansion();
+  const { outerToolName, backgroundTerminalInput, userInputQuestions, webSearchQueries, webOpenReferences, webSearchResults, nestedActivities, unpairedOutputs, unparsedOutputText, retainedArguments, execArguments, argumentEntries, contentBlocks, argumentsText, displayToolName, outputText, stderrText } = activity;
+  const argumentsTitle = execArguments?.kind === "patch"
+    ? t("sessions.detail.patch_input")
+    : t(execArguments ? "sessions.detail.command" : "sessions.detail.arguments");
+
+  if (activity.sleep) {
+    return <SleepItem activity={activity} tokenUsage={tokenUsage} rawJsonl={rawJsonl} />;
+  }
+
+  if (userInputQuestions) {
+    return <UserInputItem item={item} questions={userInputQuestions} tokenUsage={tokenUsage} rawJsonl={rawJsonl} />;
+  }
+
+  if (webSearchQueries || (outerToolName === "web_search" && webSearchResults)) {
+    return <WebSearchItem output={item.output} status={item.status} isError={item.isError} queries={webSearchQueries ?? []} structuredResults={webSearchResults} tokenUsage={tokenUsage} rawJsonl={rawJsonl} />;
+  }
+
+  if (webOpenReferences) {
+    return <WebSearchItem action="open" output={item.output} status={item.status} isError={item.isError} queries={webOpenReferences} structuredResults={null} tokenUsage={tokenUsage} rawJsonl={rawJsonl} />;
+  }
+
+  if (backgroundTerminalInput !== null) {
+    const response = [
+      ...(unpairedOutputs.length ? unpairedOutputs.flatMap((output) => [output.stdout, output.stderr]) : [contentBlocks?.texts.join("\n") ?? outputText]),
+      unpairedOutputs.length ? unparsedOutputText : null, stderrText,
+    ].filter(Boolean).join("\n");
+    return <BackgroundTerminalItem input={backgroundTerminalInput} output={cleanExecOutput(response) || null} result={activity.execOutput ?? (unpairedOutputs.length === 1 ? unpairedOutputs[0] : null)} tokenUsage={tokenUsage} rawJsonl={rawJsonl} />;
+  }
+
+  if (nestedActivities) {
+    return <div className={`rounded-lg border p-3 font-mono text-xs leading-relaxed ${item.isError ? ITEM_TONES.error : ITEM_TONES.tool}`}>
+      {tokenUsage ? <div className="mb-2 flex justify-end"><TokenMetadata usage={tokenUsage} /></div> : null}
+      <div className="space-y-1">
+        {nestedActivities.map((nestedActivity, index) => (
+          <SessionSearchTarget key={nestedActivity.kind === "command" && nestedActivity.callId ? nestedActivity.callId : `${nestedActivity.kind}-${index}`} target={`nested-${index}`}>
+            <SearchSourceField field="sleep_tool" text={NESTED_TOOL_NAMES[nestedActivity.kind]} />
+            <NestedActivityItem activity={nestedActivity} />
+          </SessionSearchTarget>
+        ))}
+      </div>
+      {retainedArguments ? <ToolTextBlock title={argumentsTitle} text={retainedArguments} /> : null}
+      {unpairedOutputs.map((output, index) => <SessionSearchTarget key={index} target={`output-${index}`}><ExecResultItem output={output} index={index} /></SessionSearchTarget>)}
+      {unparsedOutputText || stderrText ? <div className="mt-2">
+        <button
+          type="button"
+          className={`flex w-full items-center justify-between gap-3 text-left text-muted-foreground ${DISCLOSURE_BUTTON_CLASS}`}
+          aria-expanded={isExpanded}
+          onClick={() => setIsExpanded((value) => !value)}
+        >
+          <span>{t("sessions.detail.output")}</span>
+          {isExpanded ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
+        </button>
+        {unparsedOutputText ? <ActivityOutput text={unparsedOutputText} expanded={isExpanded} tone="text-muted-foreground" /> : null}
+        {stderrText ? <ActivityOutput field="stderr" text={stderrText} expanded={isExpanded} tone="text-error" /> : null}
+      </div> : null}
+      <RawJsonlDisclosure rawJsonl={rawJsonl} />
+    </div>;
+  }
+
+  if (execArguments?.kind === "command") {
+    const commandOutput = outputText ? cleanExecOutput(outputText) : null;
+    const activityStatus = item.status === "stopped"
+      ? "stopped"
+      : item.isError
+        ? "failed"
+        : item.status === "running"
+          ? "running"
+          : "success";
+    const signal = processSignal(item.output);
+    const statusTone = activityStatus === "failed"
+      ? "text-error"
+      : activityStatus === "success"
+        ? "text-emerald-700 dark:text-emerald-300"
+        : activityStatus === "stopped"
+          ? "text-amber-700 dark:text-amber-300"
+          : "text-foreground";
+    const outputTone = activityStatus === "failed" ? "text-error" : "text-muted-foreground";
+    return (
+      <div className={`rounded-lg border p-3 font-mono text-xs leading-relaxed ${activityStatus === "failed" ? ITEM_TONES.error : ITEM_TONES.tool}`}>
+        <button
+          type="button"
+          className={`flex w-full min-w-0 items-start justify-between gap-3 text-left text-foreground ${DISCLOSURE_BUTTON_CLASS}`}
+          aria-expanded={isExpanded}
+          onClick={() => setIsExpanded((value) => !value)}
+        >
+          <span className="flex min-w-0 gap-1.5">
+            <span className={`shrink-0 ${statusTone}`} title={activityStatus === "failed" || activityStatus === "success" ? t(activityStatus === "failed" ? "sessions.detail.exit_failure_tooltip" : "sessions.detail.exit_success_tooltip") : undefined}>•</span>
+            <span className="min-w-0 whitespace-pre-wrap break-words">
+              {activityStatus === "running"
+                ? t("sessions.detail.activity_running")
+                : activityStatus === "stopped"
+                  ? t("sessions.detail.activity_stopped")
+                  : t("sessions.detail.activity_ran")}
+              {activityStatus === "stopped" && signal ? ` (${signal}) ` : " "}
+              {isExpanded ? <SessionSearchText text={execArguments.command} field="command" /> : buildCollapsedPreview(execArguments.command, 1)}
+            </span>
+          </span>
+          <span className="flex shrink-0 items-center gap-3 font-sans text-muted-foreground">
+            {tokenUsage ? <TokenMetadata usage={tokenUsage} /> : null}
+            <span className="flex items-center gap-1">
+              {isExpanded ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
+              {isExpanded ? t("sessions.detail.collapse") : t("sessions.detail.expand")}
+            </span>
+          </span>
+        </button>
+        <SearchSourceField field="working_directory" text={execArguments.workdir} />
+        {commandOutput ? <ActivityOutput text={commandOutput} expanded={isExpanded} tone={outputTone} /> : null}
+        {stderrText ? (
+          <ActivityOutput field="stderr" text={stderrText} expanded={isExpanded} tone="text-error" />
+        ) : null}
+        <RawJsonlDisclosure rawJsonl={rawJsonl} />
+      </div>
+    );
+  }
+
+  return (
+    <div className={`rounded-lg border p-3 ${item.isError ? ITEM_TONES.error : ITEM_TONES.tool}`}>
+      <button
+        type="button"
+        className={`flex w-full items-center justify-between gap-3 text-left text-xs font-semibold ${item.isError ? ITEM_TITLE_TONES.error : ITEM_TITLE_TONES.tool} ${DISCLOSURE_BUTTON_CLASS}`}
+        aria-expanded={isExpanded}
+        onClick={() => setIsExpanded((value) => !value)}
+      >
+        <span className="flex min-w-0 items-center gap-1">
+          <Terminal className="h-3.5 w-3.5 shrink-0" />
+          <span className="truncate">{displayToolName} {item.status ? `· ${item.status}` : ""}</span>
+        </span>
+        <span className="flex shrink-0 items-center gap-3">
+          {tokenUsage ? <TokenMetadata usage={tokenUsage} /> : null}
+          <span className="flex items-center gap-1">
+            {isExpanded ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
+            {isExpanded ? t("sessions.detail.collapse") : t("sessions.detail.expand")}
+          </span>
+        </span>
+      </button>
+      <div className="mt-3 space-y-2">
+        {argumentsText ? (
+          execArguments?.kind === "patch"
+            ? <PatchDiffBlock patch={argumentsText} expanded={isExpanded} />
+            : isExpanded
+              ? <ToolTextBlock title={argumentsTitle} text={argumentsText} />
+              : <ToolPreview title={argumentsTitle} text={argumentsText} lines={1} />
+        ) : null}
+        {argumentEntries.length > 0 ? (
+          <div className="grid gap-2 sm:grid-cols-2 content-lg:grid-cols-3">
+            {argumentEntries.map(([key, value]) => (
+              <div key={key} className="min-w-0 rounded-md border border-cyan-300/50 bg-cyan-50/60 px-3 py-2 dark:border-cyan-800/50 dark:bg-cyan-950/25">
+                <div className="text-[10px] font-semibold uppercase tracking-[0.1em] text-cyan-700 dark:text-cyan-300">
+                  {t(`sessions.detail.tool_argument_labels.${key}`, { defaultValue: key.replaceAll("_", " ") })}
+                </div>
+                <pre className="mt-1 whitespace-pre-wrap break-words font-mono text-xs leading-relaxed text-foreground">
+                  <SessionSearchText text={formatToolArgumentValue(value)} field="arguments" />
+                </pre>
+              </div>
+            ))}
+          </div>
+        ) : null}
+        {execArguments?.workdir ? (
+          <div className="rounded-md border border-border/50 bg-muted/35 px-3 py-2 text-xs">
+            <span className="font-semibold text-muted-foreground">{t("sessions.detail.working_directory")}: </span>
+            <span className="break-all font-mono text-foreground"><SessionSearchText text={execArguments.workdir} field="working_directory" /></span>
+          </div>
+        ) : null}
+        {unpairedOutputs.map((output, index) => <SessionSearchTarget key={index} target={`output-${index}`}><ExecResultItem output={output} index={index} /></SessionSearchTarget>)}
+        {outputText ? (
+          isExpanded
+            ? <ToolTextBlock title={t("sessions.detail.output")} text={outputText} />
+            : <ToolPreview title={t("sessions.detail.output")} text={outputText} lines={5} />
+        ) : null}
+        {contentBlocks?.images.length ? (
+          <div className="py-2">
+            <div className="mb-2 text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+              {t("sessions.detail.image_count", { count: contentBlocks.images.length })}
+            </div>
+            {isExpanded ? (
+              <div className="grid gap-2 sm:grid-cols-2">
+                {contentBlocks.images.map((imageUrl, index) => (
+                  <img
+                    key={`${item.callId ?? item.name}-${index}`}
+                    src={imageUrl}
+                    alt={t("sessions.detail.output_image", { index: index + 1 })}
+                    loading="lazy"
+                    className="max-h-80 w-full rounded-md border border-border/60 bg-background object-contain"
+                  />
+                ))}
+              </div>
+            ) : null}
+          </div>
+        ) : null}
+        {stderrText ? (
+          isExpanded
+            ? <ToolTextBlock title={t("sessions.detail.stderr")} text={stderrText} />
+            : <ToolPreview title={t("sessions.detail.stderr")} text={stderrText} lines={5} />
+        ) : null}
+      </div>
+      <RawJsonlDisclosure rawJsonl={rawJsonl} />
+    </div>
+  );
+}
+
+function PatchItem({ item, tokenUsage, rawJsonl }: { item: Extract<ReplayItem, { kind: "patch" }>; tokenUsage?: TokenUsageItem; rawJsonl: string[] }) {
+  const { t } = useTranslation();
+  const [isExpanded, setIsExpanded] = useSessionSearchExpansion();
+  const isError = item.isError || item.success === false;
+
+  return (
+    <div className={`rounded-lg border p-3 ${isError ? ITEM_TONES.error : ITEM_TONES.patch}`}>
+      <button
+        type="button"
+        className={`flex w-full items-center justify-between gap-3 text-left text-xs font-semibold ${isError ? ITEM_TITLE_TONES.error : ITEM_TITLE_TONES.patch} ${DISCLOSURE_BUTTON_CLASS}`}
+        aria-expanded={isExpanded}
+        onClick={() => setIsExpanded((value) => !value)}
+      >
+        <span>{item.success === false ? t("sessions.detail.patch_failed") : t("sessions.detail.patch_result")}</span>
+        <span className="flex shrink-0 items-center gap-3">
+          {tokenUsage ? <TokenMetadata usage={tokenUsage} /> : null}
+          <span className="flex items-center gap-1">
+            {isExpanded ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
+            {isExpanded ? t("sessions.detail.collapse") : t("sessions.detail.expand")}
+          </span>
+        </span>
+      </button>
+      {isExpanded && item.output ? <div className="mt-3"><TextBlock title={t("sessions.detail.patch_output")} text={item.output} /></div> : null}
+      <RawJsonlDisclosure rawJsonl={rawJsonl} />
+    </div>
+  );
+}
+
+function TimelineItem({ item, activity, tokenUsage, rawJsonlLines }: TimelineEntry & { rawJsonlLines: string[] }) {
+  const { t } = useTranslation();
+  const rawJsonl = [...(item.rawJsonlLineNumbers ?? []), ...(tokenUsage?.rawJsonlLineNumbers ?? [])]
+    .flatMap((lineNumber) => rawJsonlLines[lineNumber - 1] === undefined ? [] : [rawJsonlLines[lineNumber - 1]]);
+  let content: ReactNode;
+
+  if (item.kind === "message") {
+    content = <MessageItem item={item} tokenUsage={tokenUsage} rawJsonl={rawJsonl} />;
+  } else if (item.kind === "reasoning") {
+    content = (
+      <div className={`rounded-lg border p-3 text-muted-foreground ${ITEM_TONES.reasoning}`}>
+        <div className="mb-1 flex justify-end gap-2">
+          {tokenUsage ? <TokenMetadata usage={tokenUsage} /> : null}
+          <CopyContentButton content={item.text} />
+        </div>
+        <TextBlock title={t("sessions.detail.reasoning_summary")} text={item.text} markdown titleClassName={ITEM_TITLE_TONES.reasoning} />
+        <RawJsonlDisclosure rawJsonl={rawJsonl} />
+      </div>
+    );
+  } else if (item.kind === "toolCall") {
+    content = <><SearchSourceField field="sleep_tool" text={activity!.displayToolName} /><ToolCallItem item={item} activity={activity!} tokenUsage={tokenUsage} rawJsonl={rawJsonl} /></>;
+  } else if (item.kind === "patch") {
+    if (!item.isError && item.success !== false) return null;
+    content = <PatchItem item={item} tokenUsage={tokenUsage} rawJsonl={rawJsonl} />;
+  } else if (item.kind === "tokenUsage") {
+    content = (
+      <div className="px-3 py-0.5">
+        <div className="flex justify-end"><TokenMetadata usage={item} /></div>
+        <RawJsonlDisclosure rawJsonl={rawJsonl} />
+      </div>
+    );
+  } else if (item.kind === "error") {
+    content = <div className={`flex flex-wrap items-start justify-between gap-3 rounded-lg border p-3 text-sm ${ITEM_TONES.error} ${ITEM_TITLE_TONES.error}`}><span><SessionSearchText text={item.text} /></span>{tokenUsage ? <TokenMetadata usage={tokenUsage} /> : null}<RawJsonlDisclosure rawJsonl={rawJsonl} /></div>;
+  } else {
+    content = (
+      <div className={`flex flex-wrap items-start justify-between gap-3 rounded-lg border px-3 py-2 text-xs ${ITEM_TONES.notice} ${ITEM_TITLE_TONES.notice}`}>
+        <span><SessionSearchText text={[item.label, item.text].filter(Boolean).join(" · ")} /></span>
+        {tokenUsage ? <TokenMetadata usage={tokenUsage} /> : null}
+        <RawJsonlDisclosure rawJsonl={rawJsonl} />
+      </div>
+    );
+  }
+
+  return content;
+}
+
+export const ConversationItem = memo(function ConversationItem({ block, rawJsonlLines, searchHits = [] }: { block: ConversationBlock; rawJsonlLines: string[]; searchHits?: SessionSearchHit[] }) {
+  const { t } = useTranslation();
+  const [userExpanded, setExpanded] = useState(false);
+  const expanded = userExpanded || searchHits.length > 0;
+  if (block.kind === "item") return <SessionSearchContext value={searchHits}><TimelineItem {...block.entry} rawJsonlLines={rawJsonlLines} /></SessionSearchContext>;
+  // Merge adjacent reads only, retaining a badge for each original token event.
+  const rows: { label: string; names: string[]; entries: TimelineEntry[] }[] = [];
+  block.actions.forEach((actions, index) => {
+    actions.forEach((action, actionIndex) => {
+      const previous = rows.at(-1);
+      const entries = actionIndex === actions.length - 1 ? [block.entries[index]] : [];
+      if (action.label === "Read" && previous?.label === "Read") {
+        if (!previous.names.includes(action.text)) previous.names.push(action.text);
+        previous.entries.push(...entries);
+      } else rows.push({ label: action.label, names: [action.text], entries });
+    });
+  });
+  return (
+    <section className={`rounded-lg border p-3 ${ITEM_TONES.tool}`} aria-label="Explored">
+      <button type="button" className={`flex w-full items-center gap-2 text-left text-xs text-muted-foreground ${DISCLOSURE_BUTTON_CLASS}`} aria-expanded={expanded} onClick={() => setExpanded((value) => !value)}>
+        <span aria-hidden="true">•</span><span className="font-semibold">Explored</span>
+        <span>{t("sessions.detail.tool_count", { count: block.entries.length })}</span>
+        {expanded ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
+        <span className="sr-only">{t(expanded ? "sessions.detail.collapse" : "sessions.detail.expand")}</span>
+      </button>
+      {expanded ? <div className="ml-2 mt-2 space-y-2 border-l border-border/60 pl-4">
+        {block.entries.map((entry, index) => <SessionSearchContext key={index} value={searchHits.filter((hit) => hit.entryIndex === index)}><TimelineItem {...entry} rawJsonlLines={rawJsonlLines} /></SessionSearchContext>)}
+      </div> : <div className="ml-2 mt-2 space-y-2 border-l border-border/60 pl-4">
+        {rows.map((row, index) => <div key={index} className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 text-xs">
+          <span className="min-w-0 break-words text-muted-foreground"><span className="mr-2 font-medium text-foreground">{row.label}</span>{row.names.join(", ")}</span>
+          <span className="flex flex-wrap justify-end gap-2">{row.entries.map((entry, entryIndex) => entry.tokenUsage ? <span key={entryIndex} className="inline-flex items-center gap-1" title={entry.activity?.execArguments?.command}>
+            {row.entries.length > 1 ? <span className="text-[10px] text-muted-foreground">#{entryIndex + 1}</span> : null}<TokenMetadata usage={entry.tokenUsage} />
+          </span> : null)}</span>
+        </div>)}
+      </div>}
+    </section>
+  );
+});
+
+export function SessionDetailModal({ session, isActive = true, showSessionCredits = false, onClose, onScanComplete }: SessionDetailModalProps) {
+  const { t } = useTranslation();
+  const [detail, setDetail] = useState<SessionReplayDetail | null>(null);
+  const [activePath, setActivePath] = useState(session.path);
+  const [refreshedSession, setRefreshedSession] = useState<SessionDetailRow | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
+  const [refreshError, setRefreshError] = useState<string | null>(null);
+  const requestGeneration = useRef(0);
+  const refreshInFlight = useRef(false);
+  const [error, setError] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<TabKey>("timeline");
+  const [copied, setCopied] = useState(false);
+  const [copiedSessionId, setCopiedSessionId] = useState(false);
+  const [copiedProjectPath, setCopiedProjectPath] = useState<string | null>(null);
+  const [expandedTurns, setExpandedTurns] = useState<Set<string>>(() => new Set());
+  const [showFullRaw, setShowFullRaw] = useState(false);
+  const [showDetails, setShowDetails] = useState(false);
+  const [showSearch, setShowSearch] = useState(false);
+  const [isScrolled, setIsScrolled] = useState(false);
+  const [collapsedHeight, setCollapsedHeight] = useState(0);
+  const [activeTurnKey, setActiveTurnKey] = useState<string | null>(null);
+  const [search, setSearch] = useState<SessionSearchState | null>(null);
+  const searchRef = useRef<SessionSearchHandle>(null);
+  const searchButtonRef = useRef<HTMLButtonElement>(null);
+  const summaryRef = useRef<HTMLElement>(null);
+  const closeButtonRef = useRef<HTMLButtonElement>(null);
+  const dialogRef = useRef<HTMLDivElement>(null);
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const turnRefs = useRef(new Map<string, HTMLElement>());
+  useModalFocus(dialogRef, closeButtonRef, onClose, isActive);
+  const creditSession = refreshedSession?.path === activePath ? refreshedSession : activePath === session.path ? session : null;
+  const activeDetail = detail?.path === activePath ? detail : null;
+  const creditThreadId = creditSession?.threadId ?? activeDetail?.agents?.find((agent) => agent.path === activePath)?.sessionId;
+  const credits = useSessionCredits(isActive && showSessionCredits, creditThreadId ? [{
+    threadId: creditThreadId,
+    modifiedAtMs: creditSession?.modifiedAtMs ?? activeDetail?.modifiedAtMs ?? 0,
+  }] : []);
+
+  useEffect(() => {
+    if (!isActive) return;
+    function handleSearchKey(event: KeyboardEvent) {
+      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "f" && detail) {
+        event.preventDefault();
+        if (showSearch) closeSearch();
+        else setShowSearch(true);
+      } else if (event.key === "Escape" && showSearch) {
+        event.preventDefault();
+        event.stopPropagation();
+        closeSearch();
+      }
+    }
+    window.addEventListener("keydown", handleSearchKey, true);
+    return () => window.removeEventListener("keydown", handleSearchKey, true);
+  }, [detail, showSearch, isActive]);
+
+  useEffect(() => {
+    setActivePath(session.path);
+  }, [session.path]);
+
+  useEffect(() => {
+    let cancelled = false;
+    requestGeneration.current += 1;
+    setRefreshedSession(null);
+    setRefreshError(null);
+    setDetail(null);
+    setError(null);
+    setActiveTab("timeline");
+    setCopiedSessionId(false);
+    setCopiedProjectPath(null);
+    setExpandedTurns(new Set());
+    setShowFullRaw(false);
+    setShowDetails(false);
+    setShowSearch(false);
+    setIsScrolled(false);
+    setCollapsedHeight(0);
+    setActiveTurnKey(null);
+    setSearch(null);
+    turnRefs.current.clear();
+    if (scrollRef.current) scrollRef.current.scrollTop = 0;
+
+    void fetchSessionDetail(activePath)
+      .then((data) => {
+        if (!cancelled) {
+          setDetail(data);
+          setExpandedTurns(new Set(data.turns.map((turn, index) => `${turn.turnId}-${index}`)));
+          setActiveTurnKey(data.turns.length > 0 ? `${data.turns[0].turnId}-0` : null);
+        }
+      })
+      .catch((err) => {
+        if (!cancelled) setError(err instanceof Error ? err.message : String(err));
+      });
+
+    return () => {
+      cancelled = true;
+      requestGeneration.current += 1;
+    };
+  }, [activePath, session.path]);
+
+  async function refreshSession() {
+    if (refreshInFlight.current || !detail) return;
+    const generation = requestGeneration.current;
+    const previousPath = detail.path;
+    refreshInFlight.current = true;
+    setRefreshing(true);
+    setRefreshError(null);
+    try {
+      const result = await rescanSession(previousPath);
+      const synchronization = onScanComplete?.(result.session, previousPath, result.scan);
+      if (generation === requestGeneration.current) {
+        const previousKeys = new Set(detail.turns.map((turn, index) => `${turn.turnId}-${index}`));
+        setExpandedTurns((current) => new Set(result.detail.turns.map((turn, index) => `${turn.turnId}-${index}`)
+          .filter((key) => !previousKeys.has(key) || current.has(key))));
+        setDetail(result.detail);
+        setRefreshedSession(result.session);
+        credits.refresh();
+      }
+      await synchronization;
+    } catch (error) {
+      if (generation === requestGeneration.current) setRefreshError(error instanceof Error ? error.message : String(error));
+    } finally {
+      refreshInFlight.current = false;
+      setRefreshing(false);
+    }
+  }
+
+  const cacheRate = useMemo(() => {
+    const inputTokens = detail?.summary.inputTokens ?? session.inputTokens;
+    const cachedInputTokens = detail?.summary.cachedInputTokens ?? session.cachedInputTokens;
+    return inputTokens > 0 ? cachedInputTokens / inputTokens : 0;
+  }, [detail, session.cachedInputTokens, session.inputTokens]);
+
+  const models = detail?.summary.models.length ? detail.summary.models : session.models;
+  const projects = detail?.summary.projects.length ? detail.summary.projects : session.projects;
+  const sessionProjectsByPath = new Map(sessionProjectReferences(refreshedSession ?? session).map((project) => [project.path, project]));
+  const displayedProjects = projects.map((path) => sessionProjectsByPath.get(path) ?? {
+    path,
+    displayName: path.split(/[\\/]/).filter(Boolean).pop() || path,
+  });
+  const threadName = detail ? detail.threadName : session.threadName;
+  const displayedSessionId = cleanSessionId(detail?.sessionId ?? session.sessionId);
+  const rawPreview = useMemo(() => detail ? buildRawPreview(detail.rawJsonl) : "", [detail]);
+  const rawJsonlLines = useMemo(() => detail?.rawJsonl.split("\n") ?? [], [detail?.rawJsonl]);
+  const conversation = useMemo(() => detail ? buildSessionConversation(detail.turns) : [], [detail]);
+  const turnPreviews = useMemo(() => detail?.turns.map(firstUserPreview) ?? [], [detail]);
+  const navigationPreviews = useMemo(() => detail?.turns.map((turn) => turn.userMessages.find((message) => {
+    const text = message.text.trim();
+    return text.length > 0
+      && !text.startsWith("# AGENTS.md instructions for ")
+      && !text.startsWith("<environment_context>");
+  })?.text.trim().slice(0, 600) ?? "") ?? [], [detail]);
+  const searchResult = showSearch && search?.active && search.source === detail && search.scope === activeTab ? search : null;
+  const searchHit = searchResult?.hit;
+  const searchMatches = useMemo(() => {
+    const turns = new Map<number, Map<number, SessionSearchHit[]>>();
+    for (const match of searchResult?.matches ?? []) {
+      let blocks = turns.get(match.turnIndex);
+      if (!blocks) turns.set(match.turnIndex, blocks = new Map());
+      const matches = blocks.get(match.blockIndex) ?? [];
+      matches.push(match);
+      blocks.set(match.blockIndex, matches);
+    }
+    return turns;
+  }, [searchResult?.matches]);
+
+  useLayoutEffect(() => {
+    if (!searchHit) return;
+    if (detail && searchHit.turnIndex >= 0) {
+      setActiveTurnKey(`${detail.turns[searchHit.turnIndex].turnId}-${searchHit.turnIndex}`);
+    }
+    const scroll = scrollRef.current;
+    const target = scroll?.querySelector<HTMLElement>('[data-testid="session-search-current"]');
+    if (scroll && target) {
+      scroll.scrollTop += target.getBoundingClientRect().top - scroll.getBoundingClientRect().top - 64;
+    }
+  }, [detail, searchHit]);
+
+  async function copySessionId() {
+    await navigator.clipboard?.writeText(displayedSessionId);
+    setCopiedSessionId(true);
+    window.setTimeout(() => setCopiedSessionId(false), 1400);
+  }
+
+  async function copyRawJsonl() {
+    if (!detail) return;
+    await navigator.clipboard?.writeText(detail.rawJsonl);
+    setCopied(true);
+    window.setTimeout(() => setCopied(false), 1400);
+  }
+
+  async function copyProjectPath(path: string) {
+    if (!navigator.clipboard) return;
+    await navigator.clipboard.writeText(path);
+    setCopiedProjectPath(path);
+    window.setTimeout(() => setCopiedProjectPath((current) => current === path ? null : current), 1400);
+  }
+
+  function toggleTurn(key: string) {
+    setExpandedTurns((current) => {
+      const next = new Set(current);
+      if (next.has(key)) {
+        next.delete(key);
+      } else {
+        next.add(key);
+      }
+      return next;
+    });
+  }
+
+  function closeSearch() {
+    flushSync(() => {
+      setShowSearch(false);
+      setSearch(null);
+    });
+    searchButtonRef.current?.focus({ preventScroll: true });
+  }
+
+  function scrollToTurn(key: string, position: "start" | "end") {
+    if (position === "end" && !expandedTurns.has(key)) {
+      flushSync(() => setExpandedTurns((current) => new Set(current).add(key)));
+    }
+    setActiveTurnKey(key);
+    const scroll = scrollRef.current;
+    const turn = turnRefs.current.get(key);
+    if (!scroll || !turn) return;
+    const viewport = scroll.getBoundingClientRect();
+    const bounds = turn.getBoundingClientRect();
+    const style = getComputedStyle(turn);
+    const offset = position === "start"
+      ? bounds.top - viewport.top - parseFloat(style.scrollMarginTop || "0")
+      : bounds.bottom - viewport.bottom + parseFloat(style.scrollMarginBottom || "0");
+    // scrollIntoView also scrolls overflow-hidden ancestors, moving the title bar offscreen.
+    scroll.scrollTo({ top: scroll.scrollTop + offset, behavior: document.documentElement.dataset.motion === "off" ? "instant" : "smooth" });
+  }
+
+  const navigationTurnIndex = Math.max(0, detail?.turns.findIndex((turn, index) => `${turn.turnId}-${index}` === activeTurnKey) ?? 0);
+  const navigationTurn = detail?.turns[navigationTurnIndex];
+  const navigationTurnKey = navigationTurn ? `${navigationTurn.turnId}-${navigationTurnIndex}` : "";
+
+  return (
+    <div
+      ref={dialogRef}
+      className="absolute inset-0 z-50 flex overscroll-contain bg-background text-foreground"
+      role="dialog"
+      aria-labelledby="session-detail-title"
+    >
+      <div className="flex h-full w-full flex-col overflow-hidden overscroll-contain">
+        <header className={`z-10 shrink-0 border-b border-border/70 bg-surface px-4 shadow-sm transition-[padding] motion-reduce:transition-none ${isScrolled ? "py-1" : "py-1.5"}`}>
+          <div className="flex min-h-8 items-center gap-2">
+            <div className="min-w-0 flex-1">
+              <div className="flex min-w-0 items-center gap-1.5">
+                <FileJson className="h-4 w-4 text-primary" />
+                <h2 id="session-detail-title" className={`mr-1 min-w-0 truncate font-bold tracking-tight transition-[font-size] ${isScrolled ? "text-sm" : "text-base"}`}>
+                  {threadName || (
+                    <button
+                      type="button"
+                      className={`max-w-full truncate hover:text-primary ${DISCLOSURE_BUTTON_CLASS}`}
+                      title={copiedSessionId ? t("sessions.detail.session_id_copied") : t("sessions.detail.copy_session_id")}
+                      aria-label={copiedSessionId ? t("sessions.detail.session_id_copied") : t("sessions.detail.copy_session_id")}
+                      onClick={() => void copySessionId()}
+                    >
+                      {displayedSessionId}
+                    </button>
+                  )}
+                </h2>
+                <SessionArchivedBadge path={detail?.path ?? activePath} />
+              </div>
+            </div>
+            <button
+              ref={searchButtonRef}
+              type="button"
+              className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground disabled:opacity-40 ${DISCLOSURE_BUTTON_CLASS}`}
+              title={t("sessions.detail.search_placeholder")}
+              aria-label={t("sessions.detail.search_placeholder")}
+              aria-expanded={showSearch}
+              aria-controls="session-detail-search"
+              disabled={!detail}
+              onClick={() => showSearch ? closeSearch() : setShowSearch(true)}
+            >
+              <Search aria-hidden="true" className="h-3.5 w-3.5" />
+            </button>
+            <button
+              type="button"
+              className={`flex h-7 shrink-0 items-center gap-1 rounded-md px-2 text-xs font-semibold text-muted-foreground hover:bg-muted hover:text-foreground ${DISCLOSURE_BUTTON_CLASS}`}
+              aria-expanded={showDetails}
+              onClick={() => {
+                setShowDetails((value) => isScrolled || !value);
+                if (scrollRef.current) scrollRef.current.scrollTop = 0;
+                setIsScrolled(false);
+                setCollapsedHeight(0);
+              }}
+            >
+              <Info className="h-3.5 w-3.5" />
+              {t("sessions.detail.details")}
+              {showDetails ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
+            </button>
+            <Button variant="primary" size="sm" onClick={() => void refreshSession()} disabled={refreshing || !detail} aria-busy={refreshing}>
+              <RefreshCcw className={`h-3.5 w-3.5 ${refreshing ? "animate-spin" : ""}`} />
+              {t("sessions.detail.refresh")}
+            </Button>
+            <nav className="flex shrink-0 items-center rounded-md bg-muted/70 p-0.5">
+              <button type="button" onClick={() => setActiveTab("timeline")} className={`rounded px-2 py-1 text-xs font-semibold transition ${activeTab === "timeline" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}>
+                {t("sessions.detail.timeline")}
+              </button>
+              <button type="button" onClick={() => setActiveTab("raw")} className={`rounded px-2 py-1 text-xs font-semibold transition ${activeTab === "raw" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}>
+                {t("sessions.detail.raw_jsonl")}
+              </button>
+            </nav>
+            <Button ref={closeButtonRef} variant="secondary" size="sm" className="h-8 w-8 shrink-0 p-0" onClick={onClose} aria-label={t("sessions.detail.close_aria")}>
+              <X className="h-4 w-4" />
+            </Button>
+          </div>
+          <div
+            className={`grid transition-[grid-template-rows,opacity] duration-200 motion-reduce:transition-none ${isScrolled ? "grid-rows-[0fr] opacity-0" : "grid-rows-[1fr] opacity-100"}`}
+            inert={isScrolled}
+            aria-hidden={isScrolled}
+          >
+          <section ref={summaryRef} aria-label={t("sessions.detail.session_summary")} className="min-h-0 overflow-hidden bg-surface">
+          <div className="flex flex-wrap gap-1.5 pt-1 pb-0.5">
+            <MetricBadge label={t("sessions.detail.duration")} value={formatDuration(detail?.summary.durationMs)} icon={<Clock3 className="h-3.5 w-3.5" />} tone="blue" />
+            <MetricBadge label={t("sessions.detail.total_tokens")} value={formatNumber(detail?.summary.totalTokens ?? session.totalTokens)} icon={<Database className="h-3.5 w-3.5" />} tone="violet" />
+            <MetricBadge label={t("sessions.detail.input_tokens")} value={formatNumber(detail?.summary.inputTokens ?? session.inputTokens)} icon={<Database className="h-3.5 w-3.5" />} tone="blue" />
+            <MetricBadge label={t("sessions.detail.output_tokens")} value={formatNumber(detail?.summary.outputTokens ?? session.outputTokens)} icon={<Database className="h-3.5 w-3.5" />} tone="green" />
+            <MetricBadge label={t("sessions.detail.cost")} value={formatCurrency(detail ? detail.summary.costUSD : session.costUSD)} icon={<Coins className="h-3.5 w-3.5" />} tone="emerald" />
+            <MetricBadge label={t("sessions.detail.cache")} value={formatPercent(cacheRate)} icon={<Database className="h-3.5 w-3.5" />} tone="cyan" />
+            <MetricBadge label={t("sessions.detail.tool_calls")} value={formatNumber(detail?.summary.toolCallCount ?? 0)} icon={<Wrench className="h-3.5 w-3.5" />} tone="amber" />
+            <MetricBadge label={t("sessions.detail.patches")} value={formatNumber(detail?.summary.patchCount ?? 0)} icon={<FileDiff className="h-3.5 w-3.5" />} tone="green" />
+            <MetricBadge label={t("sessions.detail.errors")} value={formatNumber(detail?.summary.errorCount ?? 0)} icon={<AlertTriangle className="h-3.5 w-3.5" />} tone="red" />
+          </div>
+          {showDetails ? (
+            <div className="mt-1.5 flex flex-wrap items-center gap-1.5 border-t border-border/50 pt-1.5 text-[11px] text-muted-foreground">
+              {threadName ? (
+                <button
+                  type="button"
+                  className={`flex max-w-[260px] items-center gap-1 truncate rounded border border-zinc-300/70 bg-zinc-100/80 px-2 py-0.5 font-mono text-zinc-700 hover:bg-zinc-200/80 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300 dark:hover:bg-zinc-800 ${DISCLOSURE_BUTTON_CLASS}`}
+                  title={copiedSessionId ? t("sessions.detail.session_id_copied") : t("sessions.detail.copy_session_id")}
+                  aria-label={copiedSessionId ? t("sessions.detail.session_id_copied") : t("sessions.detail.copy_session_id")}
+                  onClick={() => void copySessionId()}
+                >
+                  {copiedSessionId ? <Check className="h-3 w-3 shrink-0" /> : null}
+                  <span className="truncate">{displayedSessionId}</span>
+                </button>
+              ) : null}
+              {displayedProjects.map((project) => (
+                <button
+                  key={project.path}
+                  type="button"
+                  className={`inline-flex max-w-full items-center gap-1.5 rounded border border-blue-300/60 bg-blue-50/80 px-2 py-0.5 text-left font-medium text-blue-700 hover:bg-blue-100 dark:border-blue-800 dark:bg-blue-950/40 dark:text-blue-300 dark:hover:bg-blue-900/50 ${DISCLOSURE_BUTTON_CLASS}`}
+                  title={project.path}
+                  aria-label={t(copiedProjectPath === project.path ? "sessions.detail.project_path_copied" : "sessions.detail.copy_project_path", { path: project.path })}
+                  onClick={() => void copyProjectPath(project.path)}
+                >
+                  {project.codexProjectName ? <><span className="truncate">{projectLabel(project)}</span><span className="shrink-0 rounded-full border border-indigo-500/20 bg-indigo-500/10 px-1 py-px text-[8px] font-semibold text-indigo-500">{t("projects.codex_project")}</span><span aria-hidden="true">·</span></> : null}
+                  <span className="min-w-0 break-all font-mono">{project.path}</span>
+                  {copiedProjectPath === project.path ? <Check className="h-3 w-3 shrink-0" /> : <Clipboard className="h-3 w-3 shrink-0" />}
+                </button>
+              ))}
+              {models.map((model) => <span key={model} className="rounded-full border border-emerald-300/60 bg-emerald-50/80 px-2 py-0.5 font-semibold text-emerald-700 dark:border-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-300">{model}</span>)}
+              <span>{t("sessions.detail.started", { value: formatTimestamp(detail?.summary.startTime ?? null) })}</span>
+              <span>·</span>
+              <span>{t("sessions.detail.ended", { value: formatTimestamp(detail?.summary.endTime ?? null) })}</span>
+              <span>·</span>
+              <span>{t("sessions.detail.first_token", { value: formatDuration(detail?.summary.timeToFirstTokenMs) })}</span>
+              <span>·</span>
+              <span>{t("sessions.detail.cli", { value: detail?.summary.cliVersion ?? "--" })}</span>
+            </div>
+          ) : null}
+          {detail && (refreshedSession || activePath === session.path) || showSessionCredits ? <div className="mt-1.5 flex items-start gap-x-4 border-t border-border/50 pt-1.5">
+            {detail && (refreshedSession || activePath === session.path) ? <div className="min-w-0 flex-1"><SessionQuotaUsageView usage={refreshedSession ? refreshedSession.quotaUsage : session.quotaUsage} detailed /></div> : null}
+            {showSessionCredits ? <div className="ml-auto max-w-[50%] py-0.5">
+              <SessionCredits row={creditThreadId ? credits.rows[creditThreadId] : undefined} loading={credits.loading} error={credits.error} hasThreadId={Boolean(creditThreadId)} />
+              {credits.error ? <p role="status" className="mt-1 text-[10px] text-muted-foreground">{t(`session_credits.errors.${credits.error}`)}</p> : null}
+            </div> : null}
+          </div> : null}
+          </section>
+          </div>
+        </header>
+
+        <div className="relative flex min-h-0 flex-1 flex-col">
+        {detail && showSearch ? <SessionSearchToolbar key={activePath} ref={searchRef} detail={detail} scope={activeTab} onChange={setSearch} onClose={closeSearch} /> : null}
+        {detail && activeTab === "timeline" && navigationTurn ? (
+          <nav id="session-compact-navigation" aria-label={t("sessions.detail.quick_navigation")} className="flex shrink-0 items-center gap-2 border-b border-border bg-surface px-4 py-2 min-[1280px]:hidden">
+            <List className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+            <label htmlFor="session-turn-selector" className="sr-only">{t("sessions.detail.quick_navigation")}</label>
+            <select id="session-turn-selector" value={navigationTurnKey} onChange={(event) => scrollToTurn(event.target.value, "start")} className="min-w-0 flex-1 rounded border border-border bg-background px-2 py-1.5 text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+              {detail.turns.map((turn, index) => <option key={`${turn.turnId}-${index}`} value={`${turn.turnId}-${index}`}>{t("sessions.detail.turn", { id: index + 1 })}{navigationPreviews[index] ? ` · ${navigationPreviews[index]}` : ""}</option>)}
+            </select>
+            {(["start", "end"] as const).map((position) => <button key={position} type="button" onClick={() => scrollToTurn(navigationTurnKey, position)} aria-label={t(`sessions.detail.navigate_to_turn_${position}`, { id: navigationTurnIndex + 1 })} title={t(`sessions.detail.navigate_to_turn_${position}`, { id: navigationTurnIndex + 1 })} className={`flex h-8 w-8 shrink-0 items-center justify-center rounded border border-border text-muted-foreground hover:bg-muted hover:text-foreground ${DISCLOSURE_BUTTON_CLASS}`}>
+              {position === "start" ? <ArrowUpToLine className="h-4 w-4" /> : <ArrowDownToLine className="h-4 w-4" />}
+            </button>)}
+          </nav>
+        ) : null}
+        <div
+          ref={scrollRef}
+          data-testid="session-detail-scroll"
+          className="min-h-0 flex-1 overflow-y-auto overscroll-contain bg-background [overflow-anchor:none]"
+          onScroll={(event) => {
+            const scrollTop = event.currentTarget.scrollTop;
+            if (!isScrolled && scrollTop > 12) {
+              // Preserve the scroll range while the header releases space, even for short replays.
+              setCollapsedHeight((summaryRef.current?.offsetHeight ?? 0) + 4);
+              setIsScrolled(true);
+            } else if (isScrolled && scrollTop <= 0) {
+              setIsScrolled(false);
+              setCollapsedHeight(0);
+            }
+
+            const turnSections = Array.from(turnRefs.current.entries());
+            if (turnSections.length > 0) {
+              const marker = event.currentTarget.getBoundingClientRect().top + 80;
+              let currentTurnKey = turnSections[0][0];
+              for (const [turnKey, element] of turnSections) {
+                if (element.getBoundingClientRect().top > marker) break;
+                currentTurnKey = turnKey;
+              }
+              setActiveTurnKey((current) => current === currentTurnKey ? current : currentTurnKey);
+            }
+          }}
+        >
+          <div className="px-4 py-5">
+          {refreshError ? <p role="alert" className="mb-3 rounded-lg border border-error/20 bg-error/5 p-3 text-sm text-error">{t("sessions.detail.refresh_error")}: {refreshError}</p> : null}
+          {error ? (
+            <div className="flex items-start gap-3 rounded-lg border border-error/30 bg-error/5 p-4 text-sm text-error">
+              <AlertTriangle className="h-4 w-4 shrink-0" />
+              <span>{error}</span>
+            </div>
+          ) : !detail ? (
+            <div className="flex h-full items-center justify-center gap-3 text-sm text-muted-foreground">
+              <Loader2 className="h-4 w-4 animate-spin" />
+              {t("sessions.detail.loading_replay")}
+            </div>
+          ) : activeTab === "timeline" ? (
+            <div className="mx-auto max-w-5xl min-[1280px]:flex min-[1280px]:max-w-[77rem] min-[1280px]:gap-4">
+              <nav
+                data-testid="session-wide-navigation"
+                className="order-last hidden w-40 shrink-0 min-[1280px]:block"
+                aria-label={t("sessions.detail.quick_navigation")}
+              >
+                <div className="sticky top-5 max-h-[calc(100vh-7rem)] overflow-y-auto rounded-lg border border-border/60 bg-surface/95 p-2 shadow-sm backdrop-blur">
+                  <div className="flex items-center gap-1.5 px-2 pb-2 text-xs font-semibold text-muted-foreground">
+                    <List className="h-3.5 w-3.5" />
+                    {t("sessions.detail.quick_navigation")}
+                  </div>
+                  <div className="space-y-0.5">
+                    {detail.turns.map((turn, index) => {
+                      const turnKey = `${turn.turnId}-${index}`;
+                      const preview = navigationPreviews[index];
+                      const isActive = activeTurnKey === turnKey;
+                      return (
+                        <div
+                          key={turnKey}
+                          className={`relative block w-full rounded-md px-2 py-1.5 text-left transition ${isActive ? "bg-primary/10 text-primary" : "text-muted-foreground hover:bg-muted hover:text-foreground"}`}
+                          aria-current={isActive ? "location" : undefined}
+                        >
+                          <span className="line-clamp-3 min-h-12 whitespace-pre-wrap break-words text-xs font-medium" title={preview || undefined}>
+                            {preview || t("sessions.detail.turn", { id: index + 1 })}
+                          </span>
+                          {(["start", "end"] as const).map((position) => (
+                            <button
+                              key={position}
+                              type="button"
+                              className={`group absolute inset-x-0 flex h-1/2 items-center justify-end px-1 hover:bg-primary/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring ${position === "start" ? "top-0 rounded-t-md" : "bottom-0 rounded-b-md"}`}
+                              aria-label={`${t(`sessions.detail.navigate_to_turn_${position}`, { id: turn.turnId })}${preview ? `: ${preview}` : ""}`}
+                              title={t(`sessions.detail.navigate_to_turn_${position}`, { id: index + 1 })}
+                              onClick={() => scrollToTurn(turnKey, position)}
+                            >
+                              <span className="rounded bg-surface/95 p-0.5 text-primary opacity-0 transition-opacity group-hover:opacity-100 group-focus:opacity-100" aria-hidden="true">
+                                {position === "start" ? <ArrowUpToLine className="h-3.5 w-3.5" /> : <ArrowDownToLine className="h-3.5 w-3.5" />}
+                              </span>
+                            </button>
+                          ))}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              </nav>
+              <div className="min-w-0 max-w-5xl flex-1 space-y-5">
+              <AgentHierarchy agents={detail.agents ?? []} activePath={detail.path} onSelect={setActivePath} />
+              {detail.turns.map((turn, index) => {
+                const turnKey = `${turn.turnId}-${index}`;
+                const isExpanded = expandedTurns.has(turnKey) || searchMatches.has(index);
+                const userPreview = turnPreviews[index];
+                return (
+                <section
+                  key={turnKey}
+                  ref={(element) => {
+                    if (element) turnRefs.current.set(turnKey, element);
+                    else turnRefs.current.delete(turnKey);
+                  }}
+                  className="scroll-mt-5 scroll-mb-5 rounded-xl border-2 border-border/50 p-3"
+                >
+                  <button
+                    type="button"
+                    className={`flex w-full flex-col gap-1.5 rounded-md text-left sm:flex-row sm:items-center sm:justify-between ${DISCLOSURE_BUTTON_CLASS}`}
+                    aria-expanded={isExpanded}
+                    onClick={() => toggleTurn(turnKey)}
+                  >
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
+                        <MessageSquare className="h-4 w-4 text-primary" />
+                        {t("sessions.detail.turn", { id: turn.turnId })}
+                      </div>
+                      {!isExpanded && userPreview ? (
+                        <div className="mt-1 truncate text-xs text-muted-foreground">{userPreview}</div>
+                      ) : null}
+                      <div className="mt-1 flex flex-wrap gap-1 text-[10px] text-muted-foreground">
+                        <span className="px-1 py-0.5">{t("sessions.detail.message_count", { count: countMessages(turn) })}</span>
+                        <span className="px-1 py-0.5">{t("sessions.detail.tool_count", { count: turn.toolCalls.length })}</span>
+                        <span className="px-1 py-0.5">{t("sessions.detail.patch_count", { count: turn.patchResults.length })}</span>
+                        <span className="px-1 py-0.5">{t("sessions.detail.error_count", { count: turn.errors.length })}</span>
+                        <span className="px-1 py-0.5">{t("sessions.detail.token_event_count", { count: turn.tokenEvents.length })}</span>
+                      </div>
+                    </div>
+                    <div className="flex shrink-0 items-center gap-3 text-xs text-muted-foreground">
+                      <span>{formatTimestamp(turn.startedAt)} · {formatDuration(turn.durationMs)}</span>
+                      <span className="flex items-center gap-1 font-semibold text-foreground">
+                        {isExpanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+                        {isExpanded ? t("sessions.detail.collapse") : t("sessions.detail.expand")}
+                      </span>
+                    </div>
+                  </button>
+                  {isExpanded ? (
+                  <div className="mt-4 space-y-3">
+                    {conversation[index].map((block, itemIndex) => (
+                      <ConversationItem key={itemIndex} block={block} rawJsonlLines={rawJsonlLines} searchHits={searchMatches.get(index)?.get(itemIndex)} />
+                    ))}
+                  </div>
+                  ) : null}
+                </section>
+                );
+              })}
+              </div>
+            </div>
+          ) : (
+            <div className="mx-auto flex h-full max-w-6xl flex-col gap-3">
+              <div className="flex flex-col gap-3 rounded-lg border border-border/60 bg-surface p-4 sm:flex-row sm:items-center sm:justify-between">
+                <div className="space-y-1 text-sm">
+                  <div className="font-semibold">{t("sessions.detail.raw_preview")}</div>
+                  <div className="text-xs text-muted-foreground">
+                    {t("sessions.detail.raw_metadata", {
+                      size: formatBytes(detail.sizeBytes),
+                      lines: formatNumber(detail.rawJsonl ? detail.rawJsonl.split("\n").length : 0),
+                    })}
+                  </div>
+                </div>
+                <div className="flex flex-wrap items-center gap-2">
+                  {!showFullRaw && detail.rawJsonl !== rawPreview ? (
+                    <Button type="button" variant="secondary" size="sm" onClick={() => setShowFullRaw(true)}>
+                      {t("sessions.detail.show_full_raw")}
+                    </Button>
+                  ) : null}
+                  <Button variant="secondary" size="sm" onClick={() => void copyRawJsonl()}>
+                    <Clipboard className="mr-2 h-4 w-4" />
+                    {copied ? t("sessions.detail.copied") : t("sessions.detail.copy")}
+                  </Button>
+                  <Button variant="secondary" size="sm" onClick={() => void revealInFileManager(detail.path)}>
+                    <FolderOpen className="mr-2 h-4 w-4" />
+                    {t("sessions.detail.reveal_in_file_manager")}
+                  </Button>
+                </div>
+              </div>
+              <pre className="min-h-[60vh] whitespace-pre-wrap break-words rounded-lg border border-border/60 bg-surface p-4 font-mono text-xs leading-relaxed text-foreground">
+                <SessionSearchContext value={searchResult?.matches ?? []}><SessionSearchText text={detail.rawJsonl} full={showFullRaw}>{showFullRaw ? detail.rawJsonl : rawPreview}</SessionSearchText></SessionSearchContext>
+              </pre>
+            </div>
+          )}
+          </div>
+          <div aria-hidden="true" style={{ height: collapsedHeight }} />
+        </div>
+        </div>
+      </div>
+    </div>
+  );
+}

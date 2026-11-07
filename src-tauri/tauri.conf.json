@@ -1,0 +1,28 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "Codex Pulse",
+  "version": "0.3.0",
+  "identifier": "io.github.zhulongqihan.codexpulse",
+  "build": {
+    "beforeDevCommand": "pnpm dev",
+    "beforeBuildCommand": "pnpm build",
+    "devUrl": "http://localhost:5173",
+    "frontendDist": "../dist"
+  },
+  "app": {
+    "macOSPrivateApi": true,
+    "windows": [],
+    "security": {
+      "csp": "default-src 'self'; img-src 'self' asset: http://asset.localhost data: blob:; style-src 'self' 'unsafe-inline'; connect-src ipc: http://ipc.localhost ws://localhost:5173 http://localhost:5173;"
+    }
+  },
+  "bundle": {
+    "active": true,
+    "createUpdaterArtifacts": false,
+    "icon": [
+      "icons/icon.png"
+    ]
+  },
+  "plugins": {},
+  "mainBinaryName": "codex-pulse"
+}

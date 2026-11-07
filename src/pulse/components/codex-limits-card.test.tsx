@@ -1,0 +1,670 @@
+// @vitest-environment jsdom
+import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
+import { formatResetTime, CodexLimitsCard, CodexSidebarLimits, formatSidebarCountdown } from "./codex-limits-card";
+import dayjs from "dayjs";
+import { act, fireEvent, render, screen } from "@testing-library/react";
+import i18n from "../i18n";
+
+describe("formatResetTime", () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("returns Reset unavailable when resetsAtStr is null", () => {
+    expect(formatResetTime(null, 300)).toBe("Reset unavailable");
+  });
+
+  it("returns Resetting soon when resetsAt is in the past", () => {
+    vi.setSystemTime(new Date("2026-05-22T12:00:00.000Z"));
+    expect(formatResetTime("2026-05-22T11:59:00.000Z", 300)).toBe("Resetting soon");
+  });
+
+  it("returns formatted Reset at HH:MM for session limits in future", () => {
+    vi.setSystemTime(new Date("2026-05-22T12:00:00.000Z"));
+
+    const resetsAtStr = "2026-05-22T16:30:00.000Z";
+    const expectedResetDate = new Date(resetsAtStr);
+    const expectedHours = String(expectedResetDate.getHours()).padStart(2, "0");
+    const expectedMins = String(expectedResetDate.getMinutes()).padStart(2, "0");
+
+    expect(formatResetTime(resetsAtStr, 300)).toBe(`Reset at ${expectedHours}:${expectedMins} (5 hours left)`);
+  });
+
+  it("returns formatted Reset at HH:MM with minutes left for session limits", () => {
+    vi.setSystemTime(new Date("2026-05-22T12:00:00.000Z"));
+
+    const resetsAtStr = "2026-05-22T12:10:00.000Z";
+    const expectedResetDate = new Date(resetsAtStr);
+    const expectedHours = String(expectedResetDate.getHours()).padStart(2, "0");
+    const expectedMins = String(expectedResetDate.getMinutes()).padStart(2, "0");
+
+    expect(formatResetTime(resetsAtStr, 300)).toBe(`Reset at ${expectedHours}:${expectedMins} (10 mins left)`);
+  });
+
+  it("returns formatted weekly limit style for windowMinutes > 300", () => {
+    vi.setSystemTime(new Date("2026-05-22T12:00:00.000Z"));
+
+    const resetsAtStr = "2026-05-24T05:00:00.000Z";
+    const resetsAt = new Date(resetsAtStr);
+    const resetDate = dayjs(resetsAtStr).format("YYYY-MM-DD h:mm A");
+
+    const diffMs = resetsAt.getTime() - new Date("2026-05-22T12:00:00.000Z").getTime();
+    const diffHours = diffMs / (1000 * 60 * 60);
+    let daysLeftText = "";
+    if (diffHours < 1) {
+      const mins = Math.ceil(diffMs / (1000 * 60));
+      daysLeftText = mins === 1 ? "1 min left" : `${mins} mins left`;
+    } else if (diffHours < 24) {
+      const hours = Math.ceil(diffHours);
+      daysLeftText = hours === 1 ? "1 hour left" : `${hours} hours left`;
+    } else {
+      const days = Math.ceil(diffHours / 24);
+      daysLeftText = days === 1 ? "1 day left" : `${days} days left`;
+    }
+
+    expect(formatResetTime(resetsAtStr, 10080)).toBe(`Resets ${resetDate} (${daysLeftText})`);
+  });
+
+  it("returns formatted weekly limit style with 1 day left", () => {
+    vi.setSystemTime(new Date("2026-05-22T12:00:00.000Z"));
+    const resetsAtStr = "2026-05-23T11:59:00.000Z";
+    const resetDate = dayjs(resetsAtStr).format("YYYY-MM-DD h:mm A");
+    expect(formatResetTime(resetsAtStr, 10080)).toBe(`Resets ${resetDate} (24 hours left)`);
+
+    const resetsAtStr2 = "2026-05-23T12:01:00.000Z";
+    const resetDate2 = dayjs(resetsAtStr2).format("YYYY-MM-DD h:mm A");
+    expect(formatResetTime(resetsAtStr2, 10080)).toBe(`Resets ${resetDate2} (1 day left)`);
+  });
+
+  it("returns formatted weekly limit style with hours left", () => {
+    vi.setSystemTime(new Date("2026-05-22T12:00:00.000Z"));
+    const resetsAtStr = "2026-05-22T17:00:00.000Z"; // 5 hours in future
+    const resetDate = dayjs(resetsAtStr).format("YYYY-MM-DD h:mm A");
+    expect(formatResetTime(resetsAtStr, 10080)).toBe(`Resets ${resetDate} (5 hours left)`);
+  });
+
+  it("returns formatted weekly limit style with minutes left", () => {
+    vi.setSystemTime(new Date("2026-05-22T12:00:00.000Z"));
+    const resetsAtStr = "2026-05-22T12:35:00.000Z"; // 35 minutes in future
+    const resetDate = dayjs(resetsAtStr).format("YYYY-MM-DD h:mm A");
+    expect(formatResetTime(resetsAtStr, 10080)).toBe(`Resets ${resetDate} (35 mins left)`);
+  });
+});
+
+describe("sidebar reset countdown", () => {
+  const now = Date.parse("2026-10-25T12:00:00Z");
+  it.each([
+    [null, null],
+    ["invalid", null],
+    ["2026-10-25T11:59:00Z", "0m"],
+    ["2026-10-25T12:00:01Z", "0h1m"],
+    ["2026-10-25T16:55:00Z", "4h55m"],
+    ["2026-10-26T11:59:00Z", "23h59m"],
+    ["2026-10-26T12:00:00Z", "1d0h"],
+    ["2026-11-01T11:55:00Z", "6d23h"],
+  ])("formats %s as %s", (resetsAt, expected) => {
+    expect(formatSidebarCountdown(resetsAt, now)).toBe(expected);
+  });
+
+  it("refreshes the countdown locally and displays the remaining percentage", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(now);
+    const limits = { session: { usedPercent: 25, remainingPercent: 75, windowMinutes: 300, resetsAt: "2026-10-25T16:55:00Z" }, weekly: null, updatedAt: "2026-10-25T12:00:00Z", source: "oauth", membershipLevel: "plus" };
+    const onRefreshLimits = vi.fn();
+    const { unmount } = render(<CodexSidebarLimits limits={limits} error={null} onRefreshLimits={onRefreshLimits} />);
+    expect(screen.getByText("4h55m")).toBeInTheDocument();
+    expect(screen.getByRole("progressbar", { name: "5-Hour Limit" })).toHaveAttribute("aria-valuenow", "75");
+    act(() => { vi.advanceTimersByTime(60_000); });
+    expect(screen.getByText("4h54m")).toBeInTheDocument();
+    expect(onRefreshLimits).not.toHaveBeenCalled();
+    unmount();
+    expect(vi.getTimerCount()).toBe(0);
+    vi.useRealTimers();
+  });
+
+  it("uses the current time when fresh limits arrive between countdown ticks", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(now);
+    const { rerender, unmount } = render(<CodexSidebarLimits limits={null} error={null} />);
+    vi.setSystemTime(now + 20_000);
+    rerender(<CodexSidebarLimits limits={{ session: { usedPercent: 0, remainingPercent: 100, windowMinutes: 300, resetsAt: new Date(Date.now() + 295 * 60_000).toISOString() }, weekly: null, updatedAt: new Date().toISOString(), source: "oauth", membershipLevel: "plus" }} error={null} />);
+    expect(screen.getByText("4h55m")).toBeInTheDocument();
+    expect(screen.queryByText("4h56m")).not.toBeInTheDocument();
+    unmount();
+    vi.useRealTimers();
+  });
+});
+
+describe("sidebar quota colors", () => {
+  it("restores the original thresholds as mocked quota values change", () => {
+    const { rerender } = render(<CodexSidebarLimits limits={null} error={null} />);
+    for (const [remaining, color] of [[100, "success"], [70, "success"], [69.9, "warning"], [30, "warning"], [29.9, "error"], [0, "error"], [75, "success"]] as const) {
+      const window = { usedPercent: 100 - remaining, remainingPercent: remaining, windowMinutes: 300, resetsAt: null };
+      rerender(<CodexSidebarLimits limits={{ session: window, weekly: { ...window, windowMinutes: 10080 }, updatedAt: new Date().toISOString(), source: "mock", membershipLevel: "plus" }} error={null} />);
+      for (const id of ["limit-row-5-hour", "limit-row-weekly"]) {
+        const row = screen.getByTestId(id);
+        expect(row.querySelector("[role=progressbar]")).toHaveAttribute("data-quota-level", color);
+        expect(row.querySelector("[role=progressbar]")).toHaveAttribute("aria-valuenow", String(remaining));
+        expect(row.querySelector(".pulse-limit-value")).toHaveTextContent(`${Math.round(remaining)}%`);
+      }
+    }
+    rerender(<CodexSidebarLimits limits={null} error={null} />);
+    expect(screen.queryByRole("progressbar")).not.toBeInTheDocument();
+  });
+});
+
+describe("CodexLimitsCard component", () => {
+  it("enables activation at zero usage and disables it after usage starts", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-09-10T00:00:00.000Z"));
+    const onRefreshLimits = vi.fn();
+    const onActivateWindow = vi.fn();
+    const baseLimits = {
+      session: { usedPercent: 0, remainingPercent: 100, windowMinutes: 300, resetsAt: "2026-09-10T05:00:00.000Z" },
+      weekly: { usedPercent: 10, remainingPercent: 90, windowMinutes: 10080, resetsAt: "2026-09-14T00:00:00.000Z" },
+      updatedAt: "2026-09-10T00:00:00.000Z",
+      source: "oauth",
+      membershipLevel: "plus",
+    };
+
+    const { rerender } = render(
+      <CodexSidebarLimits
+        limits={baseLimits}
+        error={null}
+        onRefreshLimits={onRefreshLimits}
+        onActivateWindow={onActivateWindow}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Check limits" }));
+    expect(onRefreshLimits).toHaveBeenCalledOnce();
+    expect(onActivateWindow).not.toHaveBeenCalled();
+
+    const activateButton = screen.getByRole("button", { name: "Start limit window" });
+    expect(activateButton).toBeEnabled();
+    fireEvent.click(activateButton);
+    expect(onActivateWindow).toHaveBeenCalledOnce();
+
+    rerender(
+      <CodexSidebarLimits
+        limits={{
+          ...baseLimits,
+          session: { ...baseLimits.session, usedPercent: 1, remainingPercent: 99, resetsAt: "2026-09-10T05:00:00.000Z" },
+        }}
+        error={null}
+        onRefreshLimits={onRefreshLimits}
+        onActivateWindow={onActivateWindow}
+      />,
+    );
+    expect(screen.getByRole("button", { name: "Start limit window" })).toBeDisabled();
+
+    rerender(
+      <CodexSidebarLimits
+        limits={baseLimits}
+        error={null}
+        windowActivationStatus="started"
+        onRefreshLimits={onRefreshLimits}
+        onActivateWindow={onActivateWindow}
+      />,
+    );
+    expect(screen.getByRole("button", { name: "Start limit window" })).toBeDisabled();
+
+    rerender(
+      <CodexSidebarLimits
+        limits={baseLimits}
+        error={null}
+        windowActivationStatus="recentlyRequested"
+        onRefreshLimits={onRefreshLimits}
+        onActivateWindow={onActivateWindow}
+      />,
+    );
+    expect(screen.getByRole("button", { name: "Start limit window" })).toBeDisabled();
+    vi.useRealTimers();
+  });
+
+  it("renders friendly tip for OAuth login / no credentials error", () => {
+    const errorMsg = "OAuth unavailable: Failed to read Codex auth at /Users/vincent/.codex/auth.json: No such file or directory (os error 2); CLI RPC unavailable: Codex CLI not found.";
+    render(<CodexSidebarLimits limits={null} error={errorMsg} />);
+
+    expect(screen.getByText("Not Logged In")).toBeInTheDocument();
+    expect(screen.getByText("codex auth login")).toBeInTheDocument();
+    expect(screen.queryByText("Codex limits unavailable:")).not.toBeInTheDocument();
+  });
+
+  it("renders default error message for other errors", () => {
+    const errorMsg = "Codex CLI not found. Set CODEX_CLI_PATH or install the codex command.";
+    render(<CodexSidebarLimits limits={null} error={errorMsg} />);
+
+    expect(screen.queryByText("Not Logged In")).not.toBeInTheDocument();
+    expect(screen.getByText("Unable to get Codex limits right now. Please check your network and Codex login status, then try again.")).toBeInTheDocument();
+    expect(screen.queryByText(errorMsg)).not.toBeInTheDocument();
+  });
+
+  it("recognizes the native missing-login error code", () => {
+    render(<CodexSidebarLimits limits={null} error="chatgptLoginRequired" />);
+    expect(screen.getByText("codex auth login")).toBeInTheDocument();
+  });
+
+  it.each([
+    ["codexAuthUnreadable", /Check access to auth.json/],
+    ["codexAuthInvalid", /Sign in to Codex again/],
+    ["chatgptQuotaNotApplicable", /These credentials use an API key/],
+  ])("gives specific guidance for %s", (error, message) => {
+    render(<CodexSidebarLimits limits={null} error={error} />);
+    expect(screen.getByText(message)).toBeInTheDocument();
+    expect(screen.queryByText("codex auth login")).not.toBeInTheDocument();
+  });
+
+  it("labels returned windows by duration even when membership is free or absent", () => {
+    const freeLimits = {
+      session: {
+        usedPercent: 10,
+        remainingPercent: 90,
+        windowMinutes: 300,
+        resetsAt: "2026-05-22T16:30:00.000Z",
+      },
+      weekly: {
+        usedPercent: 45,
+        remainingPercent: 55,
+        windowMinutes: 10080,
+        resetsAt: "2026-05-24T05:00:00.000Z",
+      },
+      updatedAt: "2026-05-22T12:00:00.000Z",
+      source: "cli-rpc",
+      account: "free@example.com",
+      membershipLevel: "free",
+    };
+
+    render(<CodexSidebarLimits limits={freeLimits} error={null} />);
+
+    expect(screen.queryByText("Monthly usage limit")).not.toBeInTheDocument();
+    expect(screen.getByText("5-Hour Limit")).toBeInTheDocument();
+    expect(screen.getByText("Weekly Limit")).toBeInTheDocument();
+  });
+
+  it("renders subscription limit windows for Pro Lite memberships", () => {
+    const proLiteLimits = {
+      session: {
+        usedPercent: 10,
+        remainingPercent: 90,
+        windowMinutes: 300,
+        resetsAt: "2026-05-22T16:30:00.000Z",
+      },
+      weekly: {
+        usedPercent: 98,
+        remainingPercent: 2,
+        windowMinutes: 10080,
+        resetsAt: "2026-05-25T05:00:00.000Z",
+      },
+      updatedAt: "2026-05-22T12:00:00.000Z",
+      source: "oauth",
+      membershipLevel: "prolite",
+    };
+
+    render(<CodexSidebarLimits limits={proLiteLimits} error={null} />);
+
+    expect(screen.getByText("5-Hour Limit")).toBeInTheDocument();
+    expect(screen.getByText("Weekly Limit")).toBeInTheDocument();
+    expect(screen.queryByText("Monthly usage limit")).not.toBeInTheDocument();
+  });
+
+  it("keeps reset data in the dashboard without duplicating sidebar windows or actions", () => {
+    render(<CodexLimitsCard onOpenResetCredits={() => {}} limits={{ session: null, weekly: null, resetCreditsAvailableCount: 1, resetCredits: [], updatedAt: "2026-07-15T00:00:00.000Z", source: "oauth", membershipLevel: "plus" }} />);
+    expect(screen.getByTestId("reset-area")).toContainElement(screen.getByTestId("reset-credit-count"));
+    expect(screen.queryByTestId("limit-row-weekly")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Check limits" })).not.toBeInTheDocument();
+  });
+
+  it("shows skeletons only while requests are loading and replaces them independently", () => {
+    const reset = {
+      id: "reset", resetType: "regular" as const, announcedAt: "2026-07-15T00:00:00.000Z",
+      text: "Reset confirmed", source: { url: "https://example.com/reset" },
+    };
+    const { rerender } = render(<CodexLimitsCard onOpenResetCredits={() => {}} limits={null} isResetLoading isLimitsLoading />);
+    expect(screen.getByRole("status", { name: "Latest token reset" })).toBeInTheDocument();
+    expect(screen.getByRole("status", { name: "Reset credits" })).toBeInTheDocument();
+    expect(screen.queryByTestId("reset-credit-count")).not.toBeInTheDocument();
+
+    rerender(<CodexLimitsCard onOpenResetCredits={() => {}} limits={null} latestReset={reset} isLimitsLoading />);
+    expect(screen.queryByTestId("latest-reset-skeleton")).not.toBeInTheDocument();
+    expect(screen.getByTestId("reset-credits-skeleton")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "View token resets from the last 30 days" })).toBeInTheDocument();
+  });
+
+  it("renders available credits and reports missing reset history without an endless skeleton", () => {
+    const { rerender } = render(
+      <CodexLimitsCard
+        onOpenResetCredits={() => {}}
+        limits={{
+          session: null,
+          weekly: null,
+          resetCreditsAvailableCount: 2,
+          resetCredits: null,
+          updatedAt: "2026-07-15T00:00:00.000Z",
+          source: "oauth",
+          membershipLevel: "plus",
+        }}
+      />,
+    );
+
+    expect(screen.getByTestId("reset-credit-count")).toHaveTextContent("2 available");
+    expect(screen.queryByTestId("reset-credits-skeleton")).not.toBeInTheDocument();
+    expect(screen.getByTestId("latest-reset-empty")).toBeInTheDocument();
+    expect(screen.queryByTestId("quota-forecast")).not.toBeInTheDocument();
+
+    rerender(
+      <CodexLimitsCard
+        onOpenResetCredits={() => {}}
+        limits={{
+          session: null,
+          weekly: null,
+          updatedAt: "2026-07-15T00:00:00.000Z",
+          source: "oauth",
+          membershipLevel: "plus",
+        }}
+      />,
+    );
+
+    expect(screen.queryByTestId("quota-forecast")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("reset-credit-count")).not.toBeInTheDocument();
+    expect(screen.getByTestId("reset-credits-empty")).toBeInTheDocument();
+  });
+
+  it("shows all reset credits sorted by expiry without a collapse toggle", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-07-15T00:00:00+08:00"));
+    const limits = {
+      session: {
+        usedPercent: 10,
+        remainingPercent: 90,
+        windowMinutes: 300,
+        resetsAt: "2026-05-22T16:30:00.000Z",
+      },
+      weekly: {
+        usedPercent: 45,
+        remainingPercent: 55,
+        windowMinutes: 10080,
+        resetsAt: "2026-05-24T05:00:00.000Z",
+      },
+      resetCreditsAvailableCount: 3,
+      resetCredits: [
+        { id: "later", expiresAt: "2026-08-03T18:00:00+08:00" },
+        { id: "never", expiresAt: null },
+        { id: "earlier", expiresAt: "2026-08-01T18:00:00+08:00" },
+      ],
+      updatedAt: "2026-05-22T12:00:00.000Z",
+      source: "oauth",
+      account: "plus@example.com",
+      membershipLevel: "plus",
+    };
+
+    const onOpenResetCredits = vi.fn();
+    render(<CodexLimitsCard onOpenResetCredits={onOpenResetCredits} limits={limits} />);
+
+    expect(screen.getByText("Reset credits")).toBeInTheDocument();
+    expect(screen.getByTestId("reset-credit-count")).toHaveTextContent("3 available");
+    expect(screen.getByTestId("reset-credit-count")).toHaveClass("bg-muted", "text-muted-foreground", "tabular-nums");
+    expect(screen.getByText("Credit 1")).toBeInTheDocument();
+    expect(screen.getByText(`Expires ${dayjs("2026-08-01T18:00:00+08:00").format("YYYY-MM-DD HH:mm")}`)).toBeInTheDocument();
+    expect(screen.getByText("18 days left")).toBeInTheDocument();
+    expect(onOpenResetCredits).not.toHaveBeenCalled();
+    expect(screen.queryByRole("button", { name: "Show or hide reset credit expiration details" })).not.toBeInTheDocument();
+    expect(screen.getByText("Credit 2")).toBeInTheDocument();
+    expect(screen.getByText(`Expires ${dayjs("2026-08-03T18:00:00+08:00").format("YYYY-MM-DD HH:mm")}`)).toBeInTheDocument();
+    expect(screen.getByText("20 days left")).toBeInTheDocument();
+    expect(screen.getByText("Credit 3")).toBeInTheDocument();
+    expect(screen.getByText("Does not expire")).toBeInTheDocument();
+
+    vi.useRealTimers();
+  });
+
+  it("opens ChatGPT Usage from the reset-credit label and available-count badge", () => {
+    const onOpenResetCredits = vi.fn();
+    render(
+      <CodexLimitsCard
+        onOpenResetCredits={onOpenResetCredits}
+        limits={{
+          session: null,
+          weekly: { usedPercent: 45, remainingPercent: 55, windowMinutes: 10080, resetsAt: null },
+          resetCreditsAvailableCount: 1,
+          resetCredits: [],
+          updatedAt: "2026-07-15T00:00:00.000Z",
+          source: "oauth",
+          membershipLevel: "plus",
+        }}
+      />,
+    );
+
+    fireEvent.click(screen.getByText("Reset credits"));
+    fireEvent.click(screen.getByTestId("reset-credit-count"));
+
+    expect(onOpenResetCredits).toHaveBeenCalledTimes(2);
+  });
+
+  it("renders structured reset-credit fields in Chinese", async () => {
+    await i18n.changeLanguage("zh");
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-07-15T00:00:00+08:00"));
+
+    render(
+      <CodexLimitsCard onOpenResetCredits={() => {}}
+        limits={{
+          session: null,
+          weekly: { usedPercent: 45, remainingPercent: 55, windowMinutes: 10080, resetsAt: "2026-08-04T05:00:00.000Z" },
+          resetCreditsAvailableCount: 1,
+          resetCredits: [{ id: "known", expiresAt: "2026-08-01T18:00:00+08:00" }],
+          updatedAt: "2026-07-15T00:00:00.000Z",
+          source: "oauth",
+          membershipLevel: "plus",
+        }}
+      />,
+    );
+
+    expect(screen.getByText("重置次数")).toBeInTheDocument();
+    expect(screen.getByTestId("reset-credit-count")).toHaveTextContent("1 次可用");
+    expect(screen.getByText("第 1 次")).toBeInTheDocument();
+    expect(screen.getByText(`${dayjs("2026-08-01T18:00:00+08:00").format("YYYY-MM-DD HH:mm")} 到期`)).toBeInTheDocument();
+    expect(screen.getByText("剩 18 天")).toBeInTheDocument();
+
+    vi.useRealTimers();
+    await i18n.changeLanguage("en");
+  });
+
+  it("reports partial expiration details immediately", () => {
+    render(
+      <CodexLimitsCard onOpenResetCredits={() => {}}
+        limits={{
+          session: null,
+          weekly: { usedPercent: 45, remainingPercent: 55, windowMinutes: 10080, resetsAt: "2026-08-04T05:00:00.000Z" },
+          resetCreditsAvailableCount: 3,
+          resetCredits: [{ id: "known", expiresAt: "2026-08-01T18:00:00.000Z" }],
+          updatedAt: "2026-07-15T00:00:00.000Z",
+          source: "oauth",
+          membershipLevel: "plus",
+        }}
+      />,
+    );
+
+    expect(screen.getByText("Expiration details were not returned for 2 more credits")).toBeInTheDocument();
+  });
+
+  it("keeps the reset count when all expiration details are unavailable", () => {
+    render(
+      <CodexLimitsCard onOpenResetCredits={() => {}}
+        limits={{
+          session: null,
+          weekly: { usedPercent: 45, remainingPercent: 55, windowMinutes: 10080, resetsAt: "2026-08-04T05:00:00.000Z" },
+          resetCreditsAvailableCount: 3,
+          resetCredits: null,
+          updatedAt: "2026-07-15T00:00:00.000Z",
+          source: "oauth",
+          membershipLevel: "plus",
+        }}
+      />,
+    );
+
+    expect(screen.getByTestId("reset-credit-count")).toHaveTextContent("3 available");
+    expect(screen.getByText("Expiration details are temporarily unavailable")).toBeInTheDocument();
+  });
+
+  it("shows the empty reset-credit state when no credits are available", () => {
+    const onOpenResetCredits = vi.fn();
+    render(
+      <CodexLimitsCard onOpenResetCredits={onOpenResetCredits}
+        limits={{
+          session: null,
+          weekly: { usedPercent: 45, remainingPercent: 55, windowMinutes: 10080, resetsAt: "2026-08-04T05:00:00.000Z" },
+          resetCreditsAvailableCount: 0,
+          resetCredits: [],
+          updatedAt: "2026-07-15T00:00:00.000Z",
+          source: "oauth",
+          membershipLevel: "plus",
+        }}
+      />,
+    );
+
+    expect(screen.getByTestId("reset-credit-count")).toHaveTextContent("0 available");
+    expect(screen.queryByTestId("reset-credits-skeleton")).not.toBeInTheDocument();
+    expect(screen.getByText("No reset credits available")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByTestId("reset-credit-count"));
+    expect(onOpenResetCredits).toHaveBeenCalledTimes(1);
+  });
+
+  it("renders the latest token reset and opens its history", () => {
+    const onOpenResetHistory = vi.fn();
+
+    render(
+      <CodexLimitsCard
+        onOpenResetCredits={() => {}}
+        onOpenResetHistory={onOpenResetHistory}
+        limits={null}
+        latestReset={{
+          id: "2091688655828246890",
+          resetType: "regular",
+          announcedAt: "2026-08-24T00:46:51.000Z",
+          text: "Reset has been propagated.",
+          source: {
+            author: "thsottiaux",
+            url: "https://x.com/thsottiaux/status/2091688655828246890",
+          },
+        }}
+      />,
+    );
+
+    const latestResetButton = screen.getByRole("button", { name: "View token resets from the last 30 days" });
+
+    expect(latestResetButton).toHaveTextContent("Latest token reset");
+    expect(screen.getByTestId("latest-reset-status")).toHaveClass("text-muted-foreground");
+    expect(screen.getByTestId("latest-reset-relative-time")).toHaveClass("text-foreground/75");
+    expect(latestResetButton.parentElement).toHaveClass("grid-cols-1");
+
+    fireEvent.click(latestResetButton);
+    expect(onOpenResetHistory).toHaveBeenCalledTimes(1);
+  });
+
+  it.each(["regular", "banked"] as const)("highlights a %s reset announced within the last 24 hours", (resetType) => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-08-25T12:00:00.000Z"));
+
+    render(
+      <CodexLimitsCard
+        onOpenResetCredits={() => {}}
+        limits={null}
+        latestReset={{
+          id: "recent-reset",
+          resetType,
+          announcedAt: "2026-08-25T10:00:00.000Z",
+          text: "Reset has been propagated.",
+          source: { author: "thsottiaux", url: "https://example.com/reset" },
+        }}
+      />,
+    );
+
+    const latestResetButton = screen.getByRole("button", { name: "View token resets from the last 30 days" });
+    expect(latestResetButton).toHaveTextContent("Token reset within 24h");
+    expect(latestResetButton).toHaveTextContent("2 hours ago");
+    expect(latestResetButton).toHaveClass("border-primary/35", "bg-primary/[0.07]");
+    expect(screen.getByText("Token reset within 24h")).toHaveClass("truncate");
+    expect(screen.getByTestId("latest-reset-status")).toHaveClass("bg-success/10", "text-emerald-700");
+    expect(screen.getByTestId("recent-reset-indicator")).toHaveClass("bg-success");
+    expect(screen.getByTestId("latest-reset-relative-time")).toHaveClass("font-semibold", "text-emerald-700");
+    expect(screen.getByTestId("latest-reset-relative-time").parentElement?.querySelector("time")).toHaveClass("text-primary/80");
+    expect(screen.getByTestId("latest-reset-type")).toHaveClass(resetType === "banked" ? "text-sky-700" : "text-orange-700");
+
+    vi.useRealTimers();
+  });
+
+  it("shows 30 days of reset blocks in a calendar without headings or a source link", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-08-28T12:00:00.000Z"));
+
+    render(
+      <CodexLimitsCard
+        onOpenResetCredits={() => {}}
+        limits={null}
+        latestReset={{
+          id: "latest-reset",
+          resetType: "regular",
+          announcedAt: "2026-08-28T00:35:00.000Z",
+          text: "Reset has been propagated.",
+          source: { url: "https://example.com/latest" },
+        }}
+        recentResets={[
+          {
+            id: "earlier-reset",
+            resetType: "regular",
+            announcedAt: "2026-08-02T05:00:00.000Z",
+            text: "Earlier regular reset.",
+            source: { url: "https://example.com/earlier" },
+          },
+          {
+            id: "earlier-banked-reset",
+            resetType: "banked",
+            announcedAt: "2026-08-02T06:00:00.000Z",
+            text: "Earlier banked reset.",
+            source: { url: "https://example.com/earlier-banked" },
+          },
+          {
+            id: "latest-reset",
+            resetType: "regular",
+            announcedAt: "2026-08-28T00:35:00.000Z",
+            text: "Reset has been propagated.",
+            source: { url: "https://example.com/latest" },
+          },
+          {
+            id: "banked-reset",
+            resetType: "banked",
+            announcedAt: "2026-08-25T05:00:00.000Z",
+            text: "A banked reset is available.",
+            source: { url: "https://example.com/banked" },
+          },
+        ]}
+      />,
+    );
+
+    const overview = screen.getByRole("list", { name: "Token resets over the last 30 days" });
+    const days = overview.querySelectorAll("[data-reset-overview-day]");
+    expect(days).toHaveLength(30);
+    expect(days[0]).toHaveAttribute("data-reset-type", "none");
+    expect(days[0]).toHaveAttribute("title", "2026-07-30: No reset");
+    expect(days[0]).toBeEmptyDOMElement();
+    expect(days[3]).toHaveAttribute("data-reset-type", "mixed");
+    expect(days[3]).toHaveClass("bg-orange-500");
+    expect(days[3].firstElementChild).toHaveClass("bg-sky-300");
+    expect(days[26]).toHaveAttribute("data-reset-type", "banked");
+    expect(days[26]).toHaveClass("bg-sky-300", "rounded-[3px]");
+    expect(days[29]).toHaveAttribute("data-reset-type", "regular");
+    expect(days[29]).toHaveClass("bg-orange-500", "rounded-[3px]");
+    expect(days[29]).toHaveAttribute("title", "2026-08-28: Regular reset");
+    expect(days[29]).toBeEmptyDOMElement();
+    expect(overview).toHaveTextContent("");
+    expect(screen.queryByText("codex-reset.com")).not.toBeInTheDocument();
+
+    vi.useRealTimers();
+  });
+});

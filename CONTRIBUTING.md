@@ -4,21 +4,25 @@ Thanks for helping make Codex usage easier to understand. Small, well-explained 
 
 ## Development
 
-Use Node.js 24 and npm:
+Use Node.js 24.15+ (or 26+), pnpm 10.20, Rust and the Windows MSVC build tools. WebView2 is required to run the native app:
 
 ```sh
-npm ci
-npm run dev
+pnpm install --frozen-lockfile
+pnpm dev:app
 ```
 
 Before submitting a pull request:
 
 ```sh
-npm test
-npm run build
+pnpm typecheck
+pnpm test
+cargo test --locked --manifest-path src-tauri/Cargo.toml --lib
+pnpm build
 ```
 
-Use `npm start` to check the production build and `npm run package` to create the Windows distributable. CI runs tests and the build; it does not replace checking the actual Windows application.
+Use `pnpm test:e2e:build` followed by `pnpm exec wdio run ./wdio.pulse.conf.ts` for real Windows WebView checks with synthetic data. Run `./scripts/package-portable.ps1` from PowerShell to create the portable ZIP. `scripts/build-env.ps1` puts local build caches beside the checkout and loads the existing MSVC environment without changing global tools.
+
+The lockfiles and `patches/` are part of the build. The small WDIO patch makes test reporting support workspace names containing regular-expression characters, including `codex++`.
 
 ## What makes a useful contribution
 

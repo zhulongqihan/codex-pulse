@@ -1,0 +1,56 @@
+[package]
+name = "codex-pulse"
+version = "0.3.0"
+description = "Local-first desktop dashboard for Codex CLI token usage and cost estimates."
+authors = ["zhulongqihan", "vincent (upstream)"]
+license = "MIT"
+repository = "https://github.com/zhulongqihan/codex-pulse"
+homepage = "https://github.com/zhulongqihan/codex-pulse"
+keywords = ["codex-cli", "openai-codex", "token-usage", "tauri", "desktop"]
+edition = "2021"
+
+[lib]
+name = "codex_pulse_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[profile.dev]
+debug = 1
+
+[build-dependencies]
+tauri-build = { version = "2.7.4", features = [] }
+
+[dependencies]
+ring = "0.17.14"
+sha2 = "0.10.9"
+base64 = "0.23.1"
+chrono = { version = "0.4.45", features = ["serde"] }
+chrono-tz = "0.10"
+dirs = "7"
+iana-time-zone = "0.1"
+log = "0.4.35"
+reqwest = { version = "0.13.5", default-features = false, features = ["blocking", "charset", "http2", "json", "native-tls", "query", "socks", "system-proxy"] }
+rusqlite = { version = "0.41.1", features = ["bundled", "fallible_uint"] }
+rust_xlsxwriter = "0.102.0"
+serde = { version = "1.0.229", features = ["derive"] }
+serde_json = "1.0.154"
+tauri = { version = "2.12.5", features = ["macos-private-api", "tray-icon", "image-png"] }
+tauri-plugin-dialog = "2.8.4"
+tauri-plugin-log = "2.10.1"
+tauri-plugin-wdio = { version = "1.5.1", optional = true }
+tauri-plugin-wdio-webdriver = { version = "1.5.1", optional = true }
+walkdir = "2"
+uuid = { version = "1.29.0", features = ["v4"] }
+zstd = { version = "0.14.3", default-features = false }
+
+[target.'cfg(target_os = "macos")'.dependencies]
+objc2 = "0.6.5"
+
+[target.'cfg(any(target_os = "macos", windows, target_os = "linux"))'.dependencies]
+tauri-plugin-autostart = "2.7.0"
+
+[features]
+e2e = ["dep:tauri-plugin-wdio", "dep:tauri-plugin-wdio-webdriver"]
+
+[patch.crates-io]
+# Preserve executable paths containing spaces in Windows login startup commands.
+auto-launch = { path = "vendor/auto-launch" }

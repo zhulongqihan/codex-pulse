@@ -1,0 +1,2434 @@
+#[cfg(test)]
+use crate::codex_auth::parse_codex_auth;
+use crate::codex_auth::{load_codex_auth, CodexAuth};
+use crate::{
+    codex_environment::{selected_codex_environment, CodexEnvironment, CodexRuntime},
+    types::{
+        CodexCredits, CodexLimitWindow, CodexLimitsResponse,
+        CodexResetCredit, CodexWindowActivationResponse, CodexWindowActivationStatus,
+    },
+};
+use chrono::{Local, SecondsFormat, TimeZone, Utc};
+use serde::{Deserialize, Serialize};
+#[cfg(test)]
+use serde_json::json;
+use serde_json::Value;
+use std::{
+    collections::HashMap,
+    env,
+    ffi::{OsStr, OsString},
+    fs,
+    io::Read,
+    path::{Path, PathBuf},
+    process::{Command, Stdio},
+    sync::{Arc, Condvar, Mutex, OnceLock},
+    thread,
+    time::{Duration, Instant},
+};
+
+const SESSION_WINDOW_MINUTES: i64 = 300;
+const WEEKLY_WINDOW_MINUTES: i64 = 10_080;
+const CODEX_USAGE_URL: &str = "https://chatgpt.com/backend-api/wham/usage";
+const CODEX_RESET_CREDITS_URL: &str =
+    "https://chatgpt.com/backend-api/wham/rate-limit-reset-credits";
+const CHATGPT_ACCOUNT_CHECK_URL: &str =
+    "https://chatgpt.com/backend-api/accounts/check/v4-2023-04-27";
+const RESET_CREDITS_CACHE_TTL: Duration = Duration::from_secs(5 * 60);
+const WINDOW_ACTIVATION_COOLDOWN: Duration = Duration::from_secs(5 * 60);
+const WINDOW_ACTIVATION_TIMEOUT: Duration = Duration::from_secs(3 * 60);
+const WINDOW_ACTIVATION_MODEL: &str = "gpt-5.6-luna";
+const WINDOW_ACTIVATION_PROMPT: &str = "Reply with exactly OK. Do not inspect files or call tools.";
+#[cfg(debug_assertions)]
+const WINDOW_ACTIVATION_DEBUG_ENV: &str = "CODEX_USAGE_DEBUG_WINDOW_ACTIVATION";
+#[cfg(debug_assertions)]
+const CREDITS_DEBUG_ENV: &str = "CODEX_USAGE_DEBUG_CREDITS";
+
+#[derive(Debug, Clone, PartialEq)]
+enum WindowRole {
+    Session,
+    Weekly,
+    Unknown,
+}
+
+#[derive(Debug, Clone, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+struct RateLimitWindow {
+    used_percent: f64,
+    window_duration_mins: Option<i64>,
+    resets_at: Option<i64>,
+}
+
+#[derive(Debug, Deserialize)]
+struct OAuthUsageResponse {
+    rate_limit: Option<OAuthRateLimitSnapshot>,
+    credits: Option<CodexCredits>,
+    rate_limit_reset_credits: Option<OAuthRateLimitResetCredits>,
+}
+
+#[derive(Debug, Deserialize)]
+struct OAuthRateLimitSnapshot {
+    primary_window: Option<OAuthRateLimitWindow>,
+    secondary_window: Option<OAuthRateLimitWindow>,
+}
+
+#[derive(Debug, Deserialize)]
+struct OAuthRateLimitWindow {
+    used_percent: f64,
+    reset_at: Option<i64>,
+    limit_window_seconds: Option<i64>,
+}
+
+#[derive(Debug, Deserialize)]
+struct OAuthRateLimitResetCredits {
+    available_count: Option<i64>,
+}
+
+#[derive(Debug, Clone, Deserialize, PartialEq)]
+struct OAuthResetCreditsResponse {
+    available_count: Option<i64>,
+    #[serde(default)]
+    credits: Vec<OAuthResetCredit>,
+}
+
+#[derive(Debug, Clone, Deserialize, PartialEq)]
+struct OAuthResetCredit {
+    id: String,
+    status: String,
+    expires_at: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+struct OAuthResetCreditsSnapshot {
+    available_count: Option<i64>,
+    credits: Vec<CodexResetCredit>,
+}
+
+#[derive(Debug)]
+struct CachedResetCredits {
+    snapshot: OAuthResetCreditsSnapshot,
+    fetched_at: Instant,
+}
+
+#[derive(Debug, Default)]
+struct ResetCreditsCacheEntry {
+    cached: Option<CachedResetCredits>,
+    in_flight: bool,
+    generation: u64,
+    last_error: Option<String>,
+}
+
+#[derive(Debug, Default)]
+struct ResetCreditsCache {
+    entries: Mutex<HashMap<String, ResetCreditsCacheEntry>>,
+    ready: Condvar,
+}
+
+static RESET_CREDITS_CACHE: OnceLock<ResetCreditsCache> = OnceLock::new();
+static WINDOW_ACTIVATION_LOCK: Mutex<()> = Mutex::new(());
+static LIMITS_FETCH_IN_FLIGHT: Mutex<Option<Arc<LimitsFetchFlight>>> = Mutex::new(None);
+
+#[derive(Default)]
+struct LimitsFetchFlight {
+    identity: String,
+    result: Mutex<Option<Result<CodexLimitsResponse, String>>>,
+    ready: Condvar,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct WindowActivationMarker {
+    window_key: String,
+    attempted_at: i64,
+}
+
+#[derive(Debug)]
+struct LimitsSnapshot {
+    primary: Option<RateLimitWindow>,
+    secondary: Option<RateLimitWindow>,
+    credits: Option<CodexCredits>,
+    reset_credits_available_count: Option<i64>,
+    reset_credits: Option<Vec<CodexResetCredit>>,
+    source: &'static str,
+}
+
+#[derive(Debug, Clone, Default, PartialEq)]
+struct AccountSnapshot {
+    account: Option<String>,
+    membership_level: Option<String>,
+    subscription: SubscriptionInfo,
+}
+
+#[derive(Debug, Clone, Default, PartialEq)]
+struct SubscriptionInfo {
+    workspace_name: Option<String>,
+    expires_at: Option<String>,
+    will_renew: Option<bool>,
+    has_active_subscription: Option<bool>,
+}
+
+pub fn fetch_codex_limits() -> Result<CodexLimitsResponse, String> {
+    if env::var("PULSE_OFFLINE").as_deref() == Ok("1") {
+        return Err("Account queries are disabled for this offline launch".into());
+    }
+    let environment = selected_codex_environment();
+    let auth = load_codex_auth()?;
+    if !auth.is_chatgpt { return Err("chatgptLoginRequired".into()); }
+    // A flight can be shared only by the same credentials and selected source.
+    use sha2::{Digest, Sha256};
+    let identity = format!("{:x}", Sha256::digest(format!("{:?}|{:?}|{}", environment.home, auth.account_id, auth.access_token).as_bytes()));
+    let result = fetch_codex_limits_single_flight(&identity, || {
+        log::info!("Starting fetch_codex_limits...");
+        let limits = fetch_codex_limits_with(|| fetch_oauth_limits(&auth), || fetch_account_snapshot(&auth))?;
+        #[cfg(debug_assertions)]
+        let limits = if window_activation_debug_enabled() {
+            let mut debug_limits = limits;
+            set_debug_session_window(&mut debug_limits, 0.0, Utc::now().timestamp());
+            debug_limits
+        } else {
+            limits
+        };
+        #[cfg(debug_assertions)]
+        let limits = {
+            let mut limits = limits;
+            if let Ok(value) = env::var(CREDITS_DEBUG_ENV) {
+                apply_debug_credits(&mut limits, &value);
+            }
+            limits
+        };
+        Ok(limits)
+    });
+    if selected_codex_environment() != environment || load_codex_auth().ok().as_ref() != Some(&auth) {
+        return Err("identityChanged".into());
+    }
+    result
+}
+
+#[cfg(debug_assertions)]
+fn apply_debug_credits(limits: &mut CodexLimitsResponse, value: &str) {
+    let value = value.trim();
+    let credits = match value {
+        "unavailable" => None,
+        "unlimited" => Some(CodexCredits {
+            has_credits: true,
+            unlimited: true,
+            balance: None,
+        }),
+        _ => match value.parse::<f64>() {
+            Ok(balance) if balance.is_finite() && balance >= 0.0 => Some(CodexCredits {
+                has_credits: balance > 0.0,
+                unlimited: false,
+                balance: Some(value.to_string()),
+            }),
+            _ => {
+                log::warn!("Ignoring invalid {CREDITS_DEBUG_ENV}; expected a non-negative finite number, unlimited, or unavailable.");
+                return;
+            }
+        },
+    };
+    limits.credits = credits;
+    limits.credits_is_mock = true;
+}
+
+fn fetch_codex_limits_single_flight(
+    identity: &str,
+    fetch: impl FnOnce() -> Result<CodexLimitsResponse, String>,
+) -> Result<CodexLimitsResponse, String> {
+    let (flight, should_fetch) = {
+        let mut in_flight = LIMITS_FETCH_IN_FLIGHT
+            .lock()
+            .map_err(|_| "Codex limits fetch lock was poisoned.".to_string())?;
+        match in_flight.as_ref() {
+            Some(flight) if flight.identity == identity => (Arc::clone(flight), false),
+            _ => {
+                let flight = Arc::new(LimitsFetchFlight { identity: identity.into(), ..Default::default() });
+                *in_flight = Some(Arc::clone(&flight));
+                (flight, true)
+            }
+        }
+    };
+
+    if !should_fetch {
+        let mut result = flight
+            .result
+            .lock()
+            .map_err(|_| "Codex limits fetch result lock was poisoned.".to_string())?;
+        while result.is_none() {
+            result = flight
+                .ready
+                .wait(result)
+                .map_err(|_| "Codex limits fetch result lock was poisoned.".to_string())?;
+        }
+        return result.as_ref().unwrap().clone();
+    }
+
+    let result = fetch();
+    {
+        let mut stored = flight
+            .result
+            .lock()
+            .map_err(|_| "Codex limits fetch result lock was poisoned.".to_string())?;
+        *stored = Some(result.clone());
+        flight.ready.notify_all();
+    }
+    let mut in_flight = LIMITS_FETCH_IN_FLIGHT
+        .lock()
+        .map_err(|_| "Codex limits fetch lock was poisoned.".to_string())?;
+    if in_flight.as_ref().is_some_and(|current| Arc::ptr_eq(current, &flight)) { *in_flight = None; }
+    result
+}
+
+pub fn activate_codex_window(marker_path: &Path) -> Result<CodexWindowActivationResponse, String> {
+    if env::var("PULSE_OFFLINE").as_deref() == Ok("1") {
+        return Err("Model requests are disabled for this offline launch".into());
+    }
+    log::info!("Codex window activation requested.");
+
+    #[cfg(debug_assertions)]
+    if window_activation_debug_enabled() {
+        log::info!("Codex window activation completed in debug mode without starting the CLI.");
+        let mut limits = fetch_codex_limits()?;
+        set_debug_session_window(&mut limits, 1.0, Utc::now().timestamp());
+        return Ok(CodexWindowActivationResponse {
+            status: CodexWindowActivationStatus::Started,
+            limits,
+        });
+    }
+
+    let _guard = WINDOW_ACTIVATION_LOCK
+        .lock()
+        .map_err(|_| "Codex window activation lock was poisoned.".to_string())?;
+    let working_directory = marker_path.parent().ok_or_else(|| {
+        "The Codex window activation state has no application data directory.".to_string()
+    })?;
+    activate_codex_window_with(
+        marker_path,
+        Utc::now().timestamp(),
+        fetch_codex_limits,
+        || run_codex_window_activation(working_directory),
+    )
+}
+
+#[cfg(debug_assertions)]
+fn window_activation_debug_enabled() -> bool {
+    env::var(WINDOW_ACTIVATION_DEBUG_ENV).is_ok_and(|value| value == "1")
+}
+
+#[cfg(debug_assertions)]
+fn set_debug_session_window(limits: &mut CodexLimitsResponse, used_percent: f64, now: i64) {
+    limits.session = Some(CodexLimitWindow {
+        used_percent,
+        remaining_percent: 100.0 - used_percent,
+        window_minutes: Some(SESSION_WINDOW_MINUTES),
+        resets_at: Utc
+            .timestamp_opt(now + SESSION_WINDOW_MINUTES * 60, 0)
+            .single()
+            .map(|value| value.to_rfc3339_opts(SecondsFormat::Millis, true)),
+    });
+}
+
+fn activate_codex_window_with(
+    marker_path: &Path,
+    now: i64,
+    mut fetch_limits: impl FnMut() -> Result<CodexLimitsResponse, String>,
+    run_activation: impl FnOnce() -> Result<(), String>,
+) -> Result<CodexWindowActivationResponse, String> {
+    let current = fetch_limits()?;
+    let Some(window_key) = inactive_session_window_key(&current)? else {
+        log::info!("Codex window activation skipped because the 5-hour window is already active.");
+        return Ok(CodexWindowActivationResponse {
+            status: CodexWindowActivationStatus::AlreadyActive,
+            limits: current,
+        });
+    };
+
+    if activation_was_recently_requested(marker_path, &window_key, now) {
+        log::info!(
+            "Codex window activation skipped because a request was sent within the cooldown."
+        );
+        return Ok(CodexWindowActivationResponse {
+            status: CodexWindowActivationStatus::RecentlyRequested,
+            limits: current,
+        });
+    }
+
+    write_activation_marker(marker_path, &window_key, now)?;
+    let activation_result = run_activation();
+    let updated = fetch_limits().map_err(|error| {
+        format!("The activation request finished, but the updated Codex limits could not be verified: {error}")
+    })?;
+
+    if session_window_has_usage(&updated) {
+        return Ok(CodexWindowActivationResponse {
+            status: CodexWindowActivationStatus::Started,
+            limits: updated,
+        });
+    }
+
+    activation_result?;
+    Err("The Codex request completed, but the usage service has not confirmed an active 5-hour window. Refresh the limits to verify; no second request was sent.".to_string())
+}
+
+fn inactive_session_window_key(limits: &CodexLimitsResponse) -> Result<Option<String>, String> {
+    let session = limits.session.as_ref().ok_or_else(|| {
+        "Codex did not return a 5-hour limit window, so activation was not attempted.".to_string()
+    })?;
+    if session.used_percent > 0.0 {
+        return Ok(None);
+    }
+
+    Ok(Some(format!(
+        "{}|zero-usage",
+        limits.account.as_deref().unwrap_or("unknown-account")
+    )))
+}
+
+fn session_window_has_usage(limits: &CodexLimitsResponse) -> bool {
+    limits
+        .session
+        .as_ref()
+        .is_some_and(|window| window.used_percent > 0.0)
+}
+
+fn activation_was_recently_requested(marker_path: &Path, window_key: &str, now: i64) -> bool {
+    let Ok(contents) = fs::read_to_string(marker_path) else {
+        return false;
+    };
+    let Ok(marker) = serde_json::from_str::<WindowActivationMarker>(&contents) else {
+        return false;
+    };
+    let age = now.saturating_sub(marker.attempted_at);
+    marker.window_key == window_key && age >= 0 && age < WINDOW_ACTIVATION_COOLDOWN.as_secs() as i64
+}
+
+fn write_activation_marker(marker_path: &Path, window_key: &str, now: i64) -> Result<(), String> {
+    if let Some(parent) = marker_path.parent() {
+        fs::create_dir_all(parent).map_err(|error| {
+            format!("Failed to prepare the Codex window activation state: {error}")
+        })?;
+    }
+    let marker = WindowActivationMarker {
+        window_key: window_key.to_string(),
+        attempted_at: now,
+    };
+    let contents = serde_json::to_vec(&marker)
+        .map_err(|error| format!("Failed to encode the Codex window activation state: {error}"))?;
+    fs::write(marker_path, contents)
+        .map_err(|error| format!("Failed to save the Codex window activation state: {error}"))
+}
+
+fn run_codex_window_activation(working_directory: &Path) -> Result<(), String> {
+    let codex = resolve_codex_command(&selected_codex_environment()).ok_or_else(|| {
+        "Codex CLI not found. Set CODEX_CLI_PATH or install the codex command.".to_string()
+    })?;
+    let display = codex_command_display(&codex);
+    log::info!(
+        "Starting Codex window activation command. command={display}, args={:?}",
+        codex_activation_args()
+    );
+    let mut command = codex_activation_process_command(&codex, working_directory);
+    let mut child = command
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::piped())
+        .spawn()
+        .map_err(|error| {
+            log::error!("Failed to start Codex window activation command at {display}: {error}");
+            format!("Failed to start Codex CLI at {display}: {error}")
+        })?;
+    let pid = child.id();
+    log::info!("Codex window activation command started. pid={pid}");
+    let mut stderr = child
+        .stderr
+        .take()
+        .ok_or_else(|| "Failed to open Codex CLI activation stderr.".to_string())?;
+    let stderr_reader = thread::spawn(move || {
+        let mut output = String::new();
+        let _ = stderr.read_to_string(&mut output);
+        output
+    });
+    let deadline = Instant::now() + WINDOW_ACTIVATION_TIMEOUT;
+
+    loop {
+        if let Some(status) = child
+            .try_wait()
+            .map_err(|error| format!("Failed while waiting for Codex CLI: {error}"))?
+        {
+            let _ = child.wait();
+            // CLI stderr may contain authentication or account response details.
+            // Drain the pipe to avoid deadlock, but never return or persist its body.
+            let _ = stderr_reader.join();
+            if status.success() {
+                log::info!(
+                    "Codex window activation command completed successfully. pid={pid}, status={status}"
+                );
+                return Ok(());
+            }
+            log::warn!(
+                "Codex window activation command failed. pid={pid}, status={status}"
+            );
+            return Err(format!("Codex CLI activation exited with status {status}. Check the official Codex client sign-in and try again after the cooldown."));
+        }
+        if Instant::now() >= deadline {
+            let _ = child.kill();
+            let _ = child.wait();
+            let _ = stderr_reader.join();
+            log::warn!("Codex window activation command timed out. pid={pid}");
+            return Err("Codex CLI activation timed out after 3 minutes.".to_string());
+        }
+        thread::sleep(Duration::from_millis(100));
+    }
+}
+
+fn fetch_codex_limits_with(
+    fetch_oauth: impl FnOnce() -> Result<LimitsSnapshot, String>,
+    fetch_account: impl FnOnce() -> AccountSnapshot,
+) -> Result<CodexLimitsResponse, String> {
+    let limits = fetch_oauth().map_err(|error| {
+        log::warn!("OAuth limits fetch failed: {error}");
+        error
+    })?;
+    log::info!("Successfully fetched limits via OAuth.");
+    Ok(make_response(limits, fetch_account()))
+}
+
+fn fetch_oauth_limits(auth: &CodexAuth) -> Result<LimitsSnapshot, String> {
+    if !auth.is_chatgpt {
+        return Err("chatgptQuotaNotApplicable".to_string());
+    }
+    log::info!("Building reqwest client for OAuth...");
+    let client = reqwest::blocking::Client::builder()
+        .timeout(Duration::from_secs(5))
+        .build()
+        .map_err(|error| format!("Failed to create Codex usage client: {error}"))?;
+
+    let mut request = client
+        .get(CODEX_USAGE_URL)
+        .bearer_auth(&auth.access_token)
+        .header("Accept", "application/json")
+        .header("Origin", "https://chatgpt.com")
+        .header("Referer", "https://chatgpt.com/")
+        .header("User-Agent", "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36");
+
+    if let Some(account_id) = &auth.account_id {
+        request = request.header("ChatGPT-Account-Id", account_id);
+    }
+
+    let response = request.send().map_err(|error| {
+        log::error!("Request failed: {error:?}");
+        format!("Failed to fetch Codex usage API: {error}")
+    })?;
+    let status = response.status();
+    let body = response
+        .text()
+        .map_err(|error| format!("Failed to read Codex usage API response: {error}"))?;
+
+    if !status.is_success() {
+        log::error!("Codex API error status: {status}");
+        return Err(format!("Codex usage API returned {status}"));
+    }
+
+    let usage = serde_json::from_str::<OAuthUsageResponse>(&body)
+        .map_err(|_| "Codex usage API returned an unsupported response format".to_string())?;
+    let reset_credits = fetch_oauth_reset_credits(&client, &auth);
+
+    make_oauth_snapshot(usage, reset_credits)
+}
+
+fn fetch_oauth_reset_credits(
+    client: &reqwest::blocking::Client,
+    auth: &CodexAuth,
+) -> Result<OAuthResetCreditsSnapshot, String> {
+    let account_key = auth
+        .account_id
+        .as_deref()
+        .unwrap_or(&auth.access_token)
+        .to_string();
+    RESET_CREDITS_CACHE
+        .get_or_init(ResetCreditsCache::default)
+        .fetch(account_key, RESET_CREDITS_CACHE_TTL, || {
+            fetch_oauth_reset_credits_uncached(client, auth)
+        })
+}
+
+fn fetch_oauth_reset_credits_uncached(
+    client: &reqwest::blocking::Client,
+    auth: &CodexAuth,
+) -> Result<OAuthResetCreditsSnapshot, String> {
+    let mut request = client
+        .get(CODEX_RESET_CREDITS_URL)
+        .timeout(Duration::from_secs(5))
+        .bearer_auth(&auth.access_token)
+        .header("Accept", "application/json")
+        .header("Origin", "https://chatgpt.com")
+        .header("Referer", "https://chatgpt.com/")
+        .header("User-Agent", "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36");
+
+    if let Some(account_id) = &auth.account_id {
+        request = request.header("ChatGPT-Account-Id", account_id);
+    }
+
+    let response = request
+        .send()
+        .map_err(|error| format!("Failed to fetch Codex reset credit details: {error}"))?;
+    let status = response.status();
+    let body = response
+        .text()
+        .map_err(|error| format!("Failed to read Codex reset credit details: {error}"))?;
+
+    if !status.is_success() {
+        return Err(format!(
+            "Codex reset credit details API returned {status}"
+        ));
+    }
+
+    let details = serde_json::from_str::<OAuthResetCreditsResponse>(&body)
+        .map_err(|_| "Codex reset credits API returned an unsupported response format".to_string())?;
+    Ok(OAuthResetCreditsSnapshot {
+        available_count: details.available_count,
+        credits: normalize_oauth_reset_credits(details.credits),
+    })
+}
+
+fn make_oauth_snapshot(
+    usage: OAuthUsageResponse,
+    reset_credits: Result<OAuthResetCreditsSnapshot, String>,
+) -> Result<LimitsSnapshot, String> {
+    let rate_limit = usage
+        .rate_limit
+        .ok_or_else(|| "Codex usage API response was missing rate_limit.".to_string())?;
+    let usage_available_count = usage
+        .rate_limit_reset_credits
+        .and_then(|credits| credits.available_count);
+    let (reset_credits_available_count, reset_credits) = match reset_credits {
+        Ok(details) => (
+            details
+                .available_count
+                .or(usage_available_count)
+                .or_else(|| Some(details.credits.len() as i64)),
+            Some(details.credits),
+        ),
+        Err(error) => {
+            log::warn!("Codex reset credit details unavailable: {error}");
+            (usage_available_count, None)
+        }
+    };
+
+    Ok(LimitsSnapshot {
+        primary: rate_limit.primary_window.map(RateLimitWindow::from),
+        secondary: rate_limit.secondary_window.map(RateLimitWindow::from),
+        credits: usage.credits,
+        reset_credits_available_count,
+        reset_credits,
+        source: "oauth",
+    })
+}
+
+impl ResetCreditsCache {
+    fn fetch(
+        &self,
+        account_key: String,
+        max_age: Duration,
+        fetch: impl FnOnce() -> Result<OAuthResetCreditsSnapshot, String>,
+    ) -> Result<OAuthResetCreditsSnapshot, String> {
+        let mut entries = self
+            .entries
+            .lock()
+            .map_err(|_| "Codex reset credit cache lock was poisoned.".to_string())?;
+
+        loop {
+            let entry = entries.entry(account_key.clone()).or_default();
+            if let Some(cached) = &entry.cached {
+                if cached.fetched_at.elapsed() < max_age {
+                    return Ok(cached.snapshot.clone());
+                }
+            }
+
+            if !entry.in_flight {
+                entry.in_flight = true;
+                break;
+            }
+
+            let generation = entry.generation;
+            while entries
+                .get(&account_key)
+                .is_some_and(|entry| entry.in_flight && entry.generation == generation)
+            {
+                entries = self
+                    .ready
+                    .wait(entries)
+                    .map_err(|_| "Codex reset credit cache lock was poisoned.".to_string())?;
+            }
+
+            let entry = entries.entry(account_key.clone()).or_default();
+            if entry.generation > generation {
+                if let Some(cached) = &entry.cached {
+                    return Ok(cached.snapshot.clone());
+                }
+                if let Some(error) = &entry.last_error {
+                    return Err(error.clone());
+                }
+            }
+        }
+
+        drop(entries);
+        let result = fetch();
+        let mut entries = self
+            .entries
+            .lock()
+            .map_err(|_| "Codex reset credit cache lock was poisoned.".to_string())?;
+        let entry = entries.entry(account_key).or_default();
+        entry.in_flight = false;
+        entry.generation += 1;
+
+        let result = match result {
+            Ok(snapshot) => {
+                entry.cached = Some(CachedResetCredits {
+                    snapshot: snapshot.clone(),
+                    fetched_at: Instant::now(),
+                });
+                entry.last_error = None;
+                Ok(snapshot)
+            }
+            Err(error) => {
+                entry.last_error = Some(error.clone());
+                entry
+                    .cached
+                    .as_ref()
+                    .map(|cached| cached.snapshot.clone())
+                    .ok_or(error)
+            }
+        };
+        self.ready.notify_all();
+        result
+    }
+}
+
+fn fetch_account_snapshot(auth: &CodexAuth) -> AccountSnapshot {
+    let (account, membership_level) = decode_jwt_info(&auth.access_token);
+    let subscription = match fetch_subscription_info(&auth) {
+        Ok(subscription) => subscription,
+        Err(error) => {
+            log::warn!("ChatGPT account check unavailable: {error}");
+            SubscriptionInfo::default()
+        }
+    };
+    let membership_level = reconcile_membership_level(membership_level, &subscription);
+
+    AccountSnapshot {
+        account,
+        membership_level,
+        subscription,
+    }
+}
+
+fn reconcile_membership_level(
+    membership_level: Option<String>,
+    subscription: &SubscriptionInfo,
+) -> Option<String> {
+    let is_workspace_plan = membership_level.as_deref().is_some_and(|level| {
+        ["team", "business", "enterprise"]
+            .iter()
+            .any(|workspace_plan| level.eq_ignore_ascii_case(workspace_plan))
+    });
+    let is_expired = subscription
+        .expires_at
+        .as_deref()
+        .and_then(|expires_at| chrono::DateTime::parse_from_rfc3339(expires_at).ok())
+        .is_some_and(|expires_at| Utc::now() > expires_at.with_timezone(&Utc));
+    let has_active = subscription.has_active_subscription.unwrap_or(true);
+
+    if !is_workspace_plan && (!has_active || is_expired) {
+        Some("free".to_string())
+    } else {
+        membership_level
+    }
+}
+
+fn make_response(limits: LimitsSnapshot, account: AccountSnapshot) -> CodexLimitsResponse {
+    let (session, weekly) = normalize_windows(limits.primary, limits.secondary);
+
+    CodexLimitsResponse {
+        session: session.map(make_window),
+        weekly: weekly.map(make_window),
+        credits: limits.credits,
+        credits_is_mock: false,
+        reset_credits_available_count: limits.reset_credits_available_count,
+        reset_credits: limits.reset_credits,
+        updated_at: Utc::now().to_rfc3339_opts(SecondsFormat::Millis, true),
+        source: limits.source.to_string(),
+        account: account.account,
+        membership_level: account.membership_level,
+        workspace_name: account.subscription.workspace_name,
+        subscription_expires_at: account.subscription.expires_at,
+        subscription_will_renew: account.subscription.will_renew,
+    }
+}
+
+fn fetch_subscription_info(auth: &CodexAuth) -> Result<SubscriptionInfo, String> {
+    let client = reqwest::blocking::Client::builder()
+        .timeout(Duration::from_secs(15))
+        .build()
+        .map_err(|error| format!("Failed to create ChatGPT account check client: {error}"))?;
+
+    let timezone_offset_min = chatgpt_timezone_offset_min();
+    let mut request = client
+        .get(CHATGPT_ACCOUNT_CHECK_URL)
+        .query(&[("timezone_offset_min", timezone_offset_min.to_string())])
+        .bearer_auth(&auth.access_token)
+        .header("Accept", "application/json")
+        .header("Origin", "https://chatgpt.com")
+        .header("Referer", "https://chatgpt.com/")
+        .header("User-Agent", "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36");
+
+    if let Some(account_id) = &auth.account_id {
+        request = request.header("ChatGPT-Account-Id", account_id);
+    }
+
+    let response = request
+        .send()
+        .map_err(|error| format!("Failed to fetch ChatGPT account check API: {error}"))?;
+    let status = response.status();
+    let body = response
+        .text()
+        .map_err(|error| format!("Failed to read ChatGPT account check response: {error}"))?;
+
+    if !status.is_success() {
+        return Err(format!(
+            "ChatGPT account check API returned {status}"
+        ));
+    }
+
+    let value = serde_json::from_str::<Value>(&body)
+        .map_err(|_| "ChatGPT account API returned an unsupported response format".to_string())?;
+    Ok(parse_subscription_info(&value, auth.account_id.as_deref()))
+}
+
+fn chatgpt_timezone_offset_min() -> i32 {
+    -Local::now().offset().local_minus_utc() / 60
+}
+
+fn parse_subscription_info(value: &Value, account_id: Option<&str>) -> SubscriptionInfo {
+    let Some(account) = subscription_account_value(value, account_id) else {
+        return SubscriptionInfo::default();
+    };
+
+    let workspace_name = account
+        .get("account")
+        .and_then(|account| string_field(account, "name"));
+    let expires_at = account
+        .get("entitlement")
+        .and_then(|entitlement| string_field(entitlement, "expires_at"));
+    let will_renew = account
+        .get("last_active_subscription")
+        .and_then(|subscription| subscription.get("will_renew"))
+        .and_then(Value::as_bool);
+    let has_active_subscription = account
+        .get("entitlement")
+        .and_then(|entitlement| entitlement.get("has_active_subscription"))
+        .and_then(Value::as_bool);
+
+    SubscriptionInfo {
+        workspace_name,
+        expires_at,
+        will_renew,
+        has_active_subscription,
+    }
+}
+
+fn subscription_account_value<'a>(value: &'a Value, account_id: Option<&str>) -> Option<&'a Value> {
+    let accounts = value.get("accounts")?;
+    // A selected workspace must never inherit another workspace's entitlement.
+    if let Some(account_id) = account_id { return accounts.get(account_id); }
+    accounts.get("default").or_else(|| {
+        let accounts = accounts.as_object()?;
+        (accounts.len() == 1).then(|| accounts.values().next()).flatten()
+    })
+}
+
+fn decode_jwt_info(token: &str) -> (Option<String>, Option<String>) {
+    let parts: Vec<&str> = token.split('.').collect();
+    if parts.len() < 2 {
+        return (None, None);
+    }
+    let payload_b64 = parts[1];
+
+    if let Some(decoded_bytes) = base64url_decode(payload_b64) {
+        if let Ok(decoded_str) = String::from_utf8(decoded_bytes) {
+            if let Ok(val) = serde_json::from_str::<serde_json::Value>(&decoded_str) {
+                let email = val
+                    .get("https://api.openai.com/profile")
+                    .and_then(|p| p.get("email"))
+                    .and_then(|e| e.as_str())
+                    .map(|s| s.to_string());
+
+                let plan_type = val
+                    .get("https://api.openai.com/auth")
+                    .and_then(|a| a.get("chatgpt_plan_type"))
+                    .and_then(|p| p.as_str())
+                    .map(|s| s.to_string());
+
+                return (email, plan_type);
+            }
+        }
+    }
+    (None, None)
+}
+
+fn base64url_decode(input: &str) -> Option<Vec<u8>> {
+    let mut normalized = input.replace('-', "+").replace('_', "/");
+    let rem = normalized.len() % 4;
+    if rem > 0 {
+        normalized.push_str(&"===="[rem..]);
+    }
+
+    let bytes = normalized.as_bytes();
+    let len = bytes.len();
+    if len % 4 != 0 {
+        return None;
+    }
+
+    let alphabet = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+    let mut table = [255u8; 256];
+    for (idx, &c) in alphabet.iter().enumerate() {
+        table[c as usize] = idx as u8;
+    }
+
+    let mut out = Vec::new();
+    let mut i = 0;
+    while i < len {
+        let c0 = bytes[i];
+        let c1 = bytes[i + 1];
+        let c2 = bytes[i + 2];
+        let c3 = bytes[i + 3];
+
+        let v0 = table[c0 as usize];
+        let v1 = table[c1 as usize];
+        if v0 == 255 || v1 == 255 {
+            return None;
+        }
+
+        let v2 = if c2 == b'=' {
+            0
+        } else {
+            let v = table[c2 as usize];
+            if v == 255 {
+                return None;
+            }
+            v
+        };
+        let v3 = if c3 == b'=' {
+            0
+        } else {
+            let v = table[c3 as usize];
+            if v == 255 {
+                return None;
+            }
+            v
+        };
+
+        let triple = ((v0 as u32) << 18) | ((v1 as u32) << 12) | ((v2 as u32) << 6) | (v3 as u32);
+
+        out.push(((triple >> 16) & 0xFF) as u8);
+        if c2 != b'=' {
+            out.push(((triple >> 8) & 0xFF) as u8);
+        }
+        if c3 != b'=' {
+            out.push((triple & 0xFF) as u8);
+        }
+        i += 4;
+    }
+    Some(out)
+}
+
+impl From<OAuthRateLimitWindow> for RateLimitWindow {
+    fn from(window: OAuthRateLimitWindow) -> Self {
+        Self {
+            used_percent: window.used_percent,
+            window_duration_mins: window.limit_window_seconds.map(|seconds| seconds / 60),
+            resets_at: window.reset_at,
+        }
+    }
+}
+
+fn string_field(value: &Value, key: &str) -> Option<String> {
+    value
+        .get(key)
+        .and_then(Value::as_str)
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(str::to_string)
+}
+
+fn normalize_oauth_reset_credits(credits: Vec<OAuthResetCredit>) -> Vec<CodexResetCredit> {
+    sort_reset_credits(
+        credits
+            .into_iter()
+            .filter(|credit| credit.status.eq_ignore_ascii_case("available"))
+            .map(|credit| CodexResetCredit {
+                id: credit.id,
+                expires_at: credit.expires_at.and_then(|expires_at| {
+                    chrono::DateTime::parse_from_rfc3339(&expires_at)
+                        .ok()
+                        .map(|date| {
+                            date.with_timezone(&Utc)
+                                .to_rfc3339_opts(SecondsFormat::Millis, true)
+                        })
+                }),
+            })
+            .collect(),
+    )
+}
+
+fn sort_reset_credits(mut credits: Vec<CodexResetCredit>) -> Vec<CodexResetCredit> {
+    credits.sort_by_key(|credit| {
+        (
+            credit.expires_at.is_none(),
+            credit.expires_at.clone().unwrap_or_default(),
+        )
+    });
+    credits
+}
+
+fn make_window(window: RateLimitWindow) -> CodexLimitWindow {
+    let used_percent = clamp_percent(window.used_percent);
+    let remaining_percent = clamp_percent(100.0 - used_percent);
+    let resets_at = window
+        .resets_at
+        .and_then(|timestamp| Utc.timestamp_opt(timestamp, 0).single())
+        .map(|date| date.to_rfc3339_opts(SecondsFormat::Millis, true));
+
+    CodexLimitWindow {
+        used_percent,
+        remaining_percent,
+        window_minutes: window.window_duration_mins,
+        resets_at,
+    }
+}
+
+fn clamp_percent(value: f64) -> f64 {
+    if value.is_nan() {
+        return 0.0;
+    }
+
+    value.clamp(0.0, 100.0)
+}
+
+fn normalize_windows(
+    primary: Option<RateLimitWindow>,
+    secondary: Option<RateLimitWindow>,
+) -> (Option<RateLimitWindow>, Option<RateLimitWindow>) {
+    match (primary, secondary) {
+        (Some(primary), Some(secondary)) => {
+            match (window_role(&primary), window_role(&secondary)) {
+                (WindowRole::Session, WindowRole::Weekly)
+                | (WindowRole::Session, WindowRole::Unknown)
+                | (WindowRole::Unknown, WindowRole::Weekly) => (Some(primary), Some(secondary)),
+                (WindowRole::Weekly, WindowRole::Session)
+                | (WindowRole::Weekly, WindowRole::Unknown) => (Some(secondary), Some(primary)),
+                _ => (Some(primary), Some(secondary)),
+            }
+        }
+        (Some(primary), None) => match window_role(&primary) {
+            WindowRole::Weekly => (None, Some(primary)),
+            WindowRole::Session | WindowRole::Unknown => (Some(primary), None),
+        },
+        (None, Some(secondary)) => match window_role(&secondary) {
+            WindowRole::Session | WindowRole::Unknown => (Some(secondary), None),
+            WindowRole::Weekly => (None, Some(secondary)),
+        },
+        (None, None) => (None, None),
+    }
+}
+
+fn window_role(window: &RateLimitWindow) -> WindowRole {
+    match window.window_duration_mins {
+        Some(SESSION_WINDOW_MINUTES) => WindowRole::Session,
+        Some(WEEKLY_WINDOW_MINUTES) => WindowRole::Weekly,
+        _ => WindowRole::Unknown,
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum CodexCommand {
+    Native(PathBuf),
+    WindowsCmd(PathBuf),
+    Wsl { distribution: String, path: String },
+}
+
+fn codex_activation_args() -> [&'static str; 16] {
+    [
+        "-c",
+        "mcp_servers={}",
+        "-c",
+        r#"model_reasoning_effort="low""#,
+        "-m",
+        WINDOW_ACTIVATION_MODEL,
+        "-s",
+        "read-only",
+        "-a",
+        "never",
+        "exec",
+        "--ephemeral",
+        "--ignore-user-config",
+        "--ignore-rules",
+        "--skip-git-repo-check",
+        WINDOW_ACTIVATION_PROMPT,
+    ]
+}
+
+fn resolve_codex_command(environment: &CodexEnvironment) -> Option<CodexCommand> {
+    match &environment.runtime {
+        CodexRuntime::Native => resolve_native_codex_binary()
+            .map(|path| classify_native_command(path, cfg!(target_os = "windows"))),
+        CodexRuntime::Wsl { distribution } => {
+            let path = command_v_wsl_codex(distribution)?;
+            Some(CodexCommand::Wsl {
+                distribution: distribution.clone(),
+                path,
+            })
+        }
+    }
+}
+
+fn resolve_native_codex_binary() -> Option<PathBuf> {
+    if let Ok(path) = env::var("CODEX_CLI_PATH") {
+        let path = PathBuf::from(path.trim());
+        if is_executable(&path) {
+            return Some(path);
+        }
+    }
+
+    if let Some(path) = env::var_os("PATH") {
+        let names: &[&str] = if cfg!(target_os = "windows") {
+            &["codex.exe", "codex.cmd", "codex.bat", "codex"]
+        } else {
+            &["codex"]
+        };
+        if let Some(bin) = find_in_system_path(names, &path) {
+            return Some(bin);
+        }
+    }
+
+    #[cfg(not(target_os = "windows"))]
+    {
+        if let Some(path) = command_v_codex() {
+            return Some(path);
+        }
+    }
+
+    let mut candidates = Vec::new();
+    if let Some(home) = dirs::home_dir() {
+        if cfg!(target_os = "windows") {
+            candidates.push(home.join(".codex/bin/codex.exe"));
+            candidates.push(home.join(".codex/bin/codex.cmd"));
+        } else {
+            candidates.push(home.join(".local/bin/codex"));
+            candidates.push(home.join(".bun/bin/codex"));
+            candidates.push(home.join(".npm-global/bin/codex"));
+            candidates.extend(nvm_codex_candidates(&home));
+        }
+    }
+    #[cfg(target_os = "windows")]
+    {
+        for directory in [
+            env::var_os("PNPM_HOME").map(PathBuf::from),
+            env::var_os("APPDATA").map(|path| PathBuf::from(path).join("npm")),
+        ]
+        .into_iter()
+        .flatten()
+        {
+            candidates.push(directory.join("codex.exe"));
+            candidates.push(directory.join("codex.cmd"));
+        }
+    }
+    if !cfg!(target_os = "windows") {
+        candidates.push(PathBuf::from("/opt/homebrew/bin/codex"));
+        candidates.push(PathBuf::from("/usr/local/bin/codex"));
+    }
+
+    candidates.into_iter().find(|path| is_executable(&path))
+}
+
+fn command_v_codex() -> Option<PathBuf> {
+    let shell = env::var("SHELL").unwrap_or_else(|_| "/bin/zsh".to_string());
+    let mut child = Command::new(shell)
+        .args(["-l", "-i", "-c", "command -v codex"])
+        .stdout(Stdio::piped())
+        .stderr(Stdio::null())
+        .spawn()
+        .ok()?;
+
+    let deadline = Instant::now() + Duration::from_secs(2);
+    loop {
+        if child.try_wait().ok().flatten().is_some() {
+            let output = child.wait_with_output().ok()?;
+            return parse_command_v_output(&String::from_utf8(output.stdout).ok()?);
+        }
+        if Instant::now() >= deadline {
+            let _ = child.kill();
+            let _ = child.wait();
+            return None;
+        }
+        thread::sleep(Duration::from_millis(25));
+    }
+}
+
+fn parse_command_v_output(output: &str) -> Option<PathBuf> {
+    output
+        .lines()
+        .rev()
+        .map(str::trim)
+        .map(PathBuf::from)
+        .filter(|path| path.is_absolute())
+        .find(|path| is_executable(path))
+}
+
+fn command_v_wsl_codex(distribution: &str) -> Option<String> {
+    #[cfg(target_os = "windows")]
+    {
+        let mut child = Command::new("wsl.exe")
+            .args([
+                "-d",
+                distribution,
+                "--",
+                "sh",
+                "-lc",
+                "exec \"$SHELL\" -lic 'command -v codex'",
+            ])
+            .stdout(Stdio::piped())
+            .stderr(Stdio::null())
+            .spawn()
+            .ok()?;
+        let deadline = Instant::now() + Duration::from_secs(2);
+        loop {
+            if child.try_wait().ok().flatten().is_some() {
+                let output = child.wait_with_output().ok()?;
+                return parse_wsl_command_v_output(&String::from_utf8(output.stdout).ok()?);
+            }
+            if Instant::now() >= deadline {
+                let _ = child.kill();
+                let _ = child.wait();
+                log::warn!(
+                    "Timed out while locating Codex CLI in WSL distribution {distribution}."
+                );
+                return None;
+            }
+            thread::sleep(Duration::from_millis(25));
+        }
+    }
+
+    #[cfg(not(target_os = "windows"))]
+    {
+        let _ = distribution;
+        None
+    }
+}
+
+#[cfg(any(target_os = "windows", test))]
+fn parse_wsl_command_v_output(output: &str) -> Option<String> {
+    output
+        .lines()
+        .rev()
+        .map(str::trim)
+        .find(|line| line.starts_with('/'))
+        .map(str::to_string)
+}
+
+fn classify_native_command(path: PathBuf, windows: bool) -> CodexCommand {
+    if windows
+        && matches!(
+            path.extension().and_then(|extension| extension.to_str()),
+            Some(extension) if extension.eq_ignore_ascii_case("cmd") || extension.eq_ignore_ascii_case("bat")
+        )
+    {
+        CodexCommand::WindowsCmd(path)
+    } else {
+        CodexCommand::Native(path)
+    }
+}
+
+fn codex_activation_process_command(codex: &CodexCommand, working_directory: &Path) -> Command {
+    let args = codex_activation_args();
+    let mut command = match codex {
+        CodexCommand::Native(path) => {
+            #[cfg(target_os = "windows")]
+            let mut command = Command::new(path);
+            #[cfg(not(target_os = "windows"))]
+            let mut command = {
+                let mut command = Command::new("/usr/bin/env");
+                command.arg(path);
+                command
+            };
+            command
+                .args(args)
+                .env("PATH", effective_path_with_codex(path));
+            command
+        }
+        CodexCommand::WindowsCmd(path) => {
+            let mut command = Command::new(path);
+            command
+                .args(args)
+                .env("PATH", effective_path_with_codex(path));
+            command
+        }
+        CodexCommand::Wsl { distribution, path } => {
+            let inner_command = std::iter::once(path.as_str())
+                .chain(args)
+                .map(shell_quote)
+                .collect::<Vec<_>>()
+                .join(" ");
+            let login_command = format!("exec \"$SHELL\" -lic {}", shell_quote(&inner_command));
+            let mut command = Command::new("wsl.exe");
+            command
+                .args(["-d", distribution, "--", "sh", "-lc"])
+                .arg(login_command);
+            command
+        }
+    };
+    command.current_dir(working_directory);
+    #[cfg(target_os = "windows")]
+    {
+        use std::os::windows::process::CommandExt;
+        command.creation_flags(0x08000000); // CREATE_NO_WINDOW
+    }
+    command
+}
+
+fn shell_quote(value: &str) -> String {
+    format!("'{}'", value.replace('\'', "'\\''"))
+}
+
+fn codex_command_display(codex: &CodexCommand) -> String {
+    match codex {
+        CodexCommand::Native(path) | CodexCommand::WindowsCmd(path) => path.display().to_string(),
+        CodexCommand::Wsl { distribution, path } => format!("WSL {distribution}:{path}"),
+    }
+}
+
+fn effective_path_with_codex(codex: &Path) -> OsString {
+    let mut parts = Vec::<PathBuf>::new();
+    if let Some(parent) = codex.parent() {
+        parts.push(parent.to_path_buf());
+    }
+    parts.extend(effective_path_parts());
+    env::join_paths(dedupe_paths(parts)).unwrap_or_default()
+}
+
+fn effective_path_parts() -> Vec<PathBuf> {
+    let mut parts: Vec<PathBuf> = env::var_os("PATH")
+        .map(|path| env::split_paths(&path).collect())
+        .unwrap_or_default();
+    if !cfg!(target_os = "windows") {
+        parts.extend([
+            PathBuf::from("/opt/homebrew/bin"),
+            PathBuf::from("/usr/local/bin"),
+            PathBuf::from("/usr/bin"),
+            PathBuf::from("/bin"),
+            PathBuf::from("/usr/sbin"),
+            PathBuf::from("/sbin"),
+        ]);
+    }
+    dedupe_paths(parts)
+}
+
+#[cfg(test)]
+fn path_parts(path: &str, separator: char) -> Vec<String> {
+    path.split(separator).map(str::to_string).collect()
+}
+
+#[cfg(test)]
+fn join_path_parts(parts: Vec<String>, separator: char) -> String {
+    parts.join(&separator.to_string())
+}
+
+fn dedupe_paths(parts: Vec<PathBuf>) -> Vec<PathBuf> {
+    let mut seen = Vec::<PathBuf>::new();
+    for part in parts {
+        if !part.as_os_str().is_empty() && !seen.contains(&part) {
+            seen.push(part);
+        }
+    }
+    seen
+}
+
+fn find_in_system_path(binaries: &[&str], path: &OsStr) -> Option<PathBuf> {
+    env::split_paths(path)
+        .flat_map(|part| binaries.iter().map(move |binary| part.join(binary)))
+        .find(is_executable)
+}
+
+#[cfg(test)]
+fn find_in_path_candidates_for_separator(
+    binaries: &[&str],
+    path: &str,
+    separator: char,
+) -> Option<PathBuf> {
+    path.split(separator)
+        .filter(|part| !part.is_empty())
+        .flat_map(|part| {
+            binaries
+                .iter()
+                .map(move |binary| PathBuf::from(part).join(binary))
+        })
+        .find(is_executable)
+}
+
+fn nvm_codex_candidates(home: &Path) -> Vec<PathBuf> {
+    let versions_dir = home.join(".nvm/versions/node");
+    let Ok(entries) = fs::read_dir(versions_dir) else {
+        return Vec::new();
+    };
+
+    let mut candidates = entries
+        .filter_map(Result::ok)
+        .filter_map(|entry| {
+            let path = entry.path();
+            let version = path.file_name()?.to_string_lossy().to_string();
+            Some((node_version_key(&version), path.join("bin/codex")))
+        })
+        .collect::<Vec<_>>();
+
+    candidates.sort_by(|left, right| right.0.cmp(&left.0));
+    candidates.into_iter().map(|(_, path)| path).collect()
+}
+
+fn node_version_key(version: &str) -> Vec<u64> {
+    version
+        .trim_start_matches('v')
+        .split('.')
+        .map(|part| part.parse::<u64>().unwrap_or(0))
+        .collect()
+}
+
+#[cfg(unix)]
+fn is_executable(path: &PathBuf) -> bool {
+    use std::os::unix::fs::PermissionsExt;
+
+    path.is_file()
+        && path
+            .metadata()
+            .map(|metadata| metadata.permissions().mode() & 0o111 != 0)
+            .unwrap_or(false)
+}
+
+#[cfg(not(unix))]
+fn is_executable(path: &PathBuf) -> bool {
+    path.is_file()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::cell::Cell;
+    use std::sync::mpsc;
+
+    #[test]
+    fn concurrent_limits_fetches_share_one_result() {
+        let (started_tx, started_rx) = mpsc::channel();
+        let (release_tx, release_rx) = mpsc::channel();
+        let first = thread::spawn(move || {
+            fetch_codex_limits_single_flight("test-account", || {
+                started_tx.send(()).unwrap();
+                release_rx.recv().unwrap();
+                Ok(make_response(
+                    LimitsSnapshot {
+                        primary: None,
+                        secondary: None,
+                        credits: None,
+                        reset_credits_available_count: None,
+                        reset_credits: None,
+                        source: "first",
+                    },
+                    AccountSnapshot::default(),
+                ))
+            })
+        });
+        started_rx.recv().unwrap();
+
+        let second = thread::spawn(|| {
+            fetch_codex_limits_single_flight("test-account", || Err("duplicate fetch".to_string()))
+        });
+        let deadline = Instant::now() + Duration::from_secs(5);
+        while !LIMITS_FETCH_IN_FLIGHT
+            .lock()
+            .unwrap()
+            .as_ref()
+            .is_some_and(|flight| Arc::strong_count(flight) >= 3)
+        {
+            assert!(Instant::now() < deadline, "second fetch did not join");
+            thread::yield_now();
+        }
+        assert_eq!(fetch_codex_limits_single_flight("another-account", || Err("isolated result".into())).unwrap_err(), "isolated result");
+        release_tx.send(()).unwrap();
+
+        let first_result = first.join().unwrap().unwrap();
+        assert_eq!(second.join().unwrap().unwrap(), first_result);
+        assert_eq!(first_result.source, "first");
+
+        let fresh = fetch_codex_limits_single_flight("test-account", || Err("new fetch".to_string()));
+        assert_eq!(fresh.unwrap_err(), "new fetch");
+    }
+
+    fn window(used_percent: f64, window_minutes: Option<i64>) -> RateLimitWindow {
+        RateLimitWindow {
+            used_percent,
+            window_duration_mins: window_minutes,
+            resets_at: Some(1_800_000_000),
+        }
+    }
+
+    fn limits_with_session(used_percent: f64, resets_at: &str) -> CodexLimitsResponse {
+        CodexLimitsResponse {
+            session: Some(CodexLimitWindow {
+                used_percent,
+                remaining_percent: 100.0 - used_percent,
+                window_minutes: Some(SESSION_WINDOW_MINUTES),
+                resets_at: Some(resets_at.to_string()),
+            }),
+            weekly: None,
+            credits: None,
+            credits_is_mock: false,
+            reset_credits_available_count: None,
+            reset_credits: None,
+            updated_at: "2026-09-10T00:00:00.000Z".to_string(),
+            source: "test".to_string(),
+            account: None,
+            membership_level: Some("plus".to_string()),
+            workspace_name: None,
+            subscription_expires_at: None,
+            subscription_will_renew: None,
+        }
+    }
+
+    #[test]
+    fn paid_credits_survive_oauth_without_affecting_limits_or_reset_credits() {
+        for credits in [
+            json!({"has_credits": true, "unlimited": false, "balance": "1250.500001"}),
+            json!({"has_credits": false, "unlimited": false, "balance": "0"}),
+            json!({"has_credits": false, "unlimited": false, "balance": null}),
+            json!({"has_credits": true, "unlimited": false, "balance": null}),
+            json!({"has_credits": true, "unlimited": true, "balance": null}),
+            Value::Null,
+        ] {
+            let usage = serde_json::from_value::<OAuthUsageResponse>(json!({
+                "rate_limit": {
+                    "primary_window": {"used_percent": 25, "reset_at": null, "limit_window_seconds": 18000},
+                    "secondary_window": null
+                },
+                "credits": credits,
+                "rate_limit_reset_credits": {"available_count": 2}
+            }))
+            .unwrap();
+            let expected = usage.credits.clone();
+            let response = make_response(
+                make_oauth_snapshot(usage, Err("details unavailable".to_string())).unwrap(),
+                AccountSnapshot::default(),
+            );
+            assert_eq!(response.credits, expected);
+            assert!(!response.credits_is_mock);
+            assert_eq!(response.session.unwrap().remaining_percent, 75.0);
+            assert_eq!(response.reset_credits_available_count, Some(2));
+            let serialized = serde_json::to_value(&response.credits).unwrap();
+            if expected.is_some() {
+                assert!(serialized.get("hasCredits").is_some());
+                assert!(serialized.get("has_credits").is_none());
+            }
+        }
+
+        let usage = serde_json::from_value::<OAuthUsageResponse>(json!({})).unwrap();
+        assert!(usage.credits.is_none());
+    }
+
+    #[cfg(debug_assertions)]
+    #[test]
+    fn debug_credits_cover_balances_unlimited_and_unavailable() {
+        let mut limits = limits_with_session(25.0, "2026-09-10T05:00:00.000Z");
+        let original = limits.clone();
+        for (value, expected) in [
+            (
+                " 1250.500001 ",
+                Some(CodexCredits {
+                    has_credits: true,
+                    unlimited: false,
+                    balance: Some("1250.500001".to_string()),
+                }),
+            ),
+            (
+                "0",
+                Some(CodexCredits {
+                    has_credits: false,
+                    unlimited: false,
+                    balance: Some("0".to_string()),
+                }),
+            ),
+            (
+                "unlimited",
+                Some(CodexCredits {
+                    has_credits: true,
+                    unlimited: true,
+                    balance: None,
+                }),
+            ),
+            ("unavailable", None),
+        ] {
+            apply_debug_credits(&mut limits, value);
+            assert_eq!(limits.credits, expected);
+            assert!(limits.credits_is_mock);
+            assert_eq!(limits.session, original.session);
+            assert_eq!(limits.reset_credits, original.reset_credits);
+        }
+        for value in ["-1", "NaN", "inf", "", "invalid", "1e999"] {
+            let mut limits = original.clone();
+            apply_debug_credits(&mut limits, value);
+            assert_eq!(limits, original);
+        }
+    }
+
+    #[test]
+    fn normalize_keeps_session_then_weekly() {
+        let (session, weekly) = normalize_windows(
+            Some(window(20.0, Some(SESSION_WINDOW_MINUTES))),
+            Some(window(40.0, Some(WEEKLY_WINDOW_MINUTES))),
+        );
+
+        assert_eq!(session.unwrap().used_percent, 20.0);
+        assert_eq!(weekly.unwrap().used_percent, 40.0);
+    }
+
+    #[test]
+    fn normalize_swaps_weekly_then_session() {
+        let (session, weekly) = normalize_windows(
+            Some(window(40.0, Some(WEEKLY_WINDOW_MINUTES))),
+            Some(window(20.0, Some(SESSION_WINDOW_MINUTES))),
+        );
+
+        assert_eq!(session.unwrap().used_percent, 20.0);
+        assert_eq!(weekly.unwrap().used_percent, 40.0);
+    }
+
+    #[test]
+    fn normalize_places_single_weekly_in_weekly_slot() {
+        let (session, weekly) =
+            normalize_windows(Some(window(40.0, Some(WEEKLY_WINDOW_MINUTES))), None);
+
+        assert!(session.is_none());
+        assert_eq!(weekly.unwrap().used_percent, 40.0);
+    }
+
+    #[test]
+    fn normalize_keeps_unknown_in_primary_slot() {
+        let (session, weekly) = normalize_windows(Some(window(15.0, Some(60))), None);
+
+        assert_eq!(session.unwrap().used_percent, 15.0);
+        assert!(weekly.is_none());
+    }
+
+    #[test]
+    fn make_window_clamps_used_and_remaining_percent() {
+        let low = make_window(window(-10.0, Some(SESSION_WINDOW_MINUTES)));
+        let high = make_window(window(140.0, Some(WEEKLY_WINDOW_MINUTES)));
+
+        assert_eq!(low.used_percent, 0.0);
+        assert_eq!(low.remaining_percent, 100.0);
+        assert_eq!(high.used_percent, 100.0);
+        assert_eq!(high.remaining_percent, 0.0);
+        assert_eq!(high.resets_at, Some("2027-01-15T08:00:00.000Z".to_string()));
+    }
+
+    #[test]
+    fn activation_command_uses_supplied_working_directory() {
+        let working_directory = env::temp_dir();
+        let command = codex_activation_process_command(
+            &CodexCommand::Native(PathBuf::from("/usr/local/bin/codex")),
+            &working_directory,
+        );
+
+        assert_eq!(command.get_current_dir(), Some(working_directory.as_path()));
+    }
+
+    #[test]
+    fn activation_args_disable_tools_and_use_read_only_sandbox() {
+        assert_eq!(
+            codex_activation_args(),
+            [
+                "-c",
+                "mcp_servers={}",
+                "-c",
+                r#"model_reasoning_effort="low""#,
+                "-m",
+                WINDOW_ACTIVATION_MODEL,
+                "-s",
+                "read-only",
+                "-a",
+                "never",
+                "exec",
+                "--ephemeral",
+                "--ignore-user-config",
+                "--ignore-rules",
+                "--skip-git-repo-check",
+                WINDOW_ACTIVATION_PROMPT,
+            ]
+        );
+    }
+
+    #[test]
+    fn active_window_does_not_send_activation_request() {
+        let marker = command_v_fixture("active-window-marker");
+        let launches = Cell::new(0);
+        let response = activate_codex_window_with(
+            &marker,
+            1_789_000_000,
+            || Ok(limits_with_session(1.0, "2026-09-10T05:00:00.000Z")),
+            || {
+                launches.set(launches.get() + 1);
+                Ok(())
+            },
+        )
+        .unwrap();
+
+        assert_eq!(response.status, CodexWindowActivationStatus::AlreadyActive);
+        assert_eq!(launches.get(), 0);
+        assert!(!marker.exists());
+    }
+
+    #[test]
+    fn debug_session_window_can_cycle_from_inactive_to_started() {
+        let mut limits = limits_with_session(75.0, "2026-09-10T01:00:00.000Z");
+
+        set_debug_session_window(&mut limits, 0.0, 1_789_000_000);
+        assert_eq!(limits.session.as_ref().unwrap().used_percent, 0.0);
+        assert_eq!(limits.session.as_ref().unwrap().remaining_percent, 100.0);
+
+        set_debug_session_window(&mut limits, 1.0, 1_789_000_000);
+        assert_eq!(limits.session.as_ref().unwrap().used_percent, 1.0);
+        assert_eq!(limits.session.as_ref().unwrap().remaining_percent, 99.0);
+    }
+
+    #[test]
+    fn successful_cli_does_not_claim_activation_without_usage_confirmation() {
+        let marker = command_v_fixture("zero-usage-window-marker");
+        let _ = fs::remove_file(&marker);
+        let fetches = Cell::new(0);
+        let launches = Cell::new(0);
+        let response = activate_codex_window_with(
+            &marker,
+            1_789_000_000,
+            || {
+                fetches.set(fetches.get() + 1);
+                Ok(if fetches.get() == 1 {
+                    limits_with_session(0.0, "2026-09-10T05:00:00.000Z")
+                } else {
+                    limits_with_session(0.0, "2026-09-10T06:00:00.000Z")
+                })
+            },
+            || {
+                launches.set(launches.get() + 1);
+                Ok(())
+            },
+        )
+        .unwrap_err();
+
+        assert!(response.contains("has not confirmed"));
+        assert_eq!(fetches.get(), 2);
+        assert_eq!(launches.get(), 1);
+        fs::remove_file(marker).unwrap();
+    }
+
+    #[test]
+    fn recent_marker_suppresses_a_repeated_activation_request() {
+        let marker = command_v_fixture("recent-activation-marker");
+        let _ = fs::remove_file(&marker);
+        write_activation_marker(&marker, "unknown-account|zero-usage", 1_789_000_000).unwrap();
+        let launches = Cell::new(0);
+        let response = activate_codex_window_with(
+            &marker,
+            1_789_000_001,
+            || Ok(limits_with_session(0.0, "2026-09-10T05:00:00.000Z")),
+            || {
+                launches.set(launches.get() + 1);
+                Ok(())
+            },
+        )
+        .unwrap();
+
+        assert_eq!(
+            response.status,
+            CodexWindowActivationStatus::RecentlyRequested
+        );
+        assert_eq!(launches.get(), 0);
+        fs::remove_file(marker).unwrap();
+    }
+
+    #[test]
+    fn oauth_usage_url_uses_wham_usage_endpoint() {
+        assert_eq!(
+            CODEX_USAGE_URL,
+            "https://chatgpt.com/backend-api/wham/usage"
+        );
+    }
+
+    #[test]
+    fn parses_codex_auth_tokens_with_account_id() {
+        let auth = parse_codex_auth(
+            r#"{
+                "tokens": {
+                    "access_token": "access",
+                    "refresh_token": "refresh",
+                    "account_id": "account"
+                }
+            }"#,
+        )
+        .unwrap();
+
+        assert_eq!(auth.access_token, "access");
+        assert_eq!(auth.account_id, Some("account".to_string()));
+    }
+
+    #[test]
+    fn parses_codex_auth_camel_case_tokens() {
+        let auth = parse_codex_auth(
+            r#"{
+                "tokens": {
+                    "accessToken": "access",
+                    "refreshToken": "refresh",
+                    "accountId": "account"
+                }
+            }"#,
+        )
+        .unwrap();
+
+        assert_eq!(auth.access_token, "access");
+        assert_eq!(auth.account_id, Some("account".to_string()));
+    }
+
+    #[test]
+    fn oauth_detail_failure_preserves_usage_count_and_windows() {
+        let usage = serde_json::from_str::<OAuthUsageResponse>(
+            r#"{
+                "rate_limit": {
+                    "primary_window": {
+                        "used_percent": 25,
+                        "reset_at": 1800000000,
+                        "limit_window_seconds": 18000
+                    },
+                    "secondary_window": {
+                        "used_percent": 60,
+                        "reset_at": 1800003600,
+                        "limit_window_seconds": 604800
+                    }
+                },
+                "rate_limit_reset_credits": {
+                    "available_count": 2
+                }
+            }"#,
+        )
+        .unwrap();
+        let response = make_response(
+            make_oauth_snapshot(usage, Err("details unavailable".to_string())).unwrap(),
+            AccountSnapshot::default(),
+        );
+
+        assert_eq!(response.source, "oauth");
+        assert_eq!(response.reset_credits_available_count, Some(2));
+        assert_eq!(response.reset_credits, None);
+        assert_eq!(response.session.unwrap().remaining_percent, 75.0);
+        assert_eq!(
+            response.weekly.unwrap().window_minutes,
+            Some(WEEKLY_WINDOW_MINUTES)
+        );
+    }
+
+    #[test]
+    fn parses_filters_and_sorts_oauth_reset_credit_details() {
+        let details = serde_json::from_str::<OAuthResetCreditsResponse>(
+            r#"{
+                "available_count": 3,
+                "credits": [
+                    {"id": "never", "status": "available", "expires_at": null},
+                    {"id": "used", "status": "redeemed", "expires_at": "2026-08-01T00:00:00Z"},
+                    {"id": "later", "status": "available", "expires_at": "2026-08-03T02:00:00+02:00"},
+                    {"id": "earlier", "status": "available", "expires_at": "2026-08-01T00:00:00Z"}
+                ]
+            }"#,
+        )
+        .unwrap();
+
+        assert_eq!(details.available_count, Some(3));
+        assert_eq!(
+            normalize_oauth_reset_credits(details.credits),
+            vec![
+                CodexResetCredit {
+                    id: "earlier".to_string(),
+                    expires_at: Some("2026-08-01T00:00:00.000Z".to_string()),
+                },
+                CodexResetCredit {
+                    id: "later".to_string(),
+                    expires_at: Some("2026-08-03T00:00:00.000Z".to_string()),
+                },
+                CodexResetCredit {
+                    id: "never".to_string(),
+                    expires_at: None,
+                },
+            ]
+        );
+    }
+
+    #[test]
+    fn oauth_reset_credit_count_prefers_details_then_usage_then_valid_details() {
+        let usage = || {
+            serde_json::from_str::<OAuthUsageResponse>(
+                r#"{
+                    "rate_limit": {
+                        "primary_window": null,
+                        "secondary_window": null
+                    },
+                    "rate_limit_reset_credits": {
+                        "available_count": 2
+                    }
+                }"#,
+            )
+            .unwrap()
+        };
+        let credits = vec![CodexResetCredit {
+            id: "credit".to_string(),
+            expires_at: None,
+        }];
+
+        let from_details = make_oauth_snapshot(
+            usage(),
+            Ok(OAuthResetCreditsSnapshot {
+                available_count: Some(3),
+                credits: credits.clone(),
+            }),
+        )
+        .unwrap();
+        let from_usage = make_oauth_snapshot(
+            usage(),
+            Ok(OAuthResetCreditsSnapshot {
+                available_count: None,
+                credits: credits.clone(),
+            }),
+        )
+        .unwrap();
+        let from_valid_details = make_oauth_snapshot(
+            serde_json::from_str::<OAuthUsageResponse>(
+                r#"{
+                    "rate_limit": {
+                        "primary_window": null,
+                        "secondary_window": null
+                    }
+                }"#,
+            )
+            .unwrap(),
+            Ok(OAuthResetCreditsSnapshot {
+                available_count: None,
+                credits,
+            }),
+        )
+        .unwrap();
+
+        assert_eq!(from_details.reset_credits_available_count, Some(3));
+        assert_eq!(from_usage.reset_credits_available_count, Some(2));
+        assert_eq!(from_valid_details.reset_credits_available_count, Some(1));
+    }
+
+    #[test]
+    fn reset_credit_cache_reuses_success_for_the_same_account() {
+        let cache = ResetCreditsCache::default();
+        let expected = OAuthResetCreditsSnapshot {
+            available_count: Some(2),
+            credits: Vec::new(),
+        };
+        let mut calls = 0;
+
+        let first = cache
+            .fetch("account-a".to_string(), RESET_CREDITS_CACHE_TTL, || {
+                calls += 1;
+                Ok(expected.clone())
+            })
+            .unwrap();
+        let second = cache
+            .fetch("account-a".to_string(), RESET_CREDITS_CACHE_TTL, || {
+                calls += 1;
+                Err("should not fetch".to_string())
+            })
+            .unwrap();
+
+        assert_eq!(calls, 1);
+        assert_eq!(first, expected);
+        assert_eq!(second, expected);
+    }
+
+    #[test]
+    fn reset_credit_cache_merges_concurrent_requests_for_the_same_account() {
+        use std::sync::{
+            atomic::{AtomicUsize, Ordering},
+            Barrier,
+        };
+
+        let cache = Arc::new(ResetCreditsCache::default());
+        let barrier = Arc::new(Barrier::new(3));
+        let calls = Arc::new(AtomicUsize::new(0));
+        let mut requests = Vec::new();
+
+        for _ in 0..2 {
+            let cache = Arc::clone(&cache);
+            let barrier = Arc::clone(&barrier);
+            let calls = Arc::clone(&calls);
+            requests.push(thread::spawn(move || {
+                barrier.wait();
+                cache
+                    .fetch("account-a".to_string(), RESET_CREDITS_CACHE_TTL, || {
+                        calls.fetch_add(1, Ordering::SeqCst);
+                        thread::sleep(Duration::from_millis(50));
+                        Ok(OAuthResetCreditsSnapshot {
+                            available_count: Some(2),
+                            credits: Vec::new(),
+                        })
+                    })
+                    .unwrap()
+            }));
+        }
+
+        barrier.wait();
+        for request in requests {
+            assert_eq!(request.join().unwrap().available_count, Some(2));
+        }
+        assert_eq!(calls.load(Ordering::SeqCst), 1);
+    }
+
+    #[test]
+    fn reset_credit_cache_uses_last_success_after_429() {
+        let cache = ResetCreditsCache::default();
+        let expected = OAuthResetCreditsSnapshot {
+            available_count: Some(2),
+            credits: vec![CodexResetCredit {
+                id: "cached".to_string(),
+                expires_at: Some("2026-08-01T00:00:00.000Z".to_string()),
+            }],
+        };
+        cache
+            .fetch("account-a".to_string(), Duration::ZERO, || {
+                Ok(expected.clone())
+            })
+            .unwrap();
+
+        let fallback = cache
+            .fetch("account-a".to_string(), Duration::ZERO, || {
+                Err("Codex reset credit details API returned 429".to_string())
+            })
+            .unwrap();
+
+        assert_eq!(fallback, expected);
+    }
+
+    #[test]
+    fn reset_credit_cache_does_not_cross_accounts() {
+        let cache = ResetCreditsCache::default();
+        cache
+            .fetch("account-a".to_string(), RESET_CREDITS_CACHE_TTL, || {
+                Ok(OAuthResetCreditsSnapshot {
+                    available_count: Some(2),
+                    credits: Vec::new(),
+                })
+            })
+            .unwrap();
+
+        let error = cache
+            .fetch("account-b".to_string(), RESET_CREDITS_CACHE_TTL, || {
+                Err("account-b returned 429".to_string())
+            })
+            .unwrap_err();
+
+        assert_eq!(error, "account-b returned 429");
+    }
+
+    #[test]
+    fn fetches_oauth_limits_with_account_details() {
+        let response = fetch_codex_limits_with(
+            || {
+                Ok(LimitsSnapshot {
+                    primary: Some(window(20.0, Some(SESSION_WINDOW_MINUTES))),
+                    secondary: Some(window(40.0, Some(WEEKLY_WINDOW_MINUTES))),
+                    credits: None,
+                    reset_credits_available_count: None,
+                    reset_credits: None,
+                    source: "oauth",
+                })
+            },
+            || AccountSnapshot {
+                account: Some("test@example.com".to_string()),
+                ..AccountSnapshot::default()
+            },
+        )
+        .unwrap();
+
+        assert_eq!(response.source, "oauth");
+        assert_eq!(response.account.as_deref(), Some("test@example.com"));
+        assert_eq!(response.session.unwrap().remaining_percent, 80.0);
+        assert_eq!(response.weekly.unwrap().remaining_percent, 60.0);
+    }
+
+    #[test]
+    fn returns_oauth_error_without_fetching_account_details() {
+        let error = fetch_codex_limits_with(
+            || Err("bad token".to_string()),
+            || panic!("Account details must not delay a failed limits request"),
+        )
+        .unwrap_err();
+
+        assert_eq!(error, "bad token");
+    }
+
+    #[test]
+    fn parses_account_check_subscription_info() {
+        let value = serde_json::json!({
+            "accounts": {
+                "default": {
+                    "entitlement": {
+                        "renews_at": "2026-06-11T07:22:29+00:00",
+                        "expires_at": "2026-06-12T08:22:29+00:00",
+                        "has_active_subscription": true
+                    },
+                    "last_active_subscription": {
+                        "will_renew": false
+                    }
+                }
+            }
+        });
+
+        assert_eq!(
+            parse_subscription_info(&value, None),
+            SubscriptionInfo {
+                workspace_name: None,
+                expires_at: Some("2026-06-12T08:22:29+00:00".to_string()),
+                will_renew: Some(false),
+                has_active_subscription: Some(true),
+            }
+        );
+    }
+
+    #[test]
+    fn selects_workspace_account_from_account_check_response() {
+        let value = serde_json::json!({
+            "accounts": {
+                "business-account": {
+                    "account": {
+                        "account_id": "business-account",
+                        "name": "Elelive团队"
+                    },
+                    "entitlement": {
+                        "has_active_subscription": true
+                    }
+                },
+                "default": {
+                    "account": {
+                        "account_id": "personal-account",
+                        "name": null
+                    },
+                    "entitlement": {
+                        "has_active_subscription": false
+                    }
+                }
+            }
+        });
+
+        assert_eq!(
+            parse_subscription_info(&value, Some("business-account")),
+            SubscriptionInfo {
+                workspace_name: Some("Elelive团队".to_string()),
+                has_active_subscription: Some(true),
+                ..SubscriptionInfo::default()
+            }
+        );
+    }
+
+    #[test]
+    fn parses_empty_subscription_info_when_account_check_fields_are_missing() {
+        let value = serde_json::json!({
+            "accounts": {
+                "default": {
+                    "entitlement": null,
+                    "last_active_subscription": null
+                }
+            }
+        });
+
+        assert_eq!(
+            parse_subscription_info(&value, None),
+            SubscriptionInfo::default()
+        );
+    }
+
+    #[test]
+    fn selected_workspace_never_inherits_another_accounts_entitlement() {
+        let value = json!({"accounts": {
+            "default": {"entitlement": {"has_active_subscription": true, "expires_at": "2030-01-01"}},
+            "other-workspace": {"entitlement": {"has_active_subscription": true}}
+        }});
+        assert_eq!(parse_subscription_info(&value, Some("missing-workspace")), SubscriptionInfo::default());
+        let ambiguous = json!({"accounts": {
+            "a": {"entitlement": {"has_active_subscription": true}},
+            "b": {"entitlement": {"has_active_subscription": true}}
+        }});
+        assert_eq!(parse_subscription_info(&ambiguous, None), SubscriptionInfo::default());
+    }
+
+    #[test]
+    fn activation_is_confirmed_only_after_observed_usage() {
+        let marker = command_v_fixture("confirmed-activation-marker");
+        let _ = fs::remove_file(&marker);
+        let fetches = Cell::new(0);
+        let response = activate_codex_window_with(&marker, 1_789_000_000,
+            || { fetches.set(fetches.get() + 1); Ok(limits_with_session(if fetches.get() == 1 { 0.0 } else { 1.0 }, "2026-09-10T05:00:00.000Z")) },
+            || Ok(())).unwrap();
+        assert_eq!(response.status, CodexWindowActivationStatus::Started);
+        fs::remove_file(marker).unwrap();
+    }
+
+    #[test]
+    fn preserves_workspace_membership_when_personal_subscription_is_inactive() {
+        let subscription = SubscriptionInfo {
+            has_active_subscription: Some(false),
+            ..SubscriptionInfo::default()
+        };
+
+        assert_eq!(
+            reconcile_membership_level(Some("team".to_string()), &subscription),
+            Some("team".to_string())
+        );
+    }
+
+    #[test]
+    fn downgrades_personal_membership_when_subscription_is_inactive() {
+        let subscription = SubscriptionInfo {
+            has_active_subscription: Some(false),
+            ..SubscriptionInfo::default()
+        };
+
+        assert_eq!(
+            reconcile_membership_level(Some("plus".to_string()), &subscription),
+            Some("free".to_string())
+        );
+    }
+
+    #[test]
+    fn response_includes_subscription_info_from_account_snapshot() {
+        let response = make_response(
+            LimitsSnapshot {
+                primary: Some(window(20.0, Some(SESSION_WINDOW_MINUTES))),
+                secondary: None,
+                credits: None,
+                reset_credits_available_count: Some(2),
+                reset_credits: None,
+                source: "oauth",
+            },
+            AccountSnapshot {
+                account: Some("user@example.com".to_string()),
+                membership_level: Some("plus".to_string()),
+                subscription: SubscriptionInfo {
+                    workspace_name: Some("Workspace".to_string()),
+                    expires_at: Some("2026-06-12T08:22:29+00:00".to_string()),
+                    will_renew: Some(false),
+                    has_active_subscription: Some(true),
+                },
+            },
+        );
+
+        assert_eq!(
+            response.subscription_expires_at,
+            Some("2026-06-12T08:22:29+00:00".to_string())
+        );
+        assert_eq!(response.subscription_will_renew, Some(false));
+        assert_eq!(response.workspace_name, Some("Workspace".to_string()));
+        assert_eq!(response.reset_credits_available_count, Some(2));
+    }
+
+    #[test]
+    fn effective_path_prepends_resolved_codex_directory() {
+        let codex = std::env::temp_dir().join("codex-test-bin").join("codex");
+        let path = effective_path_with_codex(&codex);
+        let first = std::env::split_paths(&path).next();
+
+        assert_eq!(first.as_deref(), codex.parent());
+    }
+
+    #[test]
+    fn windows_path_lists_use_semicolon_separator() {
+        assert_eq!(
+            path_parts(r"C:\\Tools;D:\\npm;;", ';'),
+            vec![r"C:\\Tools", r"D:\\npm", "", ""]
+        );
+        assert_eq!(
+            join_path_parts(vec![r"C:\\Tools".to_string(), r"D:\\npm".to_string()], ';'),
+            r"C:\\Tools;D:\\npm"
+        );
+    }
+
+    #[test]
+    fn windows_path_lookup_prefers_exe_before_cmd() {
+        let root = command_v_fixture("windows-path");
+        fs::create_dir_all(&root).unwrap();
+        let exe = root.join("codex.exe");
+        let cmd = root.join("codex.cmd");
+        fs::write(&exe, "exe").unwrap();
+        fs::write(&cmd, "cmd").unwrap();
+
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            fs::set_permissions(&exe, fs::Permissions::from_mode(0o755)).unwrap();
+            fs::set_permissions(&cmd, fs::Permissions::from_mode(0o755)).unwrap();
+        }
+
+        assert_eq!(
+            find_in_path_candidates_for_separator(
+                &["codex.exe", "codex.cmd"],
+                &root.to_string_lossy(),
+                ';'
+            ),
+            Some(exe)
+        );
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn windows_cmd_wrapper_passes_unquoted_arguments_to_rust() {
+        let codex = classify_native_command(PathBuf::from(r"C:\\Users\\test\\codex.cmd"), true);
+        let command = codex_activation_process_command(&codex, Path::new("."));
+        let args = command
+            .get_args()
+            .map(|arg| arg.to_string_lossy().to_string())
+            .collect::<Vec<_>>();
+
+        assert_eq!(command.get_program(), r"C:\\Users\\test\\codex.cmd");
+        assert_eq!(args, codex_activation_args());
+    }
+
+    #[cfg(target_os = "windows")]
+    #[test]
+    fn windows_cli_launch_preserves_arguments_and_hides_activation_console() {
+        use std::os::windows::process::CommandExt;
+
+        let root = command_v_fixture("windows cli & activation");
+        fs::create_dir_all(&root).unwrap();
+        let source = root.join("capture.rs");
+        let executable = root.join("capture.exe");
+        fs::write(
+            &source,
+            r#"
+#[link(name = "kernel32")]
+extern "system" { fn GetConsoleWindow() -> *mut std::ffi::c_void; }
+fn main() {
+    println!("{}", unsafe { GetConsoleWindow().is_null() });
+    println!("{}", std::env::current_dir().unwrap().display());
+    for arg in std::env::args().skip(1) { println!("{arg}"); }
+}
+"#,
+        )
+        .unwrap();
+        let compiled = Command::new(env::var_os("RUSTC").unwrap_or_else(|| "rustc".into()))
+            .arg(&source)
+            .arg("-o")
+            .arg(&executable)
+            .creation_flags(0x08000000)
+            .output()
+            .unwrap();
+        assert!(
+            compiled.status.success(),
+            "{}",
+            String::from_utf8_lossy(&compiled.stderr)
+        );
+
+        for extension in ["exe", "cmd", "bat"] {
+            let path = root.join(format!("capture.{extension}"));
+            if extension != "exe" {
+                fs::write(
+                    &path,
+                    format!("@echo off\r\n\"{}\" %*\r\n", executable.display()),
+                )
+                .unwrap();
+            }
+            let codex = classify_native_command(path, true);
+            let output = codex_activation_process_command(&codex, &root)
+                .output()
+                .unwrap();
+            assert!(output.status.success(), "{output:?}");
+            let stdout = String::from_utf8(output.stdout).unwrap();
+            let lines = stdout.lines().collect::<Vec<_>>();
+            assert_eq!(lines[0], "true", "activation must not create a console");
+            assert_eq!(lines[1], root.to_str().unwrap());
+            assert_eq!(&lines[2..], codex_activation_args());
+        }
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn parses_wsl_codex_path_after_shell_noise() {
+        assert_eq!(
+            parse_wsl_command_v_output("startup warning\n/home/test/.npm/bin/codex\n"),
+            Some("/home/test/.npm/bin/codex".to_string())
+        );
+    }
+
+    #[test]
+    fn wsl_cli_runs_through_the_selected_distributions_login_shell() {
+        let command = codex_activation_process_command(
+            &CodexCommand::Wsl {
+                distribution: "Ubuntu".to_string(),
+                path: "/home/test/.nvm/bin/codex".to_string(),
+            },
+            Path::new("."),
+        );
+        let args = command
+            .get_args()
+            .map(|arg| arg.to_string_lossy().to_string())
+            .collect::<Vec<_>>();
+
+        assert_eq!(command.get_program(), "wsl.exe");
+        assert_eq!(&args[..5], &["-d", "Ubuntu", "--", "sh", "-lc"]);
+        assert!(args[5].contains("$SHELL"));
+        assert!(args[5].contains("/home/test/.nvm/bin/codex"));
+        assert!(args[5].contains("exec"));
+    }
+
+    #[test]
+    fn nvm_candidates_prefer_highest_node_version() {
+        let root =
+            std::env::temp_dir().join(format!("codex-usage-nvm-test-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&root);
+        fs::create_dir_all(root.join(".nvm/versions/node/v18.20.0/bin")).unwrap();
+        fs::create_dir_all(root.join(".nvm/versions/node/v24.11.0/bin")).unwrap();
+
+        let candidates = nvm_codex_candidates(&root);
+
+        assert_eq!(
+            candidates.first(),
+            Some(&root.join(".nvm/versions/node/v24.11.0/bin/codex"))
+        );
+
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn command_v_parser_ignores_shell_startup_noise() {
+        let path = command_v_fixture("codex");
+        fs::create_dir_all(path.parent().unwrap()).unwrap();
+        fs::write(&path, "#!/bin/sh\n").unwrap();
+
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            fs::set_permissions(&path, fs::Permissions::from_mode(0o755)).unwrap();
+        }
+
+        let parsed = parse_command_v_output(&format!("startup noise\n{}\n", path.display()));
+
+        assert_eq!(parsed, Some(path.clone()));
+        fs::remove_file(path).unwrap();
+    }
+
+    fn command_v_fixture(name: &str) -> PathBuf {
+        std::env::temp_dir().join(format!("codex-usage-{name}-{}", std::process::id()))
+    }
+}

@@ -109,119 +109,92 @@
   <a class="skip-link" href="#main">跳到截图</a>
   <div class="wrap">
     <header class="site-header">
-      <a class="brand" href="./" aria-label="Codex Pulse 在线演示首页">
-        <svg viewBox="0 0 28 28" fill="none" aria-hidden="true"><path d="M2 15h6l3-9 6 17 3-8h6" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"/></svg>
-        Codex Pulse <span class="version">v0.2.0</span>
+      <a class="brand" href="./?demo=1" aria-label="Codex Pulse 合成演示">
+        <svg viewBox="0 0 28 28" fill="currentColor" aria-hidden="true"><rect x="3" y="8" width="5" height="17" rx="1"/><rect x="12" y="2" width="5" height="25" rx="1"/><rect x="21" y="6" width="5" height="21" rx="1"/></svg>
+        Codex Pulse <span class="version">v0.3.0</span>
       </a>
       <nav class="header-links" aria-label="项目导航">
-        <a href="./">在线演示</a>
+        <a href="./?demo=1">在线演示</a>
         <a href="https://github.com/zhulongqihan/codex-pulse">GitHub</a>
+        <a href="https://github.com/zhulongqihan/codex-pulse/blob/main/README.md">中文说明</a>
         <a href="https://github.com/zhulongqihan/codex-pulse/blob/main/README.en.md" lang="en">English</a>
       </nav>
     </header>
-
     <div class="hero">
       <h1>同一份用量，<br>两种阅读方式。</h1>
-      <p>Codex Pulse 是 Windows Codex 用量监控与 Token 统计工具。本机消耗、官方账号额度和可选 API 估价分开显示，既能查看工作记录，也能用小悬浮窗留意剩余额度。</p>
+      <p>Codex Pulse 是 Windows Codex 用量监控与 Token 统计工具。本机消耗、官方账号额度和 API 估价分开显示。可以查看整体趋势，也能逐回合阅读完整对话、工具调用与补丁。</p>
       <div class="actions">
-        <a class="button primary" href="https://github.com/zhulongqihan/codex-pulse/releases/tag/v0.2.0">下载 Windows x64 版</a>
-        <a class="button" href="./">体验在线演示</a>
+        <a class="button primary" href="https://github.com/zhulongqihan/codex-pulse/releases/tag/v0.3.0">下载 Windows x64 版</a>
+        <a class="button" href="./?demo=1">体验在线演示</a>
       </div>
-      <p class="demo-note">以下是桌面程序使用合成数据的截图，不含真实账号或对话。网页演示也使用合成数据，无法读取你的本机日志。点选截图可查看原图。</p>
+      <p class="demo-note">以下是桌面程序使用合成记录的截图，不含真实账号或对话。网页演示也使用合成数据，不会读取你的本机日志。未返回的账号信息保持未知。点选截图可查看原图。</p>
     </div>
-
     <nav class="section-nav" aria-label="图集导航">
-      <a href="#themes">清爽与刻度</a>
-      <a href="#views">六个主视图</a>
-      <a href="#settings">设置</a>
-      <a href="#widget">悬浮窗</a>
-      <a href="#scope">功能范围</a>
+      <a href="#themes">清爽与刻度</a><a href="#views">六个主视图</a><a href="#pricing">价格目录</a><a href="#replay">会话回放</a><a href="#settings">设置</a><a href="#widget">悬浮窗</a><a href="#tray">系统托盘</a><a href="#scope">数据边界</a>
     </nav>
-
     <main id="main">
       <section id="themes" class="theme-section" aria-labelledby="themes-title">
-        <div class="section-heading">
-          <h2 id="themes-title">清爽与刻度</h2>
-          <p>切换主题，保留页面、日期、筛选、搜索、排序与选择。</p>
-        </div>
+        <div class="section-heading"><h2 id="themes-title">清爽与刻度</h2><p>切换外观，保留日期、筛选、搜索、排序与回放阅读位置。</p></div>
         <div class="screen-grid">
-          <figure>
-            <a class="screenshot" href="screenshots/clear-overview.png" target="_blank" rel="noopener" aria-label="查看清爽主题仪表盘原图，新标签页打开"><img src="screenshots/clear-overview.png" alt="清爽 Clear 主题的 Windows 桌面仪表盘，使用合成 Token 和账号额度数据" decoding="async"></a>
-            <figcaption><h3>清爽 <span lang="en">Clear</span></h3><p>明亮的工作面与轻量层级，适合长时间阅读。</p></figcaption>
-          </figure>
-          <figure>
-            <a class="screenshot" href="screenshots/meter-overview.png" target="_blank" rel="noopener" aria-label="查看刻度主题仪表盘原图，新标签页打开"><img src="screenshots/meter-overview.png" alt="刻度 Meter 主题的 Windows 桌面仪表盘，使用合成 Token 和账号额度数据" decoding="async"></a>
-            <figcaption><h3>刻度 <span lang="en">Meter</span></h3><p>用更明确的图表对比和数字层级看清变化。</p></figcaption>
-          </figure>
+          <figure><a class="screenshot" href="screenshots/clear-overview.png" target="_blank" rel="noopener" aria-label="查看清爽 · 仪表盘原图，新标签页打开"><img loading="lazy" decoding="async" src="screenshots/clear-overview.png" alt="Codex Pulse Clear 仪表盘，合成演示数据"></a><figcaption><h3>清爽 · 仪表盘 <span lang="en">Clear dashboard</span></h3><p>连续的指标与横向日趋势，适合逐日阅读。</p></figcaption></figure>
+          <figure><a class="screenshot" href="screenshots/meter-overview.png" target="_blank" rel="noopener" aria-label="查看刻度 · 仪表盘原图，新标签页打开"><img loading="lazy" decoding="async" src="screenshots/meter-overview.png" alt="Codex Pulse Meter 仪表盘，合成演示数据"></a><figcaption><h3>刻度 · 仪表盘 <span lang="en">Meter dashboard</span></h3><p>清晰的工作区边界与深色纵向柱图，便于比较变化。</p></figcaption></figure>
         </div>
       </section>
-
       <section id="views" aria-labelledby="views-title">
-        <div class="section-heading"><h2 id="views-title">六个主视图</h2><p>从整体趋势，看到模型、日期、项目和会话。</p></div>
+        <div class="section-heading"><h2 id="views-title">六个主视图</h2><p>仪表盘之外，沿模型、日期、项目或会话继续阅读。</p></div>
         <div class="screen-grid">
-          <figure>
-            <a class="screenshot" href="screenshots/overview.png" target="_blank" rel="noopener" aria-label="查看仪表盘原图，新标签页打开"><img loading="lazy" decoding="async" src="screenshots/overview.png" alt="Codex Pulse 仪表盘桌面截图，使用合成演示数据"></a>
-            <figcaption><h3>仪表盘 <span lang="en">Dashboard</span></h3><p>汇总本机活动，独立查看账号服务返回的剩余额度与重置时间。</p></figcaption>
-          </figure>
-          <figure>
-            <a class="screenshot" href="screenshots/sessions.png" target="_blank" rel="noopener" aria-label="查看会话页原图，新标签页打开"><img loading="lazy" decoding="async" src="screenshots/sessions.png" alt="Codex Pulse 会话用量与元数据页面，使用合成演示数据"></a>
-            <figcaption><h3>会话 <span lang="en">Sessions</span></h3><p>搜索和筛选会话元数据，查看对应的模型、项目与 Token 分项。</p></figcaption>
-          </figure>
-          <figure>
-            <a class="screenshot" href="screenshots/models.png" target="_blank" rel="noopener" aria-label="查看模型页原图，新标签页打开"><img loading="lazy" decoding="async" src="screenshots/models.png" alt="Codex Pulse 模型用量分析页面，使用合成演示数据"></a>
-            <figcaption><h3>模型 <span lang="en">Models</span></h3><p>比较模型用量、输入输出构成，以及可用时显示的 API 参考费用。</p></figcaption>
-          </figure>
-          <figure>
-            <a class="screenshot" href="screenshots/day.png" target="_blank" rel="noopener" aria-label="查看按日页原图，新标签页打开"><img loading="lazy" decoding="async" src="screenshots/day.png" alt="Codex Pulse 按日 Token 统计页面，使用合成演示数据"></a>
-            <figcaption><h3>按日 <span lang="en">Daily</span></h3><p>按所选日期范围整理每日消耗，再定位具体一天的活动。</p></figcaption>
-          </figure>
-          <figure>
-            <a class="screenshot" href="screenshots/monthly.png" target="_blank" rel="noopener" aria-label="查看按月页原图，新标签页打开"><img loading="lazy" decoding="async" src="screenshots/monthly.png" alt="Codex Pulse 自然月用量汇总页面，使用合成演示数据"></a>
-            <figcaption><h3>按月 <span lang="en">Monthly</span></h3><p>将本机记录按自然月归集，查看各月 Token 分项和变化。</p></figcaption>
-          </figure>
-          <figure>
-            <a class="screenshot" href="screenshots/projects.png" target="_blank" rel="noopener" aria-label="查看项目页原图，新标签页打开"><img loading="lazy" decoding="async" src="screenshots/projects.png" alt="Codex Pulse 项目用量分析页面，使用合成演示数据"></a>
-            <figcaption><h3>项目 <span lang="en">Projects</span></h3><p>查看项目间的用量分布，继续检查相关会话。</p></figcaption>
-          </figure>
+          <figure><a class="screenshot" href="screenshots/clear-sessions.png" target="_blank" rel="noopener" aria-label="查看清爽 · 会话原图，新标签页打开"><img loading="lazy" decoding="async" src="screenshots/clear-sessions.png" alt="Codex Pulse Clear 会话，合成演示数据"></a><figcaption><h3>清爽 · 会话 <span lang="en">Sessions</span></h3><p>按日期整理会话与代理线程，查看模型、项目和 Token 分项。</p></figcaption></figure>
+<figure><a class="screenshot" href="screenshots/meter-sessions.png" target="_blank" rel="noopener" aria-label="查看刻度 · 会话原图，新标签页打开"><img loading="lazy" decoding="async" src="screenshots/meter-sessions.png" alt="Codex Pulse Meter 会话，合成演示数据"></a><figcaption><h3>刻度 · 会话 <span lang="en">Sessions</span></h3><p>按日期整理会话与代理线程，查看模型、项目和 Token 分项。</p></figcaption></figure>
+<figure><a class="screenshot" href="screenshots/clear-models.png" target="_blank" rel="noopener" aria-label="查看清爽 · 模型原图，新标签页打开"><img loading="lazy" decoding="async" src="screenshots/clear-models.png" alt="Codex Pulse Clear 模型，合成演示数据"></a><figcaption><h3>清爽 · 模型 <span lang="en">Models</span></h3><p>比较模型用量、缓存比例、API 参考费用，以及有观测依据时的额度消耗估计。</p></figcaption></figure>
+<figure><a class="screenshot" href="screenshots/meter-models.png" target="_blank" rel="noopener" aria-label="查看刻度 · 模型原图，新标签页打开"><img loading="lazy" decoding="async" src="screenshots/meter-models.png" alt="Codex Pulse Meter 模型，合成演示数据"></a><figcaption><h3>刻度 · 模型 <span lang="en">Models</span></h3><p>比较模型用量、缓存比例、API 参考费用，以及有观测依据时的额度消耗估计。</p></figcaption></figure>
+<figure><a class="screenshot" href="screenshots/clear-daily.png" target="_blank" rel="noopener" aria-label="查看清爽 · 按日原图，新标签页打开"><img loading="lazy" decoding="async" src="screenshots/clear-daily.png" alt="Codex Pulse Clear 按日，合成演示数据"></a><figcaption><h3>清爽 · 按日 <span lang="en">Daily</span></h3><p>保留完整所选范围，按字段排序，并进入当天会话。</p></figcaption></figure>
+<figure><a class="screenshot" href="screenshots/meter-daily.png" target="_blank" rel="noopener" aria-label="查看刻度 · 按日原图，新标签页打开"><img loading="lazy" decoding="async" src="screenshots/meter-daily.png" alt="Codex Pulse Meter 按日，合成演示数据"></a><figcaption><h3>刻度 · 按日 <span lang="en">Daily</span></h3><p>保留完整所选范围，按字段排序，并进入当天会话。</p></figcaption></figure>
+<figure><a class="screenshot" href="screenshots/clear-monthly.png" target="_blank" rel="noopener" aria-label="查看清爽 · 按月原图，新标签页打开"><img loading="lazy" decoding="async" src="screenshots/clear-monthly.png" alt="Codex Pulse Clear 按月，合成演示数据"></a><figcaption><h3>清爽 · 按月 <span lang="en">Monthly</span></h3><p>按自然月统计，明确区分无留存记录、部分留存与真实零活动。</p></figcaption></figure>
+<figure><a class="screenshot" href="screenshots/meter-monthly.png" target="_blank" rel="noopener" aria-label="查看刻度 · 按月原图，新标签页打开"><img loading="lazy" decoding="async" src="screenshots/meter-monthly.png" alt="Codex Pulse Meter 按月，合成演示数据"></a><figcaption><h3>刻度 · 按月 <span lang="en">Monthly</span></h3><p>按自然月统计，明确区分无留存记录、部分留存与真实零活动。</p></figcaption></figure>
+<figure><a class="screenshot" href="screenshots/clear-projects.png" target="_blank" rel="noopener" aria-label="查看清爽 · 项目原图，新标签页打开"><img loading="lazy" decoding="async" src="screenshots/clear-projects.png" alt="Codex Pulse Clear 项目，合成演示数据"></a><figcaption><h3>清爽 · 项目 <span lang="en">Projects</span></h3><p>同时比较完整路径、每日趋势和用量，打开项目继续查看会话或定向重扫。</p></figcaption></figure>
+<figure><a class="screenshot" href="screenshots/meter-projects.png" target="_blank" rel="noopener" aria-label="查看刻度 · 项目原图，新标签页打开"><img loading="lazy" decoding="async" src="screenshots/meter-projects.png" alt="Codex Pulse Meter 项目，合成演示数据"></a><figcaption><h3>刻度 · 项目 <span lang="en">Projects</span></h3><p>同时比较完整路径、每日趋势和用量，打开项目继续查看会话或定向重扫。</p></figcaption></figure>
         </div>
       </section>
-
+      <section id="pricing" aria-labelledby="pricing-title">
+        <div class="section-heading"><h2 id="pricing-title">价格来源，明确可查。</h2><p>搜索、供应商筛选与分页，显示来源、更新时间和陈旧状态。</p></div>
+        <div class="screen-grid"><figure><a class="screenshot" href="screenshots/clear-pricing.png" target="_blank" rel="noopener" aria-label="查看清爽 · 价格目录原图，新标签页打开"><img loading="lazy" decoding="async" src="screenshots/clear-pricing.png" alt="Codex Pulse Clear 价格目录，合成演示数据"></a><figcaption><h3>清爽 · 价格目录 <span lang="en">Price catalog</span></h3><p>比较输入、缓存输入与输出的每百万 Token 参考价；缺失价格显示未知。</p></figcaption></figure>
+<figure><a class="screenshot" href="screenshots/meter-pricing.png" target="_blank" rel="noopener" aria-label="查看刻度 · 价格目录原图，新标签页打开"><img loading="lazy" decoding="async" src="screenshots/meter-pricing.png" alt="Codex Pulse Meter 价格目录，合成演示数据"></a><figcaption><h3>刻度 · 价格目录 <span lang="en">Price catalog</span></h3><p>比较输入、缓存输入与输出的每百万 Token 参考价；缺失价格显示未知。</p></figcaption></figure></div>
+      </section>
+      <section id="replay" aria-labelledby="replay-title">
+        <div class="section-heading"><h2 id="replay-title">回到工作的具体一刻。</h2><p>完整线程、代理树、正文搜索、回合导航与原始 JSONL。</p></div>
+        <div class="screen-grid"><figure><a class="screenshot" href="screenshots/clear-replay.png" target="_blank" rel="noopener" aria-label="查看清爽 · 会话回放原图，新标签页打开"><img loading="lazy" decoding="async" src="screenshots/clear-replay.png" alt="Codex Pulse Clear 会话回放，合成演示数据"></a><figcaption><h3>清爽 · 会话回放 <span lang="en">Session replay</span></h3><p>阅读消息、工具调用、补丁、图片与问答；可在时间线和原始记录之间切换。</p></figcaption></figure>
+<figure><a class="screenshot" href="screenshots/meter-replay.png" target="_blank" rel="noopener" aria-label="查看刻度 · 会话回放原图，新标签页打开"><img loading="lazy" decoding="async" src="screenshots/meter-replay.png" alt="Codex Pulse Meter 会话回放，合成演示数据"></a><figcaption><h3>刻度 · 会话回放 <span lang="en">Session replay</span></h3><p>阅读消息、工具调用、补丁、图片与问答；可在时间线和原始记录之间切换。</p></figcaption></figure></div>
+      </section>
       <section id="settings" aria-labelledby="settings-title">
-        <div class="setting-layout">
-          <div class="setting-copy">
-            <h2 id="settings-title">偏好，各自独立。</h2>
-            <p>主题、浅深模式与动效分别选择，不需要为了换一种外观重新设置工作状态。</p>
-            <ul>
-              <li>清爽 / 刻度</li>
-              <li>浅色 / 深色 / 跟随系统</li>
-              <li>关闭 / 轻柔 / 完整动效</li>
-              <li>语言、悬浮窗、登录启动与刷新间隔</li>
-            </ul>
-          </div>
-          <figure><a class="screenshot" href="screenshots/settings.png" target="_blank" rel="noopener" aria-label="查看设置页原图，新标签页打开"><img loading="lazy" decoding="async" src="screenshots/settings.png" alt="Codex Pulse 设置页，主题、浅深模式和动效分别控制"></a><figcaption><p>可尊重系统的减少动态效果偏好。</p></figcaption></figure>
-        </div>
+        <div class="section-heading"><h2 id="settings-title">偏好，各自独立。</h2><p>外观、浅深色、行距和动效分别设置，所有窗口同步。</p></div>
+        <div class="screen-grid"><figure><a class="screenshot" href="screenshots/clear-settings.png" target="_blank" rel="noopener" aria-label="查看清爽 · 设置原图，新标签页打开"><img loading="lazy" decoding="async" src="screenshots/clear-settings.png" alt="Codex Pulse Clear 设置，合成演示数据"></a><figcaption><h3>清爽 · 设置 <span lang="en">Settings</span></h3><p>支持六种语言、来源选择、刷新间隔、登录启动与托盘配置；动效可关闭，也可遵循系统减少动态效果偏好。</p></figcaption></figure>
+<figure><a class="screenshot" href="screenshots/meter-settings.png" target="_blank" rel="noopener" aria-label="查看刻度 · 设置原图，新标签页打开"><img loading="lazy" decoding="async" src="screenshots/meter-settings.png" alt="Codex Pulse Meter 设置，合成演示数据"></a><figcaption><h3>刻度 · 设置 <span lang="en">Settings</span></h3><p>支持六种语言、来源选择、刷新间隔、登录启动与托盘配置；动效可关闭，也可遵循系统减少动态效果偏好。</p></figcaption></figure></div>
       </section>
-
       <section id="widget" class="widget-section" aria-labelledby="widget-title">
         <div class="section-heading"><h2 id="widget-title">让额度留在工作旁边。</h2><p>独立置顶窗口，按需收起、展开或隐藏。</p></div>
         <div class="widget-grid">
-          <figure><a class="screenshot" href="screenshots/widget-compact.png" target="_blank" rel="noopener" aria-label="查看紧凑悬浮窗原图，新标签页打开"><img loading="lazy" decoding="async" src="screenshots/widget-compact.png" alt="紧凑模式的 Codex Pulse 置顶悬浮窗，使用合成演示数据"></a><figcaption><h3>紧凑模式</h3><p>随手查看，不占用完整工作窗口。</p></figcaption></figure>
-          <figure><a class="screenshot" href="screenshots/widget.png" target="_blank" rel="noopener" aria-label="查看展开悬浮窗原图，新标签页打开"><img loading="lazy" decoding="async" src="screenshots/widget.png" alt="展开模式的 Codex Pulse 置顶悬浮窗，使用合成演示数据"></a><figcaption><h3>展开模式</h3><p>查看更多 Token 分项与账号额度信息。</p></figcaption></figure>
+          <figure><a class="screenshot" href="screenshots/clear-widget.png" target="_blank" rel="noopener" aria-label="查看清爽 · 紧凑悬浮窗原图，新标签页打开"><img loading="lazy" decoding="async" src="screenshots/clear-widget.png" alt="Codex Pulse Clear 紧凑悬浮窗，合成演示数据"></a><figcaption><h3>清爽 · 紧凑悬浮窗 <span lang="en">Compact widget</span></h3><p>快速查看今日用量与账号窗口，随时打开主工作台。</p></figcaption></figure>
+<figure><a class="screenshot" href="screenshots/meter-widget.png" target="_blank" rel="noopener" aria-label="查看刻度 · 紧凑悬浮窗原图，新标签页打开"><img loading="lazy" decoding="async" src="screenshots/meter-widget.png" alt="Codex Pulse Meter 紧凑悬浮窗，合成演示数据"></a><figcaption><h3>刻度 · 紧凑悬浮窗 <span lang="en">Compact widget</span></h3><p>快速查看今日用量与账号窗口，随时打开主工作台。</p></figcaption></figure>
+          <figure><a class="screenshot" href="screenshots/clear-widget-expanded.png" target="_blank" rel="noopener" aria-label="查看清爽 · 展开悬浮窗原图，新标签页打开"><img loading="lazy" decoding="async" src="screenshots/clear-widget-expanded.png" alt="Codex Pulse Clear 展开悬浮窗，合成演示数据"></a><figcaption><h3>清爽 · 展开悬浮窗 <span lang="en">Expanded widget</span></h3><p>展开显示各额度窗口、重置时间与 API 估价；托盘显示选项不影响悬浮窗指标。</p></figcaption></figure>
+<figure><a class="screenshot" href="screenshots/meter-widget-expanded.png" target="_blank" rel="noopener" aria-label="查看刻度 · 展开悬浮窗原图，新标签页打开"><img loading="lazy" decoding="async" src="screenshots/meter-widget-expanded.png" alt="Codex Pulse Meter 展开悬浮窗，合成演示数据"></a><figcaption><h3>刻度 · 展开悬浮窗 <span lang="en">Expanded widget</span></h3><p>展开显示各额度窗口、重置时间与 API 估价；托盘显示选项不影响悬浮窗指标。</p></figcaption></figure>
         </div>
       </section>
-
+      <section id="tray" aria-labelledby="tray-title">
+        <div class="section-heading"><h2 id="tray-title">在系统托盘里继续查看。</h2><p>额度、今日用量与成本可独立选择，关闭主窗口后仍能使用。</p></div>
+        <div class="widget-grid"><figure><a class="screenshot" href="screenshots/clear-tray.png" target="_blank" rel="noopener" aria-label="查看清爽 · 托盘信息板原图，新标签页打开"><img loading="lazy" decoding="async" src="screenshots/clear-tray.png" alt="Codex Pulse Clear 托盘信息板，合成演示数据"></a><figcaption><h3>清爽 · 托盘信息板 <span lang="en">Tray panel</span></h3><p>查看可用的额度与重置时间，显示主窗口或退出程序。</p></figcaption></figure>
+<figure><a class="screenshot" href="screenshots/meter-tray.png" target="_blank" rel="noopener" aria-label="查看刻度 · 托盘信息板原图，新标签页打开"><img loading="lazy" decoding="async" src="screenshots/meter-tray.png" alt="Codex Pulse Meter 托盘信息板，合成演示数据"></a><figcaption><h3>刻度 · 托盘信息板 <span lang="en">Tray panel</span></h3><p>查看可用的额度与重置时间，显示主窗口或退出程序。</p></figcaption></figure></div>
+      </section>
       <aside id="scope" class="scope" aria-labelledby="scope-title">
         <h2 id="scope-title">看清数据的边界。</h2>
         <div>
-          <p>本机 Token 来自保留的 Codex 日志；账号额度由官方账号服务返回；可选费用仅为 API 价格估算，不是 ChatGPT Pro 账单或 Credits 余额。未知额度不会显示为 0%。</p>
-          <p>v0.2.0 支持自定义日期范围、完整日期预设、所选范围内按月份分组，以及按所选范围导出每日统计为 CSV 或 Markdown。完整对话与工具回放、正文搜索、Credits 明细、重置预测、WSL 自动发现和 XLSX 导出尚不支持。</p>
-          <p>启动方法、数据来源和当前功能范围见 <a href="https://github.com/zhulongqihan/codex-pulse/blob/main/README.md">中文使用说明</a>；也可阅读 <a href="https://github.com/zhulongqihan/codex-pulse/blob/main/README.en.md" lang="en">English guide</a>。</p>
+          <p>本机 Token 来自保留的 Codex 日志；账号额度由官方账号服务返回；费用是 API 参考价格估算，不是 ChatGPT 订阅账单或 Credits 余额。未知额度与缺失价格不会显示成零。</p>
+          <p>v0.3.0 支持完整会话与工具回放、所选范围的 XLSX / Markdown 导出、自然日与自然月统计、模型价格目录、项目定向重扫、可选会话 Credits、重置历史和第三方预测。账号与第三方服务的可用信息取决于登录状态和接口返回；预测展示来源与时效，不作为官方承诺。</p>
+          <p>启动方法、数据来源和当前限制见 <a href="https://github.com/zhulongqihan/codex-pulse/blob/main/README.md">中文使用说明</a>，或阅读 <a href="https://github.com/zhulongqihan/codex-pulse/blob/main/README.en.md" lang="en">English guide</a>。</p>
         </div>
       </aside>
     </main>
-
     <footer class="site-footer">
-      <p>Codex Pulse 独立开源，不隶属于 OpenAI，也未获得 OpenAI 背书。全部展示数据为合成演示数据。</p>
+      <p>Codex Pulse 独立开源，不隶属于 OpenAI，也未获得 OpenAI 背书。全部展示记录为合成演示数据。</p>
       <nav class="footer-links" aria-label="页脚导航"><a href="https://github.com/zhulongqihan/codex-pulse">源代码</a><a href="https://github.com/zhulongqihan/codex-pulse/releases">下载与版本</a><a href="https://github.com/zhulongqihan/codex-pulse/issues">反馈问题</a></nav>
     </footer>
   </div>
