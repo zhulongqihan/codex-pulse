@@ -71,7 +71,18 @@ try {
   await running.close(); running = null;
   // Only copy the owned fixture directory to another directory within this run.
   assert(first.startsWith(output) && second.startsWith(output));
-  cpSync(first, second, { recursive: true });
+  // WebView2 may finish deleting transient profile files just after its host exits.
+  // Retry only those profile-copy races; a persistent failure still fails the run.
+  let profileCopyRetries = 0;
+  for (;;) {
+    try { cpSync(first, second, { recursive: true }); break; }
+    catch (error) {
+      if (profileCopyRetries >= 20 || !['ENOENT', 'EBUSY', 'EPERM'].includes(error.code) || !/[\\/]data[\\/]webview[\\/]/i.test(error.path ?? '')) throw error;
+      profileCopyRetries++;
+      await new Promise(resolve => setTimeout(resolve, 250));
+    }
+  }
+  evidence.profileCopyRetries = profileCopyRetries;
   running = await connect(second);
   const movedPaths = await running.invoke('get_pulse_paths');
   assert.equal(movedPaths.data, join(second, 'data'));

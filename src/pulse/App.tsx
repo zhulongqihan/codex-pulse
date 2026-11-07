@@ -98,6 +98,7 @@ export default function App() {
     isRefreshing,
     isResetting,
     isExporting,
+    exportError,
     lastRescanDurationMs,
     updateInfo,
     isUpdateChecking,
@@ -410,6 +411,7 @@ export default function App() {
                 range={range}
                 isBusy={isLoading || isRefreshing || isResetting || isExporting !== null}
                 isExporting={isExporting}
+                exportError={exportError}
                 onRangeChange={handleRangeChange}
                 onExport={(format) => void handleExport(format)}
                 metrics={metrics}

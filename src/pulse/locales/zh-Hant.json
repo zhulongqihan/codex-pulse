@@ -860,6 +860,7 @@
     "exit_fullscreen": "離開全螢幕"
   },
   "export": {
+    "failed": "匯出失敗",
     "dialog_title_excel": "匯出 Codex 使用情況至 Excel",
     "dialog_title_markdown": "匯出 Codex 使用情況至 Markdown",
     "excel_filter_name": "Excel 活頁簿",

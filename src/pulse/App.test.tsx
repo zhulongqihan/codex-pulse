@@ -2934,6 +2934,45 @@ describe("App", () => {
     });
   });
 
+  it.each(["save", "write"] as const)("keeps %s export failures separate from scan errors and recovers on retry", async (failure) => {
+    mockLoadedDashboard();
+    const loaded = invokeMock.getMockImplementation()!;
+    let failScan = false;
+    let exportAttempts = 0;
+    saveMock.mockResolvedValue("F:/CodexPulse/data/exports/retry.xlsx");
+    if (failure === "save") saveMock.mockRejectedValueOnce(new Error("Save dialog denied"));
+    invokeMock.mockImplementation(async (command: string, args?: { range?: string }) => {
+      if (command === "scan_usage" && failScan) throw new Error("Independent scan failure");
+      if (command === "export_usage") {
+        exportAttempts += 1;
+        if (failure === "write" && exportAttempts === 1) throw new Error("Export write denied");
+        return { path: "F:/CodexPulse/data/exports/retry.xlsx", format: "xlsx", range: "30d", exportedAt: "2026-06-11T00:00:00.000Z" };
+      }
+      return loaded(command, args);
+    });
+    render(<App />);
+    await waitFor(() => expect(screen.getByRole("button", { name: "Export" })).toBeEnabled());
+    await userEvent.click(screen.getByRole("button", { name: "Export" }));
+    await userEvent.click(screen.getByRole("menuitem", { name: "Excel (.xlsx)" }));
+    const message = failure === "save" ? "Save dialog denied" : "Export write denied";
+    await waitFor(() => expect(screen.getByTestId("export-error")).toHaveTextContent(`Export failed${message}`));
+    expect(screen.getByRole("button", { name: "Export" })).toBeEnabled();
+    expect(screen.queryByTestId("usage-recovery")).not.toBeInTheDocument();
+    expect(exportAttempts).toBe(failure === "save" ? 0 : 1);
+
+    failScan = true;
+    await userEvent.click(screen.getByRole("button", { name: "Rescan local logs" }));
+    await waitFor(() => expect(screen.getByTestId("usage-recovery")).toHaveTextContent("Independent scan failure"));
+    expect(screen.getByTestId("export-error")).toHaveTextContent(message);
+    await waitFor(() => expect(screen.getByRole("button", { name: "Export" })).toBeEnabled());
+    await userEvent.click(screen.getByRole("button", { name: "Export" }));
+    await userEvent.click(screen.getByRole("menuitem", { name: "Excel (.xlsx)" }));
+    await waitFor(() => expect(screen.queryByTestId("export-error")).not.toBeInTheDocument());
+    await waitFor(() => expect(screen.getByRole("button", { name: "Export" })).toBeEnabled());
+    expect(exportAttempts).toBe(failure === "save" ? 1 : 2);
+    expect(screen.getByTestId("usage-recovery")).toHaveTextContent("Independent scan failure");
+  });
+
   it("does not export when the save dialog is canceled", async () => {
     saveMock.mockResolvedValue(null);
     invokeMock.mockImplementation(async (command: string, args?: { range?: string }) => {
@@ -2956,7 +2995,10 @@ describe("App", () => {
     await userEvent.click(screen.getByRole("menuitem", { name: "Markdown (.md)" }));
 
     await waitFor(() => expect(saveMock).toHaveBeenCalled());
+    await waitFor(() => expect(screen.getByRole("button", { name: "Export" })).toBeEnabled());
     expect(invokeMock).not.toHaveBeenCalledWith("export_usage", expect.anything());
+    expect(screen.queryByTestId("export-error")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("usage-recovery")).not.toBeInTheDocument();
   });
 
   it("dismisses the main update banner and shows the eye-catching upgrade button in the header", async () => {

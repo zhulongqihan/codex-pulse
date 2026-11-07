@@ -14,11 +14,12 @@ import dayjs from "dayjs";
 
 type DashboardHeroCardProps = {
   overview: OverviewResponse; range: RangeKey; isBusy: boolean; isExporting: ExportFormat | null;
+  exportError?: string | null;
   onRangeChange: (range: RangeKey) => void; onExport: (format: ExportFormat) => void;
   metrics: MetricCardData[]; codexLimits: CodexLimitsResponse | null; onOpenDay?: (date: string) => void;
 };
 
-export function DashboardHeroCard({overview, range, isBusy, isExporting, onRangeChange, onExport, metrics, codexLimits, onOpenDay}: DashboardHeroCardProps) {
+export function DashboardHeroCard({overview, range, isBusy, isExporting, exportError, onRangeChange, onExport, metrics, codexLimits, onOpenDay}: DashboardHeroCardProps) {
   const {t} = useTranslation();
   const copy = usePulseCopy();
   const [activeTab, setActiveTab] = useState<"projects" | "models" | "dates">("projects");
@@ -40,6 +41,7 @@ export function DashboardHeroCard({overview, range, isBusy, isExporting, onRange
     <div className="pulse-range-toolbar"><div><strong>{overview.startDate} — {overview.endDate}</strong><RangeSwitcher value={range} onChange={onRangeChange}/></div>
       <DropdownMenu><DropdownMenuTrigger asChild><Button variant="secondary" size="sm" disabled={isBusy}><Download size={15}/>{isExporting === null ? t("hero.export") : t("hero.exporting")}</Button></DropdownMenuTrigger><DropdownMenuContent align="end"><DropdownMenuItem onSelect={() => onExport("xlsx")}><FileSpreadsheet size={16}/>{t("hero.export_excel")}</DropdownMenuItem><DropdownMenuItem onSelect={() => onExport("markdown")}><FileText size={16}/>{t("hero.export_markdown")}</DropdownMenuItem></DropdownMenuContent></DropdownMenu>
     </div>
+    {exportError ? <p role="alert" data-testid="export-error" className="mb-4 flex flex-wrap gap-x-2 gap-y-1 rounded-md border border-error/30 bg-error/5 px-3 py-2 text-sm text-foreground"><strong>{t("export.failed")}</strong><span className="whitespace-pre-wrap break-all">{exportError}</span></p> : null}
     <dl className="pulse-metric-strip">
       <div className="pulse-primary-metric"><dt>{copy("total")}</dt><dd>{formatCompactNumber(totals.totalTokens)} <small>tokens</small></dd></div>
       <div><dt>{copy("input")}</dt><dd>{formatCompactNumber(totals.inputTokens)}</dd></div>

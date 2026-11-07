@@ -854,6 +854,7 @@
     "exit_fullscreen": "전체 화면 종료"
   },
   "export": {
+    "failed": "내보내기에 실패했습니다",
     "dialog_title_excel": "Codex 사용량을 Excel로 내보내기",
     "dialog_title_markdown": "Codex 사용량을 Markdown으로 내보내기",
     "excel_filter_name": "Excel 통합 문서",

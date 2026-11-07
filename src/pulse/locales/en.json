@@ -854,6 +854,7 @@
     "exit_fullscreen": "Exit full screen"
   },
   "export": {
+    "failed": "Export failed",
     "dialog_title_excel": "Export Codex usage to Excel",
     "dialog_title_markdown": "Export Codex usage to Markdown",
     "excel_filter_name": "Excel Workbook",

@@ -23,5 +23,10 @@ export const config: WebdriverIO.Config = {
   framework: 'mocha', reporters: ['spec'], logLevel: 'error', outputDir: output,
   tsConfigPath: './tsconfig.e2e.json', waitforTimeout: 20000, connectionRetryTimeout: 30000, connectionRetryCount: 0,
   mochaOpts: { ui: 'bdd', timeout: 120000 },
-  async before() { await browser.switchToWindow('main'); },
+  async before() {
+    await browser.switchToWindow('main');
+    // Screenshot and accessible-name fixtures must not depend on the runner's OS locale.
+    await browser.execute(() => localStorage.setItem('language', 'zh'));
+    await browser.refresh();
+  },
 };

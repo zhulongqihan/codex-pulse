@@ -852,6 +852,7 @@
     "exit_fullscreen": "全画面表示を終了"
   },
   "export": {
+    "failed": "エクスポートに失敗しました",
     "dialog_title_excel": "Codex の使用状況を Excel にエクスポート",
     "dialog_title_markdown": "Codex の使用量を Markdown にエクスポート",
     "excel_filter_name": "Excel ブック",

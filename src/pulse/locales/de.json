@@ -854,6 +854,7 @@
     "exit_fullscreen": "Vollbild beenden"
   },
   "export": {
+    "failed": "Export fehlgeschlagen",
     "dialog_title_excel": "Codex-Verbrauch nach Excel exportieren",
     "dialog_title_markdown": "Codex-Verbrauch nach Markdown exportieren",
     "excel_filter_name": "Excel-Arbeitsmappe",

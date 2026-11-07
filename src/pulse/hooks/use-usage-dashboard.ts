@@ -161,6 +161,7 @@ export function useUsageDashboard() {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [isResetting, setIsResetting] = useState(false);
   const [isExporting, setIsExporting] = useState<ExportFormat | null>(null);
+  const [exportError, setExportError] = useState<string | null>(null);
   const [lastRescanDurationMs, setLastRescanDurationMs] = useState<number | null>(null);
   const [launchAtLogin, setLaunchAtLogin] = useState(false);
   const [launchAtLoginError, setLaunchAtLoginError] = useState<string | null>(null);
@@ -1137,6 +1138,7 @@ export function useUsageDashboard() {
     }
 
     setIsExporting(format);
+    setExportError(null);
 
     try {
       const paths = await getPulsePaths();
@@ -1148,9 +1150,8 @@ export function useUsageDashboard() {
         key: "hero.exported_message",
         values: { range: getRangeLabel(range, t), path: exported.path },
       });
-      setError(null);
     } catch (exportError) {
-      setError(exportError instanceof Error ? exportError.message : "Export failed.");
+      setExportError(errorMessage(exportError, t("export.failed")));
     } finally {
       setIsExporting(null);
     }
@@ -1284,6 +1285,7 @@ export function useUsageDashboard() {
     isRefreshing,
     isResetting,
     isExporting,
+    exportError,
     lastRescanDurationMs,
     updateInfo,
     isUpdateChecking,
