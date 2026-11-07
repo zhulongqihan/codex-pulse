@@ -3,10 +3,11 @@
 <head>
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self' ws://localhost:* http://localhost:*; object-src 'none'; base-uri 'self'; frame-src 'none'"/>
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self' ipc: http://ipc.localhost ws://localhost:* http://localhost:*; object-src 'none'; base-uri 'self'; frame-src 'none'"/>
   <title>Codex Pulse — Codex Usage Monitor &amp; Token Tracker for Windows</title>
   <meta name="description" content="Monitor local Codex token usage and ChatGPT account quota on Windows. Explore sessions, models, projects, daily and monthly history, with Clear/Meter themes and a floating desktop widget."/>
   <meta name="application-name" content="Codex Pulse"/>
+  <link rel="icon" type="image/svg+xml" href="/codex-pulse/assets/icon-CYtCc3oQ.svg"/>
   <link rel="canonical" href="https://zhulongqihan.github.io/codex-pulse/"/>
   <meta property="og:type" content="website"/>
   <meta property="og:site_name" content="Codex Pulse"/>
@@ -20,7 +21,9 @@
   <meta name="twitter:description" content="Track Codex tokens, inspect ChatGPT account quota, and explore local usage in two themes. Independent Windows desktop app; browser demo uses synthetic data."/>
   <meta name="twitter:image" content="https://zhulongqihan.github.io/codex-pulse/screenshots/meter-overview.png"/>
   <meta name="twitter:image:alt" content="Codex Pulse Meter dashboard showing synthetic demonstration data"/>
-  <script type="module" crossorigin src="./assets/index-DcfG6oic.js"></script>
+  <script type="module" crossorigin src="/codex-pulse/assets/index-DydQyHY5.js"></script>
+  <link rel="modulepreload" crossorigin href="/codex-pulse/assets/core-BKnwzu3A.js">
+  <link rel="stylesheet" crossorigin href="/codex-pulse/assets/index-DHGi5sC_.css">
 </head>
 <body>
   <div id="root"></div>
