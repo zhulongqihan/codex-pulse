@@ -23,7 +23,18 @@ const MIN_SPACING: i64 = 60;
 const MIN_SPAN: i64 = 15 * 60;
 const LOOKBACK: i64 = 60 * 60;
 const MIN_POINTS: usize = 4;
-const OBSERVATION_ERROR: f64 = 1.0; // two integer-percentage observations each may be rounded by 0.5 pp
+const OBSERVATION_ERROR: f64 = 1.0; // Integer-percent uncertainty; rounding/truncation mode is unspecified.
+
+fn observation_bounds(window_minutes: i64) -> (i64, i64) {
+    if window_minutes >= 1440 {
+        // Slow, integer-valued day/week pools need hours of continuous evidence.
+        // Keep the existing schema and 64-point bound, with fresh endpoints per poll.
+        (5 * MIN_SPACING, 5 * LOOKBACK)
+    } else {
+        (MIN_SPACING, LOOKBACK)
+    }
+}
+
 static DIRECTORY: OnceLock<PathBuf> = OnceLock::new();
 static IO_LOCK: Mutex<()> = Mutex::new(());
 
@@ -432,11 +443,18 @@ fn observe_into(store: &mut Store, identity: Option<&str>, limits: &CodexLimitsR
                 resets_at: reset,
                 points: Vec::new(),
             });
+        let (spacing, lookback) = observation_bounds(minutes);
         if let Some(last) = series.points.last() {
             if at - last.at > MAX_GAP || window.used_percent < last.used {
                 series.points.clear();
-            } else if at / MIN_SPACING == last.at / MIN_SPACING {
-                // Coalesce one minute's requests without hiding a just-observed exhausted quota.
+            } else if window.used_percent > last.used && long_pause_expired(&series, last.at) {
+                // A new point after a resolved pause starts fresh evidence. One
+                // quantized step must not revive a rate from before the pause.
+                let baseline = last.clone();
+                series.points.clear();
+                series.points.push(baseline);
+            } else if at / spacing == last.at / spacing {
+                // Coalesce this window's cadence without hiding newly observed exhaustion.
                 // Replacing the boundary point must not leave an unrepresented >10-minute gap.
                 let preceding = series
                     .points
@@ -454,7 +472,7 @@ fn observe_into(store: &mut Store, identity: Option<&str>, limits: &CodexLimitsR
             at,
             used: window.used_percent,
         });
-        series.points.retain(|point| point.at >= at - LOOKBACK);
+        series.points.retain(|point| point.at >= at - lookback);
         if series.points.len() > MAX_POINTS {
             series.points.drain(..series.points.len() - MAX_POINTS);
         }
@@ -480,6 +498,45 @@ fn empty_window(kind: &str) -> PaceWindow {
         risk: "unknown".into(),
         trend: Vec::new(),
     }
+}
+
+fn long_pause_expired(series: &Series, at: i64) -> bool {
+    if series.window_minutes < 1440 {
+        return false;
+    }
+    let Some(progress) = series
+        .points
+        .windows(2)
+        .rfind(|pair| pair[1].used > pair[0].used)
+        .map(|pair| &pair[1])
+    else {
+        return false;
+    };
+    let anchor = series
+        .points
+        .iter()
+        .rev()
+        .find(|point| {
+            progress.at - point.at >= MIN_SPAN && progress.used - point.used > OBSERVATION_ERROR
+        })
+        // An early burst may predate a fifteen-minute baseline. Its real change,
+        // diluted over at least fifteen minutes, can revoke an old projection;
+        // it is never used to create a new forecast.
+        .or_else(|| {
+            series.points.iter().rev().find(|point| {
+                progress.at > point.at && progress.used - point.used > OBSERVATION_ERROR
+            })
+        });
+    let Some(anchor) = anchor else {
+        return false;
+    };
+    let prior_lower = (progress.used - anchor.used - OBSERVATION_ERROR)
+        / ((progress.at - anchor.at).max(MIN_SPAN) as f64 / 3600.0);
+    // A quantized plateau can last a conservative one-point interval, plus a
+    // sampling bucket. Longer silence no longer supports the previous pace.
+    let quiet_limit = (OBSERVATION_ERROR / prior_lower * 3600.0).max(MIN_SPAN as f64)
+        + observation_bounds(series.window_minutes).0 as f64;
+    (at - progress.at) as f64 >= quiet_limit
 }
 
 fn project_window(series: &Series, now: i64, failed: bool) -> PaceWindow {
@@ -534,16 +591,21 @@ fn project_window(series: &Series, now: i64, failed: bool) -> PaceWindow {
         result.state = "slow".into();
         return result;
     }
+    let long_window = series.window_minutes >= 1440;
+    if long_pause_expired(series, last.at) {
+        result.state = "slow".into();
+        return result;
+    }
     let hours = span as f64 / 3600.0;
     let mut lower_rate = (consumed - OBSERVATION_ERROR) / hours;
     let mut upper_rate = (consumed + OBSERVATION_ERROR) / hours;
-    // Include a recent >=15-minute slope, broadening the range when the current pace changed.
-    if let Some(recent) = series
-        .points
-        .iter()
-        .rev()
-        .find(|point| last.at - point.at >= MIN_SPAN)
-    {
+    // Include the shortest recent resolvable long-window slope, rather than
+    // interpreting a 0/1-point quantized fifteen-minute plateau as a stopped rate.
+    // Short windows retain their original, more responsive recent-slope rule.
+    if let Some(recent) = series.points.iter().rev().find(|point| {
+        last.at - point.at >= MIN_SPAN
+            && (!long_window || last.used - point.used > OBSERVATION_ERROR)
+    }) {
         let recent_hours = (last.at - recent.at) as f64 / 3600.0;
         let recent_consumed = last.used - recent.used;
         lower_rate =
@@ -558,8 +620,13 @@ fn project_window(series: &Series, now: i64, failed: bool) -> PaceWindow {
     }
     // Subtract elapsed time from the last observation, rather than reusing a stale countdown.
     let elapsed_minutes = (now - last.at).max(0) as f64 / 60.0;
-    let lower = (((remaining - 0.5).max(0.0) / upper_rate) * 60.0 - elapsed_minutes).max(0.0);
-    let upper = (((remaining + 0.5).min(100.0) / lower_rate) * 60.0 - elapsed_minutes).max(0.0);
+    // A full point also covers truncation near exhaustion; nearest rounding is
+    // not promised by the service, so half a point would be too narrow here.
+    let lower =
+        (((remaining - OBSERVATION_ERROR).max(0.0) / upper_rate) * 60.0 - elapsed_minutes).max(0.0);
+    let upper = (((remaining + OBSERVATION_ERROR).min(100.0) / lower_rate) * 60.0
+        - elapsed_minutes)
+        .max(0.0);
     if !lower.is_finite() || !upper.is_finite() || upper > 525_600.0 {
         result.state = "slow".into();
         return result;
@@ -687,6 +754,255 @@ mod tests {
             sample(&mut data, t + step * 300, 66.0 + step as f64, t + 6 * 3600);
         }
         (data, t + 1800)
+    }
+    fn sample_long(data: &mut Store, at: i64, used: f64, reset: i64) {
+        let mut response = limits(at, used, reset);
+        let mut window = response.session.take().unwrap();
+        window.window_minutes = Some(10_080);
+        response.weekly = Some(window);
+        observe_into(data, Some(&identity()), &response, at);
+    }
+    fn integer_long_series(rate: f64, minutes: i64) -> (Store, i64) {
+        let mut data = store();
+        let t = start() / 300 * 300;
+        for minute in 0..=minutes {
+            sample_long(
+                &mut data,
+                t + minute * 60,
+                10.0 + (minute as f64 * rate / 60.0).floor(),
+                t + 7 * 86400,
+            );
+        }
+        (data, t + minutes * 60)
+    }
+    #[test]
+    fn long_window_integer_usage_can_resolve_slow_rates_across_quantized_plateaus() {
+        for (rate, warmup, end) in [(2.0, 60, 180), (0.5, 240, 480)] {
+            let mut data = store();
+            let t = start() / 300 * 300;
+            for minute in 0..=end {
+                sample_long(
+                    &mut data,
+                    t + minute * 60,
+                    10.0 + (minute as f64 * rate / 60.0).floor(),
+                    t + 7 * 86400,
+                );
+                if minute >= warmup {
+                    let result = project(&data, now(t + minute * 60));
+                    assert_eq!(result.status, "forecast", "rate={rate}, minute={minute}");
+                    assert_eq!(result.primary_kind.as_deref(), Some("weekly"));
+                    assert_eq!(result.windows[0].state, "unavailable");
+                    let window = &result.windows[1];
+                    assert!(window.rate_lower_per_hour.unwrap() <= rate);
+                    assert!(window.rate_upper_per_hour.unwrap() >= rate);
+                    assert!(window.eta_lower_minutes.unwrap() >= 0.0);
+                    assert!(window.eta_upper_minutes.unwrap().is_finite());
+                }
+            }
+            assert!(valid_store(&data));
+            assert!(data.windows[0].points.len() <= MAX_POINTS);
+        }
+    }
+    #[test]
+    fn long_window_all_flat_or_one_point_of_change_never_invents_eta() {
+        for rate in [0.0, 0.2] {
+            let (data, at) = integer_long_series(rate, 300);
+            let result = project(&data, now(at));
+            assert_eq!(result.status, if rate == 0.0 { "idle" } else { "slow" });
+            assert!(result.windows[1].eta_lower_minutes.is_none());
+            assert!(result.windows[1].eta_upper_minutes.is_none());
+        }
+    }
+    #[test]
+    fn long_window_extended_pause_drops_eta_after_resolvable_progress_stops() {
+        let (mut data, at) = integer_long_series(2.0, 120);
+        let used = data.windows[0].points.last().unwrap().used;
+        for minute in 1..=30 {
+            sample_long(&mut data, at + minute * 60, used, start() + 7 * 86400);
+        }
+        assert_eq!(project(&data, now(at + 30 * 60)).status, "forecast");
+        for minute in 31..=90 {
+            sample_long(&mut data, at + minute * 60, used, start() + 7 * 86400);
+        }
+        let result = project(&data, now(at + 90 * 60));
+        assert_eq!(result.status, "slow");
+        assert!(result.windows[1].eta_lower_minutes.is_none());
+        assert!(result.windows[1].eta_upper_minutes.is_none());
+    }
+    #[test]
+    fn long_window_pause_boundary_stays_closed_across_later_coalesced_buckets() {
+        let mut data = store();
+        let t = start() / 300 * 300;
+        for minute in 0..=40 {
+            sample_long(
+                &mut data,
+                t + minute * 60,
+                10.0 + (minute as f64 / 10.0).floor(),
+                t + 86400,
+            );
+        }
+        for minute in 41..=63 {
+            sample_long(&mut data, t + minute * 60, 14.0, t + 86400);
+        }
+        // Coalescing keeps the last observed progress at minute 44. Its shortest
+        // resolvable prior interval is 29..44: (2 - 1) / 15m, so allow 15m + 5m.
+        assert_eq!(project(&data, now(t + 63 * 60)).status, "forecast");
+        let mut timely_progress = data.clone();
+        sample_long(&mut timely_progress, t + 64 * 60, 15.0, t + 86400);
+        // The previous real plateau reading was still inside the quiet limit.
+        // A new increase on the boundary is not another unchanged observation.
+        assert!(timely_progress.windows[0].points.len() > 2);
+        assert_eq!(
+            project(&timely_progress, now(t + 64 * 60)).status,
+            "forecast"
+        );
+        for minute in 64..=105 {
+            sample_long(&mut data, t + minute * 60, 14.0, t + 86400);
+            let result = project(&data, now(t + minute * 60));
+            assert_eq!(result.status, "slow", "minute={minute}");
+            assert!(result.windows[1].eta_upper_minutes.is_none());
+        }
+        sample_long(&mut data, t + 106 * 60, 15.0, t + 86400);
+        assert_eq!(project(&data, now(t + 106 * 60)).status, "sampling");
+        for minute in 107..=121 {
+            sample_long(&mut data, t + minute * 60, 15.0, t + 86400);
+        }
+        let one_point = project(&data, now(t + 121 * 60));
+        assert_eq!(one_point.status, "slow");
+        assert!(one_point.windows[1].eta_upper_minutes.is_none());
+        for minute in 122..=136 {
+            sample_long(&mut data, t + minute * 60, 16.0, t + 86400);
+        }
+        assert_eq!(project(&data, now(t + 136 * 60)).status, "forecast");
+    }
+    #[test]
+    fn long_window_conservative_pause_handles_a_burst_before_fifteen_minutes() {
+        for ramp in [false, true] {
+            let mut data = store();
+            let t = start() / 300 * 300;
+            for minute in 0..=90 {
+                let used = if minute < 5 {
+                    10.0
+                } else if ramp {
+                    10.0 + (minute - 4).min(5) as f64
+                } else {
+                    15.0
+                };
+                sample_long(&mut data, t + minute * 60, used, t + 86400);
+            }
+            let result = project(&data, now(t + 90 * 60));
+            assert_eq!(result.status, "slow", "ramp={ramp}");
+            assert!(result.windows[1].eta_upper_minutes.is_none());
+        }
+    }
+    #[test]
+    fn long_window_conservative_remainder_covers_near_limit_integer_quantization() {
+        let modes: [(&str, fn(f64) -> f64, f64); 3] = [
+            ("floor", f64::floor, 89.9),
+            ("nearest", f64::round, 89.4),
+            ("ceil", f64::ceil, 88.9),
+        ];
+        for (name, quantize, initial) in modes {
+            let mut data = store();
+            let t = start() / 300 * 300;
+            for minute in 0..=300 {
+                sample_long(
+                    &mut data,
+                    t + minute * 60,
+                    quantize(initial + minute as f64 * 2.0 / 60.0),
+                    t + 86400,
+                );
+            }
+            let result = project(&data, now(t + 300 * 60));
+            assert_eq!(result.status, "forecast", "{name}");
+            let window = &result.windows[1];
+            let true_eta = (100.0 - (initial + 10.0)) / 2.0 * 60.0;
+            assert!(
+                window.eta_lower_minutes.unwrap() <= true_eta,
+                "{name}: lower ETA exceeds the true constant-rate time"
+            );
+            assert!(
+                window.eta_upper_minutes.unwrap() >= true_eta,
+                "{name}: upper ETA excludes the true constant-rate time"
+            );
+        }
+    }
+    #[test]
+    fn long_window_cadence_keeps_hours_bounded_and_updates_exhaustion_immediately() {
+        let (mut data, at) = integer_long_series(2.0, 360);
+        let series = &data.windows[0];
+        assert!(series.points.len() <= MAX_POINTS);
+        assert!(series.points.last().unwrap().at - series.points[0].at >= 290 * 60);
+        assert!(series.points.iter().all(|point| point.at >= at - 5 * 3600));
+        let count = series.points.len();
+        sample_long(&mut data, at + 20, 100.0, start() + 7 * 86400);
+        assert_eq!(data.windows[0].points.len(), count);
+        assert_eq!(data.updated_at, Some(at + 20));
+        assert_eq!(project(&data, now(at + 20)).status, "exhausted");
+        assert!(valid_store(&data));
+
+        let mut short = store();
+        for minute in 0..=360 {
+            sample(
+                &mut short,
+                start() + minute * 60,
+                minute as f64 / 10.0,
+                start() + 86400,
+            );
+        }
+        assert!(short.windows[0].points.len() <= MAX_POINTS);
+        assert!(short.windows[0].points.last().unwrap().at - short.windows[0].points[0].at <= 3600);
+    }
+    #[test]
+    fn long_window_adaptation_preserves_gap_staleness_failure_identity_and_reset_guards() {
+        let (data, at) = integer_long_series(0.5, 300);
+        assert_eq!(project(&data, now(at)).status, "forecast");
+        assert_eq!(project(&data, now(at + MAX_AGE + 1)).status, "stale");
+        assert_eq!(project(&data, now(start() + 7 * 86400)).status, "expired");
+        let mut failed = data.clone();
+        failed.failed = true;
+        assert_eq!(project(&failed, now(at)).status, "stale");
+        for change in ["gap", "reset", "decrease", "duration"] {
+            let mut next = data.clone();
+            let next_at = at + if change == "gap" { MAX_GAP + 1 } else { 60 };
+            sample_long(
+                &mut next,
+                next_at,
+                if change == "decrease" { 0.0 } else { 14.0 },
+                if change == "reset" {
+                    start() + 8 * 86400
+                } else {
+                    start() + 7 * 86400
+                },
+            );
+            if change == "duration" {
+                let mut response = limits(next_at + 60, 14.0, start() + 7 * 86400);
+                let mut window = response.session.take().unwrap();
+                window.window_minutes = Some(1440);
+                response.weekly = Some(window);
+                observe_into(&mut next, Some(&identity()), &response, next_at + 60);
+            }
+            assert_eq!(project(&next, now(next_at)).status, "sampling", "{change}");
+            assert_eq!(next.windows[0].points.len(), 1, "{change}");
+        }
+        let mut changed = data;
+        assert!(reconcile_store(
+            &mut changed,
+            Some("b".repeat(64)),
+            "identity_unavailable"
+        ));
+        assert_eq!(project(&changed, now(at)).status, "unavailable");
+    }
+    #[test]
+    fn long_window_coalescing_cannot_hide_a_preceding_gap() {
+        let t = start() / 300 * 300;
+        let mut data = store();
+        sample_long(&mut data, t, 5.0, t + 86400);
+        sample_long(&mut data, t + MAX_GAP, 6.0, t + 86400);
+        sample_long(&mut data, t + MAX_GAP + 30, 7.0, t + 86400);
+        assert_eq!(data.windows[0].points.len(), 1);
+        assert_eq!(data.windows[0].points[0].at, t + MAX_GAP + 30);
+        assert!(valid_store(&data));
     }
     fn selection_series(kind: &str, at: i64, first: f64, step: f64) -> Series {
         Series {

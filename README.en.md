@@ -69,6 +69,8 @@ Cached input is already part of input and is never added twice. One thread can s
 
 The pace sampler makes a read-only query about every 60 seconds by default, with cooldowns for errors and rate limits. It sends no model requests and does not enable per-session Credits. Account changes, window resets, decreasing consumption or observation gaps over 10 minutes start new segments; readings older than about 6 minutes stop the estimate. Project/model shares describe today's local tokens, not the same share of subscription quota.
 
+Slower weekly changes accumulate a longer continuous observation span. An unchanged percentage does not mean no usage. When no estimate is possible, the card explains why and shows known reset times and actual local daily tokens. Some accounts return only a weekly window; an omitted short window does not mean zero remaining quota.
+
 **Activate window** sends a minimal model request through Codex CLI after explicit confirmation and may consume quota. Ordinary refresh never activates a window. Completion of the CLI request is checked separately from confirmation that the quota window became active.
 
 ## Storage and privacy

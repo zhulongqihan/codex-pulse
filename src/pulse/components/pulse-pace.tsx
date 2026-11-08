@@ -20,6 +20,29 @@ function readingTime(value: string | null | undefined, language: string, copy: C
   const timestamp = value ? Date.parse(value) : NaN;
   return Number.isFinite(timestamp) ? new Date(timestamp).toLocaleTimeString(language, { hour: "2-digit", minute: "2-digit", hour12: false }) : copy("never");
 }
+function freshLocalTokens(data: PaceSnapshot | null, now: number): number | null {
+  const usage = data?.localUsage;
+  if (!usage || usage.stale || !Number.isSafeInteger(usage.totalTokens) || usage.totalTokens < 0) return null;
+  const updated = usage.updatedAt ? Date.parse(usage.updatedAt) : NaN;
+  if (!Number.isFinite(updated) || now - updated < -120_000 || now - updated > 360_000) return null;
+  try {
+    const parts = new Intl.DateTimeFormat("en-CA", { timeZone: usage.timezone, year: "numeric", month: "2-digit", day: "2-digit" }).formatToParts(now);
+    const part = (type: string) => parts.find(value => value.type === type)?.value;
+    if (usage.date !== `${part("year")}-${part("month")}-${part("day")}`) return null;
+  } catch { return null; }
+  return usage.totalTokens;
+}
+function compactTokens(value: number, language: string): string {
+  if (/^(zh|ja|ko)/.test(language)) return new Intl.NumberFormat(language, { notation: "compact", maximumFractionDigits: 1 }).format(value);
+  for (const [scale, unit] of [[1e9, "B"], [1e6, "M"], [1e3, "K"]] as const) if (value >= scale) return `${n(value / scale, language)}${unit}`;
+  return n(value, language, 0);
+}
+function resetCountdown(at: number, now: number, copy: Copy): string {
+  const minutes = Math.ceil((at - now) / 60_000);
+  if (minutes <= 0) return copy("resetPending");
+  const days = Math.floor(minutes / 1440), hours = Math.floor(minutes % 1440 / 60);
+  return days ? copy("resetDays", { days, hours }) : hours ? copy("resetHours", { hours, minutes: minutes % 60 }) : copy("resetMinutes", { minutes });
+}
 function snapshotState(data: PaceSnapshot | null, failed: boolean): PaceState {
   if (failed) return data?.updatedAt ? "stale" : "unavailable";
   if (!data) return "sampling";
@@ -36,9 +59,11 @@ export function PulsePaceBadgeView({ data, failed = false, onToggle }: { data: P
   const primary = primaryPaceWindow(data);
   const range = state === "forecast" ? compactPaceRange(primary) : null;
   const risk = state === "forecast" ? primary?.risk : "unknown";
-  const label = range ?? copy(state === "forecast" ? "sampling" : state);
+  const localTokens = !failed && ["sampling", "idle", "slow"].includes(state) ? freshLocalTokens(data, Date.now()) : null;
+  const label = range ?? (localTokens == null ? copy(state === "forecast" ? "sampling" : state) : `${compactTokens(localTokens, language)} Token`);
+  const meaning = localTokens == null ? label : copy("todayLocalTokens", { tokens: n(localTokens, language, 0) });
   const demoPrefix = isSyntheticDemo() ? `${copy("demo")} · ` : "";
-  return <button type="button" className={`pulse-pace-badge state-${state} risk-${risk}`} aria-label={`${demoPrefix}${copy("open")} · ${windowLabel(primary, copy, language)} · ${label}`} title={`${demoPrefix}${windowLabel(primary, copy, language)} · ${copy(state === "forecast" ? "estimate" : stateDetail(state))}`} onClick={onToggle} data-testid="pace-badge">
+  return <button type="button" className={`pulse-pace-badge state-${state} risk-${risk}`} aria-label={`${demoPrefix}${copy("open")} · ${windowLabel(primary, copy, language)} · ${meaning}`} title={`${demoPrefix}${meaning} · ${windowLabel(primary, copy, language)} · ${copy(state === "forecast" ? "estimate" : stateDetail(state))}`} onClick={onToggle} data-testid="pace-badge">
     <PulseBrandMark size={20}/><span>{label}</span>
   </button>;
 }
@@ -72,12 +97,19 @@ export function PulsePaceCard({ data, failed = false, refreshing = false, onRefr
   const language = i18n.resolvedLanguage ?? i18n.language;
   const copy: Copy = (key, values) => paceCopy(language, key, values);
   const state = snapshotState(data, failed);
+  const [now, setNow] = useState(Date.now);
+  useEffect(() => { const timer = window.setInterval(() => setNow(Date.now()), 30_000); return () => clearInterval(timer); }, []);
   const primary = primaryPaceWindow(data);
   const range = state === "forecast" ? paceRange(primary) : null;
   const risk = state === "forecast" ? primary?.risk : "unknown";
   const [sourceTab, setSourceTab] = useState<"projects" | "models">("projects");
   const sources = data?.localUsage?.[sourceTab]?.slice(0, 2) ?? [];
   const riskKey: PaceCopyKey = risk === "before_reset" ? "before" : risk === "near_reset" ? "near" : risk === "after_reset" ? "after" : "unknownRisk";
+  const resetWindow = primary?.resetsAt && Number.isFinite(Date.parse(primary.resetsAt)) ? primary : data?.windows.find(window => window.resetsAt && Number.isFinite(Date.parse(window.resetsAt)));
+  const resetAt = resetWindow?.resetsAt ? Date.parse(resetWindow.resetsAt) : NaN;
+  const resetIsPrimary = !range && ["sampling", "idle", "slow"].includes(state) && resetAt > now;
+  const totalTokens = data?.localUsage?.totalTokens;
+  const hasTotal = typeof totalTokens === "number" && Number.isSafeInteger(totalTokens) && totalTokens >= 0;
   const demo = isSyntheticDemo();
   const closeButton = useRef<HTMLButtonElement>(null);
   useEffect(() => { closeButton.current?.focus({ preventScroll: true }); }, []);
@@ -90,14 +122,20 @@ export function PulsePaceCard({ data, failed = false, refreshing = false, onRefr
     <header className={`pulse-pace-header${demo ? " has-demo-label" : ""}`}><div><PulseBrandMark size={25}/><h1 id="pace-heading">{copy("title")}</h1>{demo ? <span className="pulse-pace-demo-label">{copy("demo")}</span> : null}</div><button ref={closeButton} type="button" onClick={onClose} aria-label={copy("close")} title={copy("close")}><X size={17}/></button></header>
     <div className="pulse-pace-scroll">
       <div className="pace-estimate">
-        <p className="pace-scope-label">{windowLabel(primary ?? data?.windows[0], copy, language)} · {copy(state === "forecast" ? "estimate" : "noEstimate")}</p>
-        <p className="pace-main-reading" data-testid="pace-estimate" role="status">{range ? <>{copy("about")} <strong>{range.lower === range.upper ? n(range.lower, language) : `${n(range.lower, language)}–${n(range.upper, language)}`}</strong> {copy(range.unit === "h" ? "hours" : "minutes")}</> : copy(state === "forecast" ? "sampling" : state)}</p>
+        <p className="pace-scope-label">{windowLabel(resetIsPrimary ? resetWindow : primary ?? data?.windows[0], copy, language)} · {copy(resetIsPrimary ? "nextReset" : state === "forecast" ? "estimate" : "noEstimate")}</p>
+        <p className={`pace-main-reading${resetIsPrimary ? " is-reset-countdown" : ""}`} data-testid="pace-estimate" role="status">{range ? <>{copy("about")} <strong>{range.lower === range.upper ? n(range.lower, language) : `${n(range.lower, language)}–${n(range.upper, language)}`}</strong> {copy(range.unit === "h" ? "hours" : "minutes")}</> : resetIsPrimary ? <strong>{resetCountdown(resetAt, now, copy)}</strong> : copy(state === "idle" ? "idleHeadline" : state === "slow" ? "slowHeadline" : state === "forecast" ? "sampling" : state)}</p>
+        {Number.isFinite(resetAt) ? <p className="pace-reset-date">{resetIsPrimary ? null : <span>{copy("nextReset")} · </span>}<time dateTime={resetWindow!.resetsAt!}>{new Intl.DateTimeFormat(language, { year: "numeric", month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit", hour12: false }).format(resetAt)}</time>{resetIsPrimary ? null : <span> · {resetCountdown(resetAt, now, copy)}</span>}</p> : <p className="pace-reset-date">{copy("resetUnknown")}</p>}
         {range && primary ? <><p className="pace-risk"><i aria-hidden="true"/>{copy(riskKey)}</p><PaceTimeline window={primary} copy={copy}/></> : <p className="pace-state-detail">{copy(stateDetail(state))}</p>}
-        {primary?.observedMinutes != null && primary.consumedPercentPoints != null ? <p className="pace-consumed">{copy("observed", { minutes: n(primary.observedMinutes, language, 0), points: n(primary.consumedPercentPoints, language, 2) })}</p> : primary && primary.sampleCount > 0 ? <p className="pace-consumed">{copy("samples", { count: primary.sampleCount, minutes: n(primary.sampleSpanMinutes, language, 0) })}</p> : null}
+        {range && primary?.observedMinutes != null && primary.consumedPercentPoints != null ? <p className="pace-consumed">{copy("observed", { minutes: n(primary.observedMinutes, language, 0), points: n(primary.consumedPercentPoints, language, 2) })}</p> : state === "sampling" && primary && primary.sampleCount > 0 ? <p className="pace-consumed">{copy("samples", { count: primary.sampleCount, minutes: n(primary.sampleSpanMinutes, language, 0) })}</p> : null}
         {range ? <p className="pace-window-scope">{copy("scope")}</p> : null}
       </div>
+      <section className="pace-official" aria-label={copy("official")}><h2>{copy("official")}</h2><div>{(["session", "weekly"] as const).map(kind => {
+        const window = data?.windows.find(window => window.kind === kind);
+        return window?.remainingPercent != null && Number.isFinite(window.remainingPercent) ? <p key={kind}><span>{windowLabel(window, copy, language)}</span><strong>{n(window.remainingPercent, language, 2)}%</strong></p> : <p key={kind} className="pace-missing-window">{copy(kind === "session" ? "sessionMissing" : "weeklyMissing")}</p>;
+      })}</div></section>
       <section className="pace-sources" aria-labelledby="pace-sources-title">
         <div className="pace-sources-heading"><div className="pace-source-title"><h2 id="pace-sources-title">{copy("local")}</h2>{data?.localUsage?.stale ? <span role="status" className="pace-source-stale-label">{copy("sourceStale")}</span> : null}</div><div className="pace-source-tabs" role="group" aria-label={copy("local")}>{(["projects", "models"] as const).map(tab => <button type="button" key={tab} aria-pressed={tab === sourceTab} onClick={() => setSourceTab(tab)}>{copy(tab)}</button>)}</div></div>
+        <p className="pace-local-total">{hasTotal ? <strong data-testid="pace-token-total">{n(totalTokens, language, 0)} <span>Token</span></strong> : copy("tokensUnknown")}</p>
         {sources.length ? <ul>{sources.map((source, index) => {
           const percent = source.sharePercent;
           const known = typeof percent === "number" && Number.isFinite(percent) && percent >= 0;
@@ -106,7 +144,6 @@ export function PulsePaceCard({ data, failed = false, refreshing = false, onRefr
         <p className="pace-source-note">{copy("sourceNote")}</p>
         {data?.localUsage ? <div className="pace-source-freshness"><time dateTime={data.localUsage.updatedAt ?? undefined}>{data.localUsage.updatedAt ? copy("updated", { time: readingTime(data.localUsage.updatedAt, language, copy) }) : copy("never")}</time></div> : null}
       </section>
-      <section className="pace-official" aria-label={copy("official")}><h2>{copy("official")}</h2><div>{data?.windows.length ? data.windows.map(window => <p key={window.kind} title={window.resetsAt ? `${copy("reset")} ${readingTime(window.resetsAt, language, copy)}` : undefined}><span>{windowLabel(window, copy, language)}</span><strong>{window.remainingPercent == null || !Number.isFinite(window.remainingPercent) ? "—" : `${n(window.remainingPercent, language, 2)}%`}</strong></p>) : <span>—</span>}</div></section>
       {failed ? <p className="pace-error" role="alert">{copy(data?.updatedAt ? "failed" : "unavailableDetail")}</p> : null}
     </div>
     <footer className="pulse-pace-footer"><div><button type="button" onClick={onRefresh} disabled={refreshing} aria-busy={refreshing} aria-label={copy("refresh")} title={copy("refresh")}><RefreshCw size={16} className={refreshing ? "is-refreshing" : ""}/></button><time dateTime={data?.updatedAt ?? undefined}>{data?.updatedAt ? copy("updated", { time: readingTime(data.updatedAt, language, copy) }) : copy("never")}</time></div><button type="button" className="pace-details" onClick={onDetails}>{copy("details")}<ArrowUpRight size={14}/></button></footer>

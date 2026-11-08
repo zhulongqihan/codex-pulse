@@ -4,6 +4,19 @@ User-facing changes are grouped by release, following [Keep a Changelog](https:/
 
 ## [Unreleased]
 
+## [0.6.2] - 2026-11-08
+
+### Fixed / 修复
+
+- Adapt weekly quota observations to slow, integer-percentage changes instead of requiring a measurable change in every fifteen-minute slice. Flat, stale and interrupted observations still do not produce a time estimate.
+- 周额度采样适配较慢的整数百分比变化，不再机械要求每个十五分钟片段都能分辨消耗；持续不变、陈旧和中断的观测仍不生成预测。
+- Keep conservative time bounds near exhaustion when the service does not specify how integer quota percentages are rounded.
+- 官方未说明整数百分比舍入方式时，靠近额度上限也保留更保守的时间误差范围。
+- Explain why an estimate is unavailable, show known reset times and actual local token totals, and distinguish a window the service did not return from a zero balance.
+- 无法预测时说明原因，保留已知重置时间与本机实际 Token 数量；区分接口未返回的窗口和额度为零。
+
+[完整中英说明 / Full release notes](docs/releases/v0.6.2.md)
+
 ## [0.6.1] - 2026-11-08
 
 ### Fixed / 修复

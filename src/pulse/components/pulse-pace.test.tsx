@@ -6,10 +6,73 @@ import { paceCopy } from "@/lib/pulse-pace-copy";
 import { syntheticPaceSnapshot } from "@/lib/pulse-pace";
 import { PulsePaceBadgeView, PulsePaceCard } from "./pulse-pace";
 
-beforeEach(async () => { history.replaceState(null, "", "/"); await i18n.changeLanguage("en"); });
+beforeEach(async () => { vi.restoreAllMocks(); history.replaceState(null, "", "/"); await i18n.changeLanguage("en"); });
 const actions = () => ({ onRefresh: vi.fn(), onClose: vi.fn(), onDetails: vi.fn() });
+function weeklyOnly(state: "idle" | "slow" = "idle") {
+  const at = Date.parse("2026-11-08T08:00:00Z");
+  vi.spyOn(Date, "now").mockReturnValue(at);
+  const data = syntheticPaceSnapshot(state, new Date(at));
+  data.primaryKind = "weekly";
+  Object.assign(data.windows[0], { state: "unavailable", remainingPercent: null, windowMinutes: null, resetsAt: null, trend: [], sampleCount: 0 });
+  Object.assign(data.windows[1], { state, remainingPercent: 82, resetsAt: "2026-11-14T13:00:00Z", sampleCount: 13, sampleSpanMinutes: 60, observedMinutes: 60, consumedPercentPoints: state === "idle" ? 0 : .5 });
+  Object.assign(data.localUsage!, { totalTokens: 343_000_000, projects: [{ label: "Example project", totalTokens: 343_000_000, sharePercent: 100 }] });
+  return data;
+}
 
 describe("title bar usage companion", () => {
+  it.each(["en", "zh", "zh-Hant", "ja", "ko", "de"])("shows reset, official remaining and actual local totals for a weekly-only unchanged reading in %s", async language => {
+    await i18n.changeLanguage(language);
+    render(<PulsePaceCard data={weeklyOnly()} {...actions()}/>);
+    expect(screen.getByTestId("pace-estimate")).toHaveTextContent(paceCopy(language, "resetDays", { days: 6, hours: 5 }));
+    expect(screen.getByText(paceCopy(language, "sessionMissing"))).toBeVisible();
+    expect(screen.getByText(paceCopy(language, "idleDetail"))).toBeVisible();
+    expect(screen.getByRole("region", { name: paceCopy(language, "official") })).toHaveTextContent("82%");
+    expect(screen.getByTestId("pace-token-total")).toHaveTextContent(new Intl.NumberFormat(language).format(343_000_000));
+    expect(document.querySelector('time[datetime="2026-11-14T13:00:00Z"]')).toHaveTextContent("2026");
+    expect(screen.queryByText("2–3")).not.toBeInTheDocument();
+  });
+
+  it("uses fresh local tokens in a non-forecast badge, while retaining warning and forecast priority", () => {
+    const data = weeklyOnly();
+    const { rerender } = render(<PulsePaceBadgeView data={data} onToggle={vi.fn()}/>);
+    expect(screen.getByTestId("pace-badge")).toHaveTextContent("343M Token");
+    expect(screen.getByTestId("pace-badge")).toHaveAccessibleName(expect.stringContaining("Today’s local tokens: 343,000,000"));
+    for (const state of ["stale", "exhausted", "unavailable", "expired"] as const) {
+      data.status = state;
+      rerender(<PulsePaceBadgeView data={data} onToggle={vi.fn()}/>);
+      expect(screen.getByTestId("pace-badge")).not.toHaveTextContent("343M");
+      expect(screen.getByTestId("pace-badge")).toHaveTextContent(paceCopy("en", state));
+    }
+    data.status = "idle";
+    rerender(<PulsePaceBadgeView data={data} failed onToggle={vi.fn()}/>);
+    expect(screen.getByTestId("pace-badge")).toHaveTextContent("Refresh needed");
+    rerender(<PulsePaceBadgeView data={syntheticPaceSnapshot()} onToggle={vi.fn()}/>);
+    expect(screen.getByTestId("pace-badge")).toHaveTextContent("≈2–3h");
+  });
+
+  it("never uses stale, invalid-time or previous-day local totals as a badge fallback", () => {
+    for (const invalid of ["stale", "timestamp", "day", "number"] as const) {
+      const data = weeklyOnly();
+      if (invalid === "stale") data.localUsage!.stale = true;
+      if (invalid === "timestamp") data.localUsage!.updatedAt = "2026-11-08T07:00:00Z";
+      if (invalid === "day") data.localUsage!.date = "2026-11-07";
+      if (invalid === "number") data.localUsage!.totalTokens = Number.NaN;
+      const view = render(<PulsePaceBadgeView data={data} onToggle={vi.fn()}/>);
+      expect(view.getByTestId("pace-badge")).toHaveTextContent(paceCopy("en", "idle"));
+      view.unmount();
+    }
+  });
+
+  it("does not invent a reset or a forecast from local tokens when the reset is missing or invalid", () => {
+    const data = weeklyOnly("slow");
+    data.windows[1].resetsAt = "invalid";
+    render(<PulsePaceCard data={data} {...actions()}/>);
+    expect(screen.getByText(paceCopy("en", "resetUnknown"))).toBeVisible();
+    expect(screen.getByTestId("pace-estimate")).toHaveTextContent(paceCopy("en", "slowHeadline"));
+    expect(screen.getByTestId("pace-token-total")).toHaveTextContent("343,000,000");
+    expect(screen.queryByText("2–3")).not.toBeInTheDocument();
+  });
+
   it.each(["en", "zh", "zh-Hant", "ja", "ko", "de"])("visibly labels a directly opened synthetic card and accessibly labels its badge in %s", async language => {
     history.replaceState(null, "", "/?demo=1#pulse-pace");
     await i18n.changeLanguage(language);
@@ -39,7 +102,8 @@ describe("title bar usage companion", () => {
 
   it.each(["en", "zh", "zh-Hant", "ja", "ko", "de"])("renders truthful non-forecast states in %s", async language => {
     await i18n.changeLanguage(language);
-    render(<PulsePaceBadgeView data={syntheticPaceSnapshot("sampling")} onToggle={vi.fn()}/>);
+    const data = syntheticPaceSnapshot("sampling"); delete data.localUsage;
+    render(<PulsePaceBadgeView data={data} onToggle={vi.fn()}/>);
     expect(screen.getByTestId("pace-badge")).toHaveTextContent(paceCopy(language, "sampling"));
     expect(screen.getByTestId("pace-badge")).not.toHaveTextContent("≈");
   });
@@ -90,7 +154,7 @@ describe("title bar usage companion", () => {
   it("does not invent local sources when no local data was returned", () => {
     const data = syntheticPaceSnapshot(); delete data.localUsage;
     render(<PulsePaceCard data={data} {...actions()}/>);
-    expect(screen.getByText("No local token sources for today")).toBeVisible();
+    expect(screen.getByText("Project/model breakdown unavailable")).toBeVisible();
     expect(screen.queryByText("62%")).not.toBeInTheDocument();
   });
 

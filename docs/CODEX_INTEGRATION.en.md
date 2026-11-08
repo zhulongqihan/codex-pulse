@@ -20,6 +20,7 @@ The companion does not modify Codex installation files. It follows the client wh
 - A range describes the trend if recent consumption continues. It does not guarantee working time, request counts, or whether the limit will actually be reached before or after reset.
 - Sampling, idle, slow, missing, stale, and expired states are explicit. Account changes, resets, decreasing consumption, or gaps over 10 minutes start new segments; readings older than about 6 minutes stop the forecast.
 - The sampler reads existing quota about every 60 seconds by default, with cooldowns for errors and rate limits. It sends no model requests. Activate window in the main workspace remains a separate, confirmed operation that may consume quota.
+- Slow weekly changes accumulate a longer continuous observation span, avoiding lost trends caused by unchanged rounded percentages over a short slice. Flat observations still produce no estimate. The card shows the reason, known reset times and actual local daily tokens. A short window omitted by the service is not a zero balance.
 - Project/model shares describe today's local tokens, not their share of personal quota. Official account readings may include consumption on other devices.
 
 Try the [actual pace card with synthetic data](https://zhulongqihan.github.io/codex-pulse/?demo=1&paceScenario=forecast#pulse-pace), or switch sampling and stale states on the [product homepage](https://zhulongqihan.github.io/codex-pulse/). The website does not connect to local Codex.
