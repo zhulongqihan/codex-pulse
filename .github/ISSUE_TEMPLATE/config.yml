@@ -1,5 +1,11 @@
 blank_issues_enabled: false
 contact_links:
+  - name: Ideas, experiences and questions / 想法、体验与使用问题
+    url: https://github.com/zhulongqihan/codex-pulse/discussions
+    about: Share feedback or ask a question in Chinese or English. 欢迎中英文交流，无需先准备完整的功能方案。
+  - name: Feedback guide / 反馈指南
+    url: https://github.com/zhulongqihan/codex-pulse/blob/main/SUPPORT.md
+    about: Choose a feedback channel and find the information useful for a report.
   - name: Security and private data / 安全与私人信息
     url: https://github.com/zhulongqihan/codex-pulse/blob/main/SECURITY.md
     about: Read the reporting guidance before posting sensitive information.

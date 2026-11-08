@@ -2,6 +2,8 @@
 
 Thanks for helping make Codex usage easier to understand. Small, well-explained changes are welcome.
 
+Ideas, questions, and reports are contributions too. Use [Discussions](https://github.com/zhulongqihan/codex-pulse/discussions) for experiences and open-ended ideas, or the [issue forms](https://github.com/zhulongqihan/codex-pulse/issues/new/choose) for reproducible bugs and concrete feature requests. Chinese and English are both welcome; see [SUPPORT.md](SUPPORT.md).
+
 ## Development
 
 Use Node.js 24.15+ (or 26+), pnpm 10.20, Rust and the Windows MSVC build tools. WebView2 is required to run the native app:
@@ -58,6 +60,10 @@ Use a focused branch such as `feat/widget-controls`, `fix/range-boundaries`, or 
 Follow [VERSIONING.md](VERSIONING.md) for version changes and immutable releases. Use `pnpm version:bump patch --dry-run` before a version change, then the same command without `--dry-run`. Keep the Chinese and English guides, [CHANGELOG.md](CHANGELOG.md), and affected release notes synchronized. A source-only tooling or documentation change does not require rebuilding the installed application or changing its version.
 
 Run `pnpm source:check:staged` after staging to inspect the exact files being committed. This checks tracked paths and high-confidence secret patterns; it complements human review of screenshots, fixtures, and the final diff.
+
+Before completing an iteration, review the changed experience from a new user's perspective: finding the feature, its main action, keyboard/focus behavior, empty or failed states, and relevant Clear/Meter layouts. Correct confirmed problems and rerun the affected checks. A review with no required corrections should record that result and its limits; do not invent changes or claim an unrun test. Internal review notes and acceptance evidence stay local.
+
+For application releases, also verify the public downloads, updater, and affected demonstration links after publishing. Link addressed issues or discussions to the fixing commit and release, credit real contributions in the release notes, and state deferred limitations clearly. Do not close a report as fixed on the strength of an untested change.
 
 新贡献使用独立、聚焦的分支与约定式提交。发布遵守版本一致性、实际验证和标签／资产不可覆盖规则；中文与英文使用说明同步。公开仓库只包含软件源码、构建／贡献说明和面向使用者的交付内容。内部需求记录、执行计划、审计和验收台账保留本地。
 

@@ -108,6 +108,16 @@ pnpm exec wdio run ./wdio.pulse.conf.ts
 
 便携包与摘要输出到 `release/`。仅查看网页合成演示：`pnpm dev` 后打开 `http://127.0.0.1:5173/?demo=1`。
 
+## 反馈与参与
+
+欢迎告诉我们哪里好用、哪里不顺手，以及你希望增加什么。无需提交代码，也能参与改进：
+
+- [报告问题](https://github.com/zhulongqihan/codex-pulse/issues/new?template=bug_report.yml)：附软件版本、复现步骤和预期／实际表现。
+- [提出功能建议](https://github.com/zhulongqihan/codex-pulse/issues/new?template=feature_request.yml)，或在 [讨论区](https://github.com/zhulongqihan/codex-pulse/discussions) 分享使用体验、想法和问题。
+- [参与贡献](CONTRIBUTING.md)：欢迎代码、文档、翻译和界面改进。[反馈指南](SUPPORT.md) 说明如何选择入口和整理信息。
+
+每次软件更新都会经过用户流程复查、必要修正和回归验证，再通过 GitHub Release 交付版本说明与安装包。处理反馈时，会在相关 Issue／讨论中关联修复提交或已发布版本，方便查看进展。截图请先遮住私人信息，不要上传原始会话或认证文件。
+
 ## 开源与归属
 
 基于 MIT 发布。Rust 引擎、服务编排、回放组件、翻译和测试复用了 Vincent 及贡献者的 [Codex Usage Desktop 5.6.0](https://github.com/itvincent-git/codex-usage-desktop)，并保留原许可证；Pulse 提供自己的品牌、双版界面、便携存储、悬浮窗和更新渠道。

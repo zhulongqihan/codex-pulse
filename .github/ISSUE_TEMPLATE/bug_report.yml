@@ -13,7 +13,8 @@ body:
     id: version
     attributes:
       label: App version / 应用版本
-      placeholder: e.g. 0.1.0
+      description: Use the complete version shown in the app settings. 填写软件设置中显示的完整版本。
+      placeholder: e.g. 0.6.0
     validations:
       required: true
   - type: input
@@ -30,9 +31,12 @@ body:
       options:
         - Local usage history / 本机用量
         - Account limits / 账号额度
+        - Codex corner pace indicator / Codex 右上角节奏提示
+        - Codex sidebar panel / Codex 侧栏面板
         - Widget / 悬浮窗
         - Appearance or motion / 外观与动效
         - Startup or packaging / 启动与打包
+        - Updates / 软件更新
         - Other / 其他
     validations:
       required: true

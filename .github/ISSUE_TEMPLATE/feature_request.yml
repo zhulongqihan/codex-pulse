@@ -1,6 +1,7 @@
 name: Feature request / 功能建议
 description: Explain the workflow you want to improve.
 title: "[Feature] "
+labels: [enhancement]
 body:
   - type: textarea
     id: problem

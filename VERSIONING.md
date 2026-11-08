@@ -40,6 +40,8 @@ pnpm version:bump minor
 4. Git 标签使用 `vX.Y.Z`，每个软件版本对应唯一源码与公开资产。已发布版本不改内容、不移动标签、不替换同名资产；问题通过新版本修复。
 5. Release 提供中英说明、Windows ZIP、独立更新 exe、各自 SHA-256 和签名更新清单。验证下载后的文件，再发布演示和使用文档。
 6. 更新现有安装前正常退出、备份、保留 `data`；替换后验证版本、启动入口和偏好，保留恢复能力。
+7. 每轮完成前，从新用户视角复查主流程、可发现性、焦点／键盘、失败状态与受影响的清爽／刻度布局；修复确认的问题后重验。发布后再核对公开下载、更新与演示入口。复查无须修正时如实记录，不为“迭代一遍”制造无意义变更。
+8. 欢迎通过 [Issues](https://github.com/zhulongqihan/codex-pulse/issues) 和 [Discussions](https://github.com/zhulongqihan/codex-pulse/discussions) 反馈。处理后在原反馈中关联修复提交／发布版本，版本说明记录真实贡献；内部审计、计划与逐项验收仅本地保留。
 
 ## English
 
@@ -64,3 +66,7 @@ Use `pnpm version:check`, `pnpm version:bump patch --dry-run`, and `pnpm version
 Before release, pass version checks, tooling tests, type checks, frontend and Rust tests, plus relevant native, visual, and window-size checks. The source commit, successful GitHub Checks, version tag, and production package must agree. Verify production packaging, signatures, and upgrade data preservation before publication.
 
 Use immutable `vX.Y.Z` tags and release assets. Never retag or overwrite a published release; ship a new version for corrections. Publish bilingual notes, the Windows ZIP, update executable, both SHA-256 files, and the signed update manifest. Download and verify the public files. Before updating an existing installation, exit normally, back up, retain `data`, and verify its version, launch entries, and preferences afterward.
+
+Before completing each iteration, review discovery, the main user workflow, focus/keyboard behavior, failure states, and affected Clear/Meter layouts from a new user's perspective. Correct confirmed problems and rerun the affected checks. After publication, verify public downloads, the updater, and demonstration links. Record a review that requires no corrections honestly; a review is not a reason to manufacture changes.
+
+Feedback is welcome through [Issues](https://github.com/zhulongqihan/codex-pulse/issues) and [Discussions](https://github.com/zhulongqihan/codex-pulse/discussions). Link addressed feedback to its fixing commit or published version and credit actual contributions in release notes. Internal plans, audits, and detailed acceptance evidence remain local.
