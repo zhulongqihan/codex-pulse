@@ -104,7 +104,9 @@ pub struct TitlebarStatus {
     pub supported: bool,
     pub host_found: bool,
     pub badge_visible: bool,
+    pub badge_foreground: bool,
     pub popup_open: bool,
+    pub popup_foreground: bool,
     pub reason: String,
     pub host_rect: Option<Rectangle>,
     pub badge_rect: Option<Rectangle>,
@@ -118,7 +120,9 @@ impl TitlebarStatus {
             supported: cfg!(windows),
             host_found: false,
             badge_visible: false,
+            badge_foreground: false,
             popup_open: false,
+            popup_foreground: false,
             reason: if cfg!(windows) {
                 "no_codex_window"
             } else {
@@ -187,7 +191,7 @@ pub fn setup(
                 BADGE_WIDTH,
                 BADGE_HEIGHT,
                 false,
-                false,
+                true,
             ),
             (
                 PANEL_LABEL,
@@ -220,7 +224,7 @@ pub fn setup(
             .shadow(shadow)
             .build()?;
             if label == BADGE_LABEL {
-                native::make_no_activate(&window);
+                native::make_click_activatable(&window);
             }
             let app_handle = app.handle().clone();
             let state = controller.clone();
@@ -229,11 +233,18 @@ pub fn setup(
                 tauri::WindowEvent::CloseRequested { api, .. } => {
                     api.prevent_close();
                     state.popup.store(false, Ordering::SeqCst);
+                    native::restore_host_after_close(&app_handle, &state);
                     native::hide(&app_handle, PANEL_LABEL);
                 }
                 tauri::WindowEvent::Focused(false) if panel => {
-                    state.popup.store(false, Ordering::SeqCst);
-                    native::hide(&app_handle, PANEL_LABEL);
+                    // A natural badge click activates our process before its click IPC.
+                    // Preserve the toggle's previous state until that click is handled.
+                    if native::surface_is_foreground(&app_handle) {
+                        log::info!("Pulse titlebar focus ignored: own_surface_still_foreground");
+                    } else {
+                        state.popup.store(false, Ordering::SeqCst);
+                        native::hide(&app_handle, PANEL_LABEL);
+                    }
                 }
                 _ => (),
             });
@@ -280,7 +291,11 @@ pub fn get_titlebar_status(
 }
 
 #[tauri::command]
-pub fn titlebar_action(app: tauri::AppHandle, action: String) -> Result<(), String> {
+pub fn titlebar_action(
+    app: tauri::AppHandle,
+    window: tauri::WebviewWindow,
+    action: String,
+) -> Result<(), String> {
     let state = app
         .try_state::<TitlebarController>()
         .ok_or("Titlebar is not initialized")?;
@@ -288,12 +303,19 @@ pub fn titlebar_action(app: tauri::AppHandle, action: String) -> Result<(), Stri
         "close" => {
             state.popup.store(false, Ordering::SeqCst);
             #[cfg(windows)]
-            native::tick(&app, state.inner());
+            {
+                native::restore_host_after_close(&app, state.inner());
+                native::tick(&app, state.inner());
+            }
             Ok(())
         }
         "toggle" => {
             #[cfg(windows)]
             {
+                if window.label() != BADGE_LABEL {
+                    log::warn!("Pulse titlebar focus rejected: sender_not_badge");
+                    return Err("Open usage rhythm from its titlebar shortcut".into());
+                }
                 native::tick(&app, state.inner());
                 if !state
                     .status
@@ -304,11 +326,17 @@ pub fn titlebar_action(app: tauri::AppHandle, action: String) -> Result<(), Stri
                     return Err("Open Codex and enable the titlebar shortcut first".into());
                 }
                 let open = !state.popup.fetch_xor(true, Ordering::SeqCst);
+                if !open {
+                    native::restore_host_after_close(&app, state.inner());
+                }
                 native::tick(&app, state.inner());
                 if open {
-                    if let Some(window) = app.get_webview_window(PANEL_LABEL) {
-                        let _ = window.set_focus();
+                    if let Err(error) = native::activate_panel(&app, state.inner()) {
+                        state.popup.store(false, Ordering::SeqCst);
+                        native::tick(&app, state.inner());
+                        return Err(error);
                     }
+                    native::tick(&app, state.inner());
                 }
                 Ok(())
             }
@@ -360,6 +388,9 @@ mod native {
     #[link(name = "user32")]
     extern "system" {
         fn GetForegroundWindow() -> Hwnd;
+        fn SetForegroundWindow(window: Hwnd) -> i32;
+        fn SetActiveWindow(window: Hwnd) -> Hwnd;
+        fn SetFocus(window: Hwnd) -> Hwnd;
         fn GetAncestor(window: Hwnd, flags: u32) -> Hwnd;
         fn GetWindowRect(window: Hwnd, rect: *mut Rect) -> i32;
         fn GetClassNameW(window: Hwnd, text: *mut u16, capacity: i32) -> i32;
@@ -424,14 +455,22 @@ mod native {
             .ok()
             .map(|handle| handle.0 as Hwnd)
     }
-    pub(super) fn make_no_activate(window: &tauri::WebviewWindow) {
+    pub(super) fn make_click_activatable(window: &tauri::WebviewWindow) {
         if let Ok(window) = window.hwnd() {
             unsafe {
                 let handle = window.0 as Hwnd;
                 let style = GetWindowLongPtrW(handle, -20);
-                SetWindowLongPtrW(handle, -20, style | 0x08000000 | 0x80); // WS_EX_NOACTIVATE | WS_EX_TOOLWINDOW
+                // Presentation still uses SWP_NOACTIVATE. Only a user's click may
+                // activate the badge, giving this process the normal input privilege.
+                SetWindowLongPtrW(handle, -20, (style & !0x08000000) | 0x80);
             }
         }
+    }
+    pub(super) fn surface_is_foreground(app: &tauri::AppHandle) -> bool {
+        let foreground = unsafe { GetAncestor(GetForegroundWindow(), 2) };
+        [BADGE_LABEL, PANEL_LABEL]
+            .into_iter()
+            .any(|label| handle(app, label) == Some(foreground))
     }
     pub(super) fn hide(app: &tauri::AppHandle, label: &str) {
         if let Some(window) = handle(app, label) {
@@ -589,6 +628,92 @@ mod native {
     fn host_still_valid(host: Host) -> bool {
         trusted_window(host.window).is_some_and(|current| current.process == host.process)
     }
+    /// Called only by the badge's explicit click command. The watcher always uses
+    /// SWP_NOACTIVATE; a visible window alone does not imply native input focus.
+    pub(super) fn activate_panel(
+        app: &tauri::AppHandle,
+        state: &TitlebarController,
+    ) -> Result<(), String> {
+        fn rejected(category: &'static str) -> String {
+            log::warn!("Pulse titlebar focus rejected: {category}");
+            "The usage popup could not receive input focus".into()
+        }
+        let panel = handle(app, PANEL_LABEL).ok_or_else(|| rejected("panel_unavailable"))?;
+        let foreground = unsafe { GetAncestor(GetForegroundWindow(), 2) };
+        let badge = handle(app, BADGE_LABEL).ok_or_else(|| rejected("badge_unavailable"))?;
+        let host = state
+            .host
+            .lock()
+            .ok()
+            .and_then(|value| *value)
+            .filter(|host| host_still_valid(*host))
+            .ok_or_else(|| rejected("host_identity_changed"))?;
+        // Real Windows clicks activate the badge first. Synthetic driver events can
+        // arrive while the verified host is still foreground; neither permits an
+        // unrelated foreground application to have its focus redirected.
+        if foreground != badge && foreground != host.window {
+            return Err(rejected("host_or_badge_not_foreground"));
+        }
+        if !state.enabled.load(Ordering::SeqCst)
+            || !state.popup.load(Ordering::SeqCst)
+            || unsafe { IsWindowVisible(badge) } == 0
+            || unsafe { IsWindowVisible(panel) } == 0
+        {
+            return Err(rejected("panel_not_ready"));
+        }
+        if unsafe { GetAncestor(GetForegroundWindow(), 2) } != foreground || !host_still_valid(host)
+        {
+            return Err(rejected("foreground_changed_before_activation"));
+        }
+        unsafe {
+            SetForegroundWindow(panel);
+            if GetAncestor(GetForegroundWindow(), 2) == panel {
+                SetActiveWindow(panel);
+                SetFocus(panel);
+            }
+        }
+        if let Some(window) = app.get_webview_window(PANEL_LABEL) {
+            window
+                .set_focus()
+                .map_err(|_| rejected("webview_focus_failed"))?;
+        }
+        if unsafe { GetAncestor(GetForegroundWindow(), 2) } != panel {
+            return Err(rejected("foreground_activation_denied"));
+        }
+        log::info!(
+            "Pulse titlebar popup activated; badge_was_foreground={}",
+            foreground == badge
+        );
+        Ok(())
+    }
+    /// A user's explicit dismiss should leave Codex ready for typing. Outside
+    /// focus changes and the watcher never call this or pull another app back.
+    pub(super) fn restore_host_after_close(app: &tauri::AppHandle, state: &TitlebarController) {
+        let foreground = unsafe { GetAncestor(GetForegroundWindow(), 2) };
+        if ![BADGE_LABEL, PANEL_LABEL]
+            .into_iter()
+            .any(|label| handle(app, label) == Some(foreground))
+        {
+            return;
+        }
+        let host = state
+            .host
+            .lock()
+            .ok()
+            .and_then(|value| *value)
+            .filter(|host| host_still_valid(*host));
+        if let Some(host) = host {
+            if unsafe { GetAncestor(GetForegroundWindow(), 2) } != foreground {
+                return;
+            }
+            unsafe {
+                SetForegroundWindow(host.window);
+            }
+            if unsafe { GetAncestor(GetForegroundWindow(), 2) } != host.window {
+                log::warn!("Pulse titlebar focus rejected: host_restore_denied");
+            }
+        }
+    }
     fn geometry(host: Host) -> Option<(Rectangle, Rectangle, u32, Option<Rectangle>)> {
         unsafe {
             if !host_still_valid(host) {
@@ -651,7 +776,7 @@ mod native {
             .and_then(|value| *value)
             .filter(|host| host_still_valid(*host));
         let active = current.or_else(|| {
-            ((own_panel || own_badge) && state.popup.load(Ordering::SeqCst))
+            (own_badge || (own_panel && state.popup.load(Ordering::SeqCst)))
                 .then_some(last)
                 .flatten()
         });
@@ -676,7 +801,9 @@ mod native {
                 status.dpi = Some(dpi);
                 if let Some(position) = placement(frame, work, dpi, caption) {
                     status.badge_visible = true;
+                    status.badge_foreground = own_badge;
                     status.popup_open = state.popup.load(Ordering::SeqCst);
+                    status.popup_foreground = status.popup_open && own_panel;
                     status.badge_rect = Some(position.badge);
                     status.panel_rect = Some(position.panel);
                     status.reason = "ready".into();

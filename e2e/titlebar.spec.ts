@@ -3,7 +3,7 @@ import { readFileSync, writeFileSync, renameSync } from 'node:fs';
 import { join } from 'node:path';
 import { randomUUID } from 'node:crypto';
 
-type Status = { enabled: boolean; supported: boolean; hostFound: boolean; badgeVisible: boolean; popupOpen: boolean;
+type Status = { enabled: boolean; supported: boolean; hostFound: boolean; badgeVisible: boolean; badgeForeground: boolean; popupOpen: boolean; popupForeground: boolean;
   reason: string;
   hostRect: { x: number; y: number; width: number; height: number } | null;
   badgeRect: { x: number; y: number; width: number; height: number } | null; dpi: number | null };
@@ -26,8 +26,11 @@ async function command(action: string, data: Record<string, number> = {}) {
     try { renameSync(temporary, join(directory, 'command.json')); return true; } catch { return false; }
   });
   await browser.waitUntil(async () => {
-    return nativeState()?.commandId === id;
+    const state = nativeState();
+    return state?.commandId === id && !state.pendingPhysicalClick;
   });
+  const commandError = nativeState()?.commandError;
+  if (commandError) throw new Error(`Owned native input was blocked: ${commandError}`);
 }
 async function visible(value: boolean) {
   try { await browser.waitUntil(async () => (await status()).badgeVisible === value); }
@@ -49,6 +52,31 @@ async function synchronizedGeometry() {
     const tracked = (await status()).hostRect;
     return actual && tracked && ['x', 'y', 'width', 'height'].every(key => actual[key] === tracked[key as keyof typeof tracked]);
   });
+  return status();
+}
+async function nativePopupFocus() {
+  let stableSince = 0;
+  try {
+    await browser.waitUntil(async () => {
+      const state = await status();
+      if (!state.popupOpen || !state.popupForeground) { stableSince = 0; return false; }
+      if (!stableSince) stableSince = Date.now();
+      return Date.now() - stableSince >= 500;
+    }, { interval: 100 });
+  } catch (error) {
+    const tracked = await status().catch(() => null);
+    const dom = await browser.execute(() => {
+      const target = window as typeof window & { pulsePhysicalInputTrace?: unknown[]; pulseNativeFocusEvents?: unknown[] };
+      const button = document.querySelector('[data-testid="pace-badge"]');
+      const bounds = button?.getBoundingClientRect();
+      return { trace: target.pulsePhysicalInputTrace, nativeFocusEvents: target.pulseNativeFocusEvents, viewport: { width: innerWidth, height: innerHeight },
+        button: bounds && { x: bounds.x, y: bounds.y, width: bounds.width, height: bounds.height },
+        activeTag: document.activeElement?.tagName };
+    }).catch(() => null);
+    record('popup-focus-timeout', { status: tracked, nativeState: nativeState(), dom });
+    console.error('[Pulse native popup focus timeout]', JSON.stringify(tracked));
+    throw error;
+  }
   return status();
 }
 function record(name: string, value: unknown) {
@@ -100,12 +128,39 @@ describe('Pulse attached titlebar in a real owned native host', () => {
 
   it('opens the actual no-composer popup from the badge and supports Escape and outside focus', async () => {
     await command('restore'); await command('activate'); await visible(true);
+    // Initialize this WebView's embedded-driver bridge before native input. Return
+    // the real foreground to the fixture afterwards; never switch to the popup.
     await browser.switchToWindow('pulse-badge');
     await $('[data-testid="pace-badge"]').waitForDisplayed();
-    expect(await browser.execute(() => document.querySelectorAll('input,textarea,[contenteditable="true"]').length)).toBe(0);
-    await browser.saveScreenshot(join(output, 'native-titlebar-badge.png'));
-    await $('[data-testid="pace-badge"]').click();
-    await browser.waitUntil(async () => (await status()).popupOpen);
+    await command('activate'); await visible(true);
+    await browser.execute(async () => {
+      const target = window as typeof window & { pulseNativeFocusEvents?: unknown[]; pulseStopFocusEvents?: () => void;
+        __TAURI__: { event: { listen: (name: string, handler: (message: { payload: unknown }) => void) => Promise<() => void> } } };
+      target.pulseNativeFocusEvents = [];
+      target.pulseStopFocusEvents = await target.__TAURI__.event.listen('titlebar-status', message => target.pulseNativeFocusEvents!.push(message.payload));
+      const inputTarget = window as typeof window & { pulsePhysicalInputTrace?: unknown[] };
+      inputTarget.pulsePhysicalInputTrace = [];
+      for (const type of ['pointerdown', 'pointerup', 'mousedown', 'mouseup', 'click', 'focus', 'blur']) {
+        document.addEventListener(type, event => inputTarget.pulsePhysicalInputTrace!.push({ type: event.type,
+          trusted: event.isTrusted, target: (event.target as HTMLElement)?.tagName, at: performance.now() }), true);
+      }
+    });
+    const nativeStateBeforePhysicalClick = await status();
+    expect(nativeStateBeforePhysicalClick.badgeForeground).toBe(false);
+    const center = nativeStateBeforePhysicalClick.badgeRect!;
+    await command('click-badge', { x: Math.round(center.x + center.width / 2), y: Math.round(center.y + center.height / 2) });
+    // Read Win32 foreground state before any driver window switch can activate it.
+    const nativeFocusBeforeDriverSwitch = await nativePopupFocus();
+    expect(nativeFocusBeforeDriverSwitch.popupForeground).toBe(true);
+    const nativeFocusEvents = await browser.execute(() => {
+      const target = window as typeof window & { pulseNativeFocusEvents?: { badgeForeground: boolean; popupForeground: boolean; popupOpen: boolean }[]; pulseStopFocusEvents?: () => void };
+      target.pulseStopFocusEvents?.();
+      return target.pulseNativeFocusEvents ?? [];
+    });
+    // An old NOACTIVATE badge can sometimes open a popup under a driver. It still
+    // fails this native, physical-click activation transition before any switch.
+    expect(nativeFocusEvents.some(state => state.badgeForeground)).toBe(true);
+    expect(nativeFocusEvents.some(state => state.popupForeground)).toBe(true);
     await browser.switchToWindow('pulse-pace');
     await $('[data-testid="pace-popover"]').waitForDisplayed();
     const popup = await browser.execute(() => ({ fields: document.querySelectorAll('input,textarea,[contenteditable="true"]').length,
@@ -127,14 +182,29 @@ describe('Pulse attached titlebar in a real owned native host', () => {
       await browser.saveScreenshot(join(output, `native-titlebar-popover-${skinId}.png`));
     }
     await browser.keys('Escape');
-    await browser.waitUntil(async () => !(await status()).popupOpen);
-    await command('activate'); await visible(true);
-    await browser.switchToWindow('pulse-badge'); await $('[data-testid="pace-badge"]').click();
-    await browser.waitUntil(async () => (await status()).popupOpen);
+    await browser.waitUntil(async () => !(await status()).popupOpen && nativeState()?.foreground === true);
+    record('physical-open-and-escape', { nativeStateBeforePhysicalClick, nativeFocusBeforeDriverSwitch, nativeFocusEvents,
+      escapeClosedToHost: true, afterEscape: await status(), nativeAfterEscape: nativeState() });
+    // Esc must return native input focus without a fixture activation masking it.
+    await visible(true);
+    const reopenedCenter = (await status()).badgeRect!;
+    await command('click-badge', { x: Math.round(reopenedCenter.x + reopenedCenter.width / 2), y: Math.round(reopenedCenter.y + reopenedCenter.height / 2) });
+    await nativePopupFocus();
+    const closeCenter = (await status()).badgeRect!;
+    await command('toggle-badge', { x: Math.round(closeCenter.x + closeCenter.width / 2), y: Math.round(closeCenter.y + closeCenter.height / 2) });
+    await browser.waitUntil(async () => !(await status()).popupOpen && nativeState()?.foreground === true);
+    await visible(true);
+    const thirdCenter = (await status()).badgeRect!;
+    await command('click-badge', { x: Math.round(thirdCenter.x + thirdCenter.width / 2), y: Math.round(thirdCenter.y + thirdCenter.height / 2) });
+    await nativePopupFocus();
     await command('focus-other'); await visible(false);
     expect((await status()).popupOpen).toBe(false);
     await command('activate'); await visible(true);
+    await browser.switchToWindow('pulse-badge');
+    await $('[data-testid="pace-badge"]').waitForDisplayed();
+    expect(await browser.execute(() => document.querySelectorAll('input,textarea,[contenteditable="true"]').length)).toBe(0);
+    await browser.saveScreenshot(join(output, 'native-titlebar-badge.png'));
     await browser.switchToWindow('main');
-    record('native-popup-and-dismissal', { popup, styles, escapeClosed: true, otherWindowClosed: true, state: await status() });
+    record('native-popup-and-dismissal', { popup, nativeStateBeforePhysicalClick, nativeFocusBeforeDriverSwitch, nativeFocusEvents, styles, escapeClosedToHost: true, badgeToggleClosedToHost: true, otherWindowClosed: true, physicalBadgeClicks: nativeState()?.physicalBadgeClicks, state: await status(), inputScope: 'Guarded Win32 SendInput on owned fixture + exact debug image. Real production Codex is a separate acceptance check' });
   });
 });

@@ -7,6 +7,7 @@ import { paceCopy, type PaceCopyKey } from "@/lib/pulse-pace-copy";
 import "./pulse-pace.css";
 
 type Copy = (key: PaceCopyKey, values?: Record<string, string | number>) => string;
+const isSyntheticDemo = () => new URLSearchParams(location.search).get("demo") === "1";
 const stateDetail = (state: PaceState): PaceCopyKey => state === "forecast" ? "scope" : `${state}Detail`;
 const n = (value: number, language: string, digits = 1) => new Intl.NumberFormat(language, { maximumFractionDigits: digits }).format(value);
 function windowLabel(window: PaceWindow | null | undefined, copy: Copy, language: string) {
@@ -36,7 +37,8 @@ export function PulsePaceBadgeView({ data, failed = false, onToggle }: { data: P
   const range = state === "forecast" ? compactPaceRange(primary) : null;
   const risk = state === "forecast" ? primary?.risk : "unknown";
   const label = range ?? copy(state === "forecast" ? "sampling" : state);
-  return <button type="button" className={`pulse-pace-badge state-${state} risk-${risk}`} aria-label={`${copy("open")} · ${windowLabel(primary, copy, language)} · ${label}`} title={`${windowLabel(primary, copy, language)} · ${copy(state === "forecast" ? "estimate" : stateDetail(state))}`} onClick={onToggle} data-testid="pace-badge">
+  const demoPrefix = isSyntheticDemo() ? `${copy("demo")} · ` : "";
+  return <button type="button" className={`pulse-pace-badge state-${state} risk-${risk}`} aria-label={`${demoPrefix}${copy("open")} · ${windowLabel(primary, copy, language)} · ${label}`} title={`${demoPrefix}${windowLabel(primary, copy, language)} · ${copy(state === "forecast" ? "estimate" : stateDetail(state))}`} onClick={onToggle} data-testid="pace-badge">
     <PulseBrandMark size={20}/><span>{label}</span>
   </button>;
 }
@@ -76,6 +78,7 @@ export function PulsePaceCard({ data, failed = false, refreshing = false, onRefr
   const [sourceTab, setSourceTab] = useState<"projects" | "models">("projects");
   const sources = data?.localUsage?.[sourceTab]?.slice(0, 2) ?? [];
   const riskKey: PaceCopyKey = risk === "before_reset" ? "before" : risk === "near_reset" ? "near" : risk === "after_reset" ? "after" : "unknownRisk";
+  const demo = isSyntheticDemo();
   const closeButton = useRef<HTMLButtonElement>(null);
   useEffect(() => { closeButton.current?.focus({ preventScroll: true }); }, []);
   useEffect(() => {
@@ -84,7 +87,7 @@ export function PulsePaceCard({ data, failed = false, refreshing = false, onRefr
     return () => document.removeEventListener("keydown", key);
   }, [onClose]);
   return <section className={`pulse-pace-card state-${state} risk-${risk}`} aria-labelledby="pace-heading" data-testid="pace-popover">
-    <header className="pulse-pace-header"><div><PulseBrandMark size={25}/><h1 id="pace-heading">{copy("title")}</h1></div><button ref={closeButton} type="button" onClick={onClose} aria-label={copy("close")} title={copy("close")}><X size={17}/></button></header>
+    <header className={`pulse-pace-header${demo ? " has-demo-label" : ""}`}><div><PulseBrandMark size={25}/><h1 id="pace-heading">{copy("title")}</h1>{demo ? <span className="pulse-pace-demo-label">{copy("demo")}</span> : null}</div><button ref={closeButton} type="button" onClick={onClose} aria-label={copy("close")} title={copy("close")}><X size={17}/></button></header>
     <div className="pulse-pace-scroll">
       <div className="pace-estimate">
         <p className="pace-scope-label">{windowLabel(primary ?? data?.windows[0], copy, language)} · {copy(state === "forecast" ? "estimate" : "noEstimate")}</p>

@@ -16,6 +16,8 @@ process.env.PULSE_DATA_DIR = fixture.data;
 process.env.PULSE_OFFLINE = '1';
 process.env.CODEX_HOME = fixture.home;
 process.env.PULSE_TEST_OUTPUT = output;
+const appBinaryPath = resolve(process.env.CARGO_TARGET_DIR || 'src-tauri/target', 'debug/codex-pulse.exe');
+process.env.PULSE_TITLEBAR_EXPECTED_APP_BINARY = appBinaryPath;
 if (!process.env.PULSE_TITLEBAR_CONTROL_DIR) {
   const powershell = join(process.env.WINDIR || 'C:/Windows', 'System32/WindowsPowerShell/v1.0/powershell.exe');
   const result = spawnSync(powershell, ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File',
@@ -26,7 +28,6 @@ if (!process.env.PULSE_TITLEBAR_CONTROL_DIR) {
   process.env.PULSE_TITLEBAR_TEST_PID = String(host.processId);
   process.env.PULSE_TITLEBAR_CONTROL_DIR = host.controlDirectory;
 }
-const appBinaryPath = resolve(process.env.CARGO_TARGET_DIR || 'src-tauri/target', 'debug/codex-pulse.exe');
 
 export const config: WebdriverIO.Config = {
   runner: 'local', specs: [['./e2e/pulse.spec.ts', './e2e/titlebar.spec.ts']], maxInstances: 1,

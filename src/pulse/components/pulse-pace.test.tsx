@@ -6,10 +6,28 @@ import { paceCopy } from "@/lib/pulse-pace-copy";
 import { syntheticPaceSnapshot } from "@/lib/pulse-pace";
 import { PulsePaceBadgeView, PulsePaceCard } from "./pulse-pace";
 
-beforeEach(async () => { await i18n.changeLanguage("en"); });
+beforeEach(async () => { history.replaceState(null, "", "/"); await i18n.changeLanguage("en"); });
 const actions = () => ({ onRefresh: vi.fn(), onClose: vi.fn(), onDetails: vi.fn() });
 
 describe("title bar usage companion", () => {
+  it.each(["en", "zh", "zh-Hant", "ja", "ko", "de"])("visibly labels a directly opened synthetic card and accessibly labels its badge in %s", async language => {
+    history.replaceState(null, "", "/?demo=1#pulse-pace");
+    await i18n.changeLanguage(language);
+    render(<><PulsePaceCard data={syntheticPaceSnapshot()} {...actions()}/><PulsePaceBadgeView data={syntheticPaceSnapshot()} onToggle={vi.fn()}/></>);
+    const label = paceCopy(language, "demo");
+    expect(within(screen.getByTestId("pace-popover")).getByText(label)).toBeVisible();
+    const badge = screen.getByTestId("pace-badge");
+    expect(badge).toHaveAccessibleName(expect.stringContaining(label));
+    expect(badge).toHaveAttribute("title", expect.stringContaining(label));
+    expect(badge).not.toHaveTextContent(label);
+  });
+
+  it("does not label a regular desktop card as synthetic even when a test fixture supplies its data", () => {
+    render(<PulsePaceCard data={syntheticPaceSnapshot()} {...actions()}/>);
+    expect(screen.queryByText("Synthetic demo")).not.toBeInTheDocument();
+    expect(document.querySelector(".pulse-pace-demo-label")).toBeNull();
+  });
+
   it("keeps the badge compact and labels the specific quota window accessibly", () => {
     const onToggle = vi.fn();
     render(<PulsePaceBadgeView data={syntheticPaceSnapshot()} onToggle={onToggle}/>);
