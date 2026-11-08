@@ -1,13 +1,15 @@
-# Codex Pulse — Windows Codex 用量与会话工作台
+# Codex Pulse — 看见个人额度的消耗节奏
 
-查看本机 Token 消耗、官方账号额度和完整会话记录。提供 **清爽 Clear** 与 **刻度 Meter** 两版界面，以及独立桌面悬浮窗。
+给 Windows 上的 Codex 一个随手可看的节奏提示：从连续官方额度观测估算触顶区间，提示是否可能早于重置；再按项目和模型查看本机 Token 来源。提供 **清爽 Clear** 与 **刻度 Meter**、完整用量工作台与会话回放。
 
-**[English](README.en.md)** · **[下载](https://github.com/zhulongqihan/codex-pulse/releases/latest)** · [合成数据演示](https://zhulongqihan.github.io/codex-pulse/?demo=1) · [截图](https://zhulongqihan.github.io/codex-pulse/gallery.html) · [反馈](https://github.com/zhulongqihan/codex-pulse/issues)
+**[English](README.en.md)** · **[下载 Windows 版](https://github.com/zhulongqihan/codex-pulse/releases/latest)** · [产品与交互演示](https://zhulongqihan.github.io/codex-pulse/) · [完整工作台演示](https://zhulongqihan.github.io/codex-pulse/?demo=1) · [截图](https://zhulongqihan.github.io/codex-pulse/gallery.html) · [反馈](https://github.com/zhulongqihan/codex-pulse/issues)
 
 > 独立开源项目，不隶属于 OpenAI。公开截图与网页演示仅使用合成数据。
 
 ## 功能
 
+- **Codex 右上角节奏提示**：统一软件图标加紧凑状态，不占一行品牌文字。点击展开无输入框卡片，查看触顶区间、与重置的先后关系和今日本机 Token 来源。跟随 Windows 商店版 Codex 客户端，切到其他窗口、最小化或空间不足时隐藏。
+- **个人额度趋势**：至少 4 个有效观测、跨度至少 15 分钟，按同账号、工作区、来源与真实额度窗口分别采样。给出保守区间；未知、采样中、缓慢、无变化、陈旧和过期均保持独立状态。时间区间不是可工作时长或请求次数承诺。
 - **先看今天与现在**：本机今日用量独立于历史筛选，账号剩余额度与重置时间保持可见。完整区间的趋势和主要消耗来源集中呈现，再按需展开逐日细节。
 - **六个工作视图**：总览、会话、模型、按日、按月、项目；另有设置与可选诊断日志。导航可折叠、调宽，设置返回原页。
 - **完整范围统计**：九种日期预设、全部留存和自定义闭区间；日均按自然日计算。按月独立展示当前月至今及前 11 个自然月，区分无留存、部分留存和零活动。
@@ -21,7 +23,15 @@
 - **两版外观与六种语言**：清爽／刻度、浅色／深色／系统、密度与动效分别选择；切换保留正在查看的数据。支持简体中文、繁体中文、English、日本語、한국어、Deutsch。
 - **导出与更新**：XLSX／Markdown 包含所选范围的汇总、日期、模型和项目。自有更新源验证签名、品牌、平台与包摘要，更新失败保留数据并恢复原程序。
 
-## 两版界面
+## 节奏卡片交互预览
+
+| 清爽 Clear | 刻度 Meter |
+|---|---|
+| ![清爽产品首页与真实节奏卡片，合成数据](docs/screenshots/pace-clear.png) | ![刻度产品首页与真实节奏卡片，合成数据](docs/screenshots/pace-meter.png) |
+
+直接试用 [触顶区间](https://zhulongqihan.github.io/codex-pulse/?demo=1&paceScenario=forecast#pulse-pace)、[采样中](https://zhulongqihan.github.io/codex-pulse/?demo=1&paceScenario=sampling#pulse-pace)和[数据陈旧](https://zhulongqihan.github.io/codex-pulse/?demo=1&paceScenario=stale#pulse-pace)。这里运行已实现的界面组件，读数全部为合成示例。
+
+## 两版工作台
 
 | 清爽 Clear | 刻度 Meter |
 |---|---|
@@ -38,7 +48,9 @@
 
 需要桌面与开始菜单入口时，可使用程序内的创建快捷方式操作，或运行便携包中的 **Create-Codex-Pulse-Shortcuts.cmd**。移动程序目录后，重新创建即可修复入口。
 
-需要 Codex 内的快捷入口时，在 **设置 → 常规 → Codex 客户端快捷入口** 点击 **添加到 Codex**，在客户端插件页完成安装并固定入口。面板读取本地快照；请保持 Pulse 运行。客户端决定入口的位置，不能指定 Windows 标题栏的任意坐标。
+使用右上角提示时，在设置中开启 **Codex 右上角节奏提示**，保持 Pulse 运行，再切到 Windows 商店版 Codex 客户端。它是独立 Windows 伴随窗口，显示位置由程序跟随客户端计算，不修改 Codex 安装文件；点击状态条展开，按 Esc 或点击外部关闭卡片。[完整说明](docs/CODEX_INTEGRATION.md)。
+
+原有侧栏入口仍可使用：在 **设置 → 常规 → Codex 客户端快捷入口** 点击 **添加到 Codex**，在插件页安装并固定。MCP 面板只读本地快照，不独立登录或请求额度；其底部输入框由 Codex 宿主管理，Pulse 无法可靠隐藏。新的右上角卡片没有输入框。
 
 再次双击启动入口会找回同一数据目录的窗口。关闭主窗口会隐藏到托盘；使用托盘的 **退出** 完全结束程序。新版本可从设置检查更新，也可退出程序后解压新版覆盖程序文件并保留 `data`。
 
@@ -48,11 +60,14 @@
 |---|---|
 | 本机 Token 与会话 | 实际保留的 Codex 日志，按本机时区统计；无法恢复已删除记录或其他设备未同步的日志 |
 | 账号额度、Credits | 官方账号服务实际返回的字段，可能包含其他设备消耗；缺字段显示未知 |
+| 个人节奏与触顶区间 | 同账号、同真实窗口的连续官方额度观测，至少 15 分钟且有足够正消耗后估算；量化误差与近期变化扩宽区间，不将本机 Token 换算为额度 |
 | API 参考成本 | 模型参考价格，**不是订阅账单、Credits 扣款或额外收费**；无价格显示未知，免费模型才显示零 |
 | 历史额度估计 | 基于可关联的 5 小时／周窗口观测样本，保留上下界和样本量；其他窗口不可估，不把当前额度摊到历史 |
 | 重置预测与 Feed | 第三方信息，显示来源、时间与陈旧状态；预测不保证实际发生 |
 
 缓存输入已经包含在输入 Token 中，不能再次加到总量。一次线程可能跨日期、模型和项目；每日行不会冒充完整生命周期。
+
+节奏采样默认约每 60 秒只读查询，错误与限流时冷却；不发起模型请求，不启用逐会话 Credits。换账号、窗口重置、负增量或超过 10 分钟的观测间隔会重新分段；超过约 6 分钟未更新时停止预测。项目／模型占比只代表本机今日 Token，不代表它们占用了同等比例的订阅额度。
 
 “启动窗口”会在明确确认后通过 Codex CLI 发出最小模型请求，可能消耗额度；普通刷新不会激活窗口。CLI 请求结束后还需重新查询额度确认结果。
 
@@ -62,6 +77,7 @@
 - 开发运行默认使用 `.local/data`。`PULSE_DATA_DIR` 可指定绝对可写目录；`PULSE_CODEX_HOME` 可指定只读来源。
 - 原始会话文件保持只读。回放会读取正文与工具记录，应用自己的索引和缓存也属于私人资料，不应直接公开。
 - 账号查询在 Rust 进程中读取既有登录并访问官方服务；凭证不传给前端、不进入导出或公开日志。登录与令牌续期仍由官方 Codex 管理。
+- 节奏观测缓存在同一数据目录，身份仅保留本地哈希；前端与 MCP 快照不包含身份哈希或凭证。
 - Pulse 不添加遥测，不上传本机对话。逐会话 Credits 仅发送已查看线程的 ID；外部价格与重置服务各有独立来源。
 - 从旧版升级时保留旧数据文件，并导入兼容的外观、语言、刷新与悬浮窗偏好；旧可执行文件选择项仍留在旧配置中。
 

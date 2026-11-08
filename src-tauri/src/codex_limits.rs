@@ -168,11 +168,19 @@ struct SubscriptionInfo {
 
 pub fn fetch_codex_limits() -> Result<CodexLimitsResponse, String> {
     if env::var("PULSE_OFFLINE").as_deref() == Ok("1") {
+        crate::pulse_pace::unavailable("offline");
         return Err("Account queries are disabled for this offline launch".into());
     }
     let environment = selected_codex_environment();
-    let auth = load_codex_auth()?;
-    if !auth.is_chatgpt { return Err("chatgptLoginRequired".into()); }
+    let auth = match load_codex_auth() {
+        Ok(auth) => auth,
+        Err(error) => { crate::pulse_pace::unavailable("login_required"); return Err(error); }
+    };
+    if !auth.is_chatgpt {
+        crate::pulse_pace::unavailable("api_key");
+        return Err("chatgptLoginRequired".into());
+    }
+    let pace_identity = crate::pulse_pace::begin_account(&auth, &environment);
     // A flight can be shared only by the same credentials and selected source.
     use sha2::{Digest, Sha256};
     let identity = format!("{:x}", Sha256::digest(format!("{:?}|{:?}|{}", environment.home, auth.account_id, auth.access_token).as_bytes()));
@@ -198,7 +206,20 @@ pub fn fetch_codex_limits() -> Result<CodexLimitsResponse, String> {
         Ok(limits)
     });
     if selected_codex_environment() != environment || load_codex_auth().ok().as_ref() != Some(&auth) {
+        crate::pulse_pace::failed(pace_identity.as_deref());
         return Err("identityChanged".into());
+    }
+    #[cfg(debug_assertions)]
+    let synthetic_quota = window_activation_debug_enabled();
+    #[cfg(not(debug_assertions))]
+    let synthetic_quota = false;
+    if synthetic_quota {
+        crate::pulse_pace::unavailable("synthetic");
+    } else {
+        match &result {
+            Ok(limits) => crate::pulse_pace::observe(pace_identity.as_deref(), limits),
+            Err(_) => crate::pulse_pace::failed(pace_identity.as_deref()),
+        }
     }
     result
 }

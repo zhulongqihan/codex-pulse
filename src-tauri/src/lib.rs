@@ -15,6 +15,9 @@ mod pulse_shortcuts;
 mod pulse_instance;
 mod pulse_integration;
 mod pulse_mcp;
+mod pulse_pace;
+mod pulse_pace_view;
+mod pulse_titlebar;
 mod pulse_update;
 mod project_sessions;
 mod scanner;
@@ -973,6 +976,7 @@ pub fn run() {
             ))?;
 
             let app_data_dir = paths.data.clone();
+            pulse_pace::configure(&app_data_dir);
             let store = pulse_desktop::PreferenceStore::load(&app_data_dir);
             let preferences = store.value.lock().unwrap().clone();
             app.manage(paths.clone());
@@ -1001,6 +1005,8 @@ pub fn run() {
                 .visible(!std::env::args().any(|arg| arg == "--hidden" || arg == "--quit" || arg == "--show-widget"))
                 .build()?;
             pulse_desktop::setup_widget(app, &paths, &preferences)?;
+            pulse_titlebar::setup(app, &paths, preferences.titlebar_enabled)?;
+            pulse_pace_view::start_sampler(app.handle().clone());
             #[cfg(windows)]
             if std::env::args().any(|argument| argument == "--show-widget") {
                 pulse_instance::request_widget(app.handle());
@@ -1096,6 +1102,10 @@ pub fn run() {
             pulse_desktop::open_pulse_data_dir,
             pulse_desktop::get_widget_snapshot,
             pulse_desktop::update_widget_snapshot,
+            pulse_pace_view::fetch_pulse_pace,
+            pulse_pace_view::refresh_pulse_pace,
+            pulse_titlebar::titlebar_action,
+            pulse_titlebar::get_titlebar_status,
             fetch_usage_diagnostics,
             schedule_cache_rebuild,
             configure_codex_home,

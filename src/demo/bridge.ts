@@ -10,7 +10,7 @@ const unavailable = () => { throw new Error("此操作需要 Codex Pulse 桌面�
 const stamp = () => new Date().toISOString();
 const scan = () => ({ importedDays: overview("all").daily.length, scannedAt: stamp(), timezone: "Asia/Shanghai", metrics: { totalMs: 0, pricingMs: 0, parseMs: 0, dbMs: 0, filesScanned: sessions.length, filesParsed: 0, filesReused: sessions.length, bytesRead: 0 } });
 const paths = { data: "F:/Demo/CodexPulse/data", logs: "F:/Demo/CodexPulse/data/logs", profile: "F:/Demo/CodexPulse/data/webview", temporary: "F:/Demo/CodexPulse/data/tmp", exports: "F:/Demo/CodexPulse/data/exports" };
-const preferences: PulsePreferences = { skinId: "clear", theme: "system", motionLevel: "gentle", compactMode: false, respectReducedMotion: true, widgetVisible: false, widgetExpanded: false, widgetAlwaysOnTop: true };
+const preferences: PulsePreferences = { skinId: "clear", theme: "system", motionLevel: "gentle", compactMode: false, respectReducedMotion: true, widgetVisible: false, widgetExpanded: false, widgetAlwaysOnTop: true, titlebarEnabled: true };
 let tray: TrayPopoverData | null = null;
 let widget: TrayPopoverData | null = null;
 const creditScopes = new Map<string, { revision: number; active: boolean }>();

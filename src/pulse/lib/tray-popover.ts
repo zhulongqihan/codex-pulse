@@ -1,7 +1,9 @@
 import type { PulseIntegrationData } from "./pulse-integration";
+import type { LocalUsageSummary } from "./local-usage-summary";
 
 export type TrayPopoverData = {
   integration?: PulseIntegrationData;
+  localUsage?: LocalUsageSummary | null;
   updatedAt?: string | null;
   stale?: boolean;
   account: string | null;

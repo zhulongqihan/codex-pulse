@@ -1,10 +1,32 @@
-# 在 Codex 中打开 Pulse
+# Codex 右上角节奏提示与侧栏入口
 
 [English](CODEX_INTEGRATION.en.md) · [返回首页](../README.md)
 
-Codex Pulse 可作为本地 MCP 插件接入支持 MCP Apps 的 Codex 桌面客户端。安装后，可以从客户端侧栏或会话面板打开 Pulse，用量和额度无需切换到独立窗口查看。入口的具体位置、固定方式和显示模式由 Codex 客户端决定；Pulse 不能指定 Windows 标题栏中的任意坐标。相关扩展由 [OpenAI 官方文档](https://developers.openai.com/plugins/build/extensions)说明。
+Codex Pulse 提供两种入口：Windows 右上角伴随提示，以及本地 MCP 插件侧栏。右上角提示由 Pulse 自己的 Windows 窗口提供；插件入口的位置、固定方式和显示模式由 Codex 客户端决定。两者均需保持 Pulse 运行。
 
-## 添加快捷入口
+## 右上角节奏提示
+
+1. 启动 Pulse，在设置中开启 **Codex 右上角节奏提示**。
+2. 打开 Windows 商店版 Codex 桌面客户端，并切到前台。右上角显示软件图标与当前节奏状态；不重复显示 Pulse 品牌文字。
+3. 点击状态条展开无输入框卡片。可查看当前真实额度窗口的预计触顶区间、是否可能早于重置、最近观测消耗，以及今日本机项目／模型 Token 来源。
+4. 按 Esc、点外部或关闭按钮收起卡片。“详情”打开完整 Pulse 工作台。
+
+这是独立伴随窗口，不修改 Codex 安装文件。提示跟随客户端移动和调整大小；切换到其他程序、Codex 最小化、找不到受支持客户端或窗口太小时隐藏。设置会说明当前未显示的原因。右上角跟随目前仅支持 Windows 商店版 Codex，不适用于 Codex Web、macOS 或普通 CLI。
+
+### 节奏数据的含义
+
+- 从官方个人额度的连续只读观测估算，不把 Tokens、API 金额或 Credits 换算为百分比。
+- 同账号、工作区、日志来源与真实额度窗口分别采样。至少 4 个有效点、跨度至少 15 分钟，且有足够正消耗时，才显示保守触顶区间。
+- 区间描述近期节奏持续时的趋势，不保证还能工作多久、还能发送多少请求，也不保证实际触顶早于或晚于重置。
+- 采样中、无变化、消耗缓慢、缺少数据、陈旧和过期均有明确状态。换账号、重置、负增量或超过 10 分钟的采样间隔会重新分段；超过约 6 分钟未更新时不继续预测。
+- 采样默认约每 60 秒只读查询已有额度，错误与限流时冷却，不发起模型请求。已有主工作台的“启动窗口”仍是独立、需确认且可能消耗额度的操作。
+- 项目／模型占比只代表本机今日 Token，不能解释为它们分别用了多少个人额度；官方读数可能包括其他设备的消耗。
+
+公开网页可试用[真实节奏卡片的合成演示](https://zhulongqihan.github.io/codex-pulse/?demo=1&paceScenario=forecast#pulse-pace)，也可在[产品首页](https://zhulongqihan.github.io/codex-pulse/)切换采样中与陈旧状态。网页不连接本机 Codex。
+
+## 添加 MCP 侧栏入口
+
+本地 MCP 插件适用于支持 MCP Apps 的 Codex 桌面客户端，相关入口见 [OpenAI 官方文档](https://developers.openai.com/plugins/build/extensions)。插件底部的对话输入框由 Codex 宿主管理，Pulse 无法可靠隐藏；希望只看数据时，可使用上面的右上角无输入框卡片。
 
 1. 将完整便携包解压到准备长期使用的位置，启动 Codex Pulse，并完成一次数据刷新。
 2. 在 Pulse 的 **设置 → 常规 → Codex 客户端快捷入口** 中，点击 **添加到 Codex**。

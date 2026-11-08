@@ -202,6 +202,19 @@ function mockLoadedDashboard() {
 }
 
 describe("App", () => {
+  it("opens account details from the native pace card while leaving settings", async () => {
+    mockLoadedDashboard();
+    render(<App />);
+    await screen.findByTestId("dashboard-hero");
+    await userEvent.click(screen.getByRole("button", { name: "Settings" }));
+    expect(screen.getByRole("tab", { name: "Appearance" })).toBeVisible();
+    await act(async () => {
+      for (const callback of eventListeners.get("pulse-show-pace-details") ?? []) callback({ payload: null });
+    });
+    await waitFor(() => expect(screen.queryByRole("tab", { name: "Appearance" })).not.toBeInTheDocument());
+    expect(screen.getByTestId("dashboard-hero")).toBeVisible();
+    expect(document.getElementById("pulse-account-details")).toBeInTheDocument();
+  });
   afterEach(() => {
     vi.useRealTimers();
   });

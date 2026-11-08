@@ -11,11 +11,12 @@ export type PulsePreferences = {
   widgetVisible: boolean;
   widgetExpanded: boolean;
   widgetAlwaysOnTop: boolean;
+  titlebarEnabled: boolean;
 };
 
 export const defaultPulsePreferences: PulsePreferences = {
   skinId: "clear", theme: "system", motionLevel: "gentle", compactMode: false,
-  respectReducedMotion: true, widgetVisible: false, widgetExpanded: false, widgetAlwaysOnTop: true,
+  respectReducedMotion: true, widgetVisible: false, widgetExpanded: false, widgetAlwaysOnTop: true, titlebarEnabled: true,
 };
 const storageKey = "codexpulse.appearance.v1";
 let preferences = defaultPulsePreferences;
@@ -38,6 +39,7 @@ export function normalizePulsePreferences(value: unknown): PulsePreferences {
     widgetVisible: data.widgetVisible === true,
     widgetExpanded: data.widgetExpanded === true,
     widgetAlwaysOnTop: data.widgetAlwaysOnTop !== false,
+    titlebarEnabled: data.titlebarEnabled !== false,
   };
 }
 

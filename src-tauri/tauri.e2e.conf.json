@@ -13,7 +13,9 @@
           "windows": [
             "main",
             "tray",
-            "widget"
+            "widget",
+            "pulse-badge",
+            "pulse-pace"
           ],
           "permissions": [
             "wdio:default",

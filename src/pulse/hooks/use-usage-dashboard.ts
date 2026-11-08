@@ -2,6 +2,7 @@ import { useCodexForecast } from "@/hooks/use-codex-forecast";
 import { open, save } from "@tauri-apps/plugin-dialog";
 import { disable as disableAutostart, enable as enableAutostart, isEnabled as isAutostartEnabled } from "@tauri-apps/plugin-autostart";
 import { buildPulseIntegration } from "@/lib/pulse-integration";
+import { buildLocalUsageSummary } from "@/lib/local-usage-summary";
 import { listen } from "@tauri-apps/api/event";
 import { useEffect, useEffectEvent, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -899,6 +900,7 @@ export function useUsageDashboard() {
     }
 
     const widgetData: TrayPopoverData = {
+        localUsage: buildLocalUsageSummary(todayOverview, scanError !== null || isTodayStale),
         integration: buildPulseIntegration(todayOverview, codexLimits, scanError !== null || isTodayStale, codexLimitsError !== null),
         updatedAt: todayOverview?.updatedAt ?? null,
         stale: scanError !== null || codexLimitsError !== null || isTodayStale,

@@ -5,6 +5,7 @@ import { AlertTriangle, ChevronDown, ChevronUp, ExternalLink, GripHorizontal, Pi
 import type { TrayPopoverData } from "@/lib/tray-popover";
 import { pulseWidgetAction, usePulsePreferences } from "@/lib/pulse-appearance";
 import { usePulseCopy } from "@/lib/pulse-copy";
+import { PulseBrandMark } from "./pulse-brand-mark";
 
 export function PulseWidget() {
   const copy = usePulseCopy();
@@ -26,7 +27,7 @@ export function PulseWidget() {
   const action = (value: Parameters<typeof pulseWidgetAction>[0]) => { void pulseWidgetAction(value).catch((cause) => setError(String(cause))); };
   return <main className={`pulse-widget ${preferences.widgetExpanded ? "is-expanded" : ""}`}>
     <header className="pulse-widget-header" data-tauri-drag-region>
-      <span className="pulse-brand-mark" aria-hidden="true"><i/><i/><i/></span><strong data-tauri-drag-region>Pulse</strong><GripHorizontal size={15} className="pulse-widget-grip" data-tauri-drag-region aria-hidden="true"/>
+      <PulseBrandMark size={20}/><strong data-tauri-drag-region>Pulse</strong><GripHorizontal size={15} className="pulse-widget-grip" data-tauri-drag-region aria-hidden="true"/>
       {data?.stale ? <span role="status" aria-label={copy("stale")} title={copy("stale")} className="text-warning"><AlertTriangle size={14}/></span> : null}
       <button type="button" onClick={() => action(preferences.widgetAlwaysOnTop ? "unpin" : "pin")} aria-pressed={preferences.widgetAlwaysOnTop} aria-label={copy("pin")} title={copy("pin")}>{preferences.widgetAlwaysOnTop ? <Pin size={14}/> : <PinOff size={14}/>}</button>
       <button type="button" onClick={() => action(preferences.widgetExpanded ? "collapse" : "expand")} aria-label={copy(preferences.widgetExpanded ? "collapse" : "expand")} title={copy(preferences.widgetExpanded ? "collapse" : "expand")}>{preferences.widgetExpanded ? <ChevronUp size={15}/> : <ChevronDown size={15}/>}</button>

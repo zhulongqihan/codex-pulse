@@ -1,13 +1,15 @@
-# Codex Pulse — Codex usage and session workspace for Windows
+# Codex Pulse — See the Pace Behind Your Quota
 
-Explore local token usage, official account capacity and complete recorded conversations. Choose **Clear** or **Meter**, with an independent floating desktop widget.
+A quiet companion for Codex on Windows: estimate a range for reaching a quota limit from consecutive official observations, see whether that could happen before reset, and inspect local token sources by project and model. Includes **Clear** and **Meter**, a full usage workspace, and session replay.
 
-**[简体中文](README.md)** · **[Download](https://github.com/zhulongqihan/codex-pulse/releases/latest)** · [Synthetic demo](https://zhulongqihan.github.io/codex-pulse/?demo=1) · [Screenshots](https://zhulongqihan.github.io/codex-pulse/gallery.html) · [Issues](https://github.com/zhulongqihan/codex-pulse/issues)
+**[简体中文](README.md)** · **[Download for Windows](https://github.com/zhulongqihan/codex-pulse/releases/latest)** · [Product and interactive preview](https://zhulongqihan.github.io/codex-pulse/) · [Full workspace demo](https://zhulongqihan.github.io/codex-pulse/?demo=1) · [Screenshots](https://zhulongqihan.github.io/codex-pulse/gallery.html) · [Issues](https://github.com/zhulongqihan/codex-pulse/issues)
 
 > Independent open-source software, not affiliated with OpenAI. Public screenshots and browser demonstrations use synthetic data only.
 
 ## Features
 
+- **Codex corner pace indicator:** a shared app icon and compact status, with no brand word taking extra space. Click for a card without an input box, showing a range for reaching the limit, its relation to reset, and today's local token sources. Follows the Microsoft Store edition of Codex for Windows; hides when another app is active, Codex is minimized, or space is insufficient.
+- **Personal quota trends:** at least 4 valid observations spanning at least 15 minutes, isolated by account, workspace, source, and actual quota window. Conservative ranges coexist with explicit unknown, sampling, slow, idle, stale, and expired states. The estimate does not guarantee working time or request counts.
 - **Today and current capacity first**: today's local activity stays independent of historical filters, alongside account capacity and reset times. The complete-range trend and main usage drivers appear together, with daily detail available when needed.
 - **Six work views:** dashboard, sessions, models, daily, monthly and projects, plus settings and optional diagnostics. Collapse or resize navigation and return from settings to your previous view.
 - **Complete date ranges:** nine presets, all retained history and custom inclusive ranges. Daily averages use calendar days. The monthly view independently queries the current month to date and the previous 11 calendar months, distinguishing missing retention, partial retention and zero activity.
@@ -21,7 +23,15 @@ Explore local token usage, official account capacity and complete recorded conve
 - **Two styles and six languages:** Clear/Meter, light/dark/system, density and motion are independent preferences that preserve your working state. Supports Simplified Chinese, Traditional Chinese, English, Japanese, Korean and German.
 - **Exports and updates:** XLSX/Markdown contain range summary, daily, model and project statistics. Pulse updates verify the release signature, product, platform and package digest, preserving data and restoring the previous executable if startup fails.
 
-## Clear and Meter
+## Interactive pace preview
+
+| Clear | Meter |
+|---|---|
+| ![Clear product homepage and actual pace card with synthetic data](docs/screenshots/pace-clear.png) | ![Meter product homepage and actual pace card with synthetic data](docs/screenshots/pace-meter.png) |
+
+Try the [time-to-limit range](https://zhulongqihan.github.io/codex-pulse/?demo=1&paceScenario=forecast#pulse-pace), [sampling](https://zhulongqihan.github.io/codex-pulse/?demo=1&paceScenario=sampling#pulse-pace), and [stale data](https://zhulongqihan.github.io/codex-pulse/?demo=1&paceScenario=stale#pulse-pace) states. These run the implemented interface components with synthetic example readings only.
+
+## Clear and Meter workspaces
 
 | Clear | Meter |
 |---|---|
@@ -38,7 +48,9 @@ Both styles share the same capabilities. Clear uses lightweight comparisons and 
 
 To add desktop and Start menu entries, use the app's shortcut action or run **Create-Codex-Pulse-Shortcuts.cmd** from the portable package. Recreate the shortcuts after moving the application directory.
 
-For a shortcut inside Codex, choose **Settings → General → Codex desktop shortcut → Add to Codex**, install on the client plugin page, and pin the entry. The panel reads a local snapshot; keep Pulse running. The client controls entry placement; arbitrary Windows title-bar coordinates are not supported.
+Enable the **Codex corner pace indicator** in settings, keep Pulse running, and switch to the Microsoft Store edition of Codex for Windows. This is an independent Windows companion surface that follows the client; it does not modify Codex installation files. Click the status to expand; press Esc or click outside to dismiss. See the [full guide](docs/CODEX_INTEGRATION.en.md).
+
+The existing sidebar entry remains available: choose **Settings → General → Codex desktop shortcut → Add to Codex**, then install and pin it. The MCP panel only reads local snapshots, with no independent sign-in or quota request. Its bottom composer belongs to the Codex host and cannot be reliably hidden by Pulse. The new corner card has no input box.
 
 Opening the app again restores the window for the same data folder. Closing the main window hides it to the tray. Choose **Quit** in the tray menu to exit completely. Check for updates in settings, or exit the app and replace program files with a newer release while keeping `data`.
 
@@ -48,11 +60,14 @@ Opening the app again restores the window for the same data folder. Closing the 
 |---|---|
 | Local tokens and conversations | Retained Codex logs, grouped in the local time zone; deleted records or unsynced history from other devices cannot be reconstructed |
 | Account capacity and Credits | Fields actually returned by the official account service; these may include other devices; missing fields remain unknown |
+| Personal pace and time-to-limit range | Consecutive official observations for the same account and actual window, with at least 15 minutes and significant positive consumption; quantization and recent variation widen the range, and local tokens are never converted to quota |
 | API reference costs | Model reference prices, **not subscription bills, Credits charges or extra fees**; missing prices remain unknown, while genuinely free models show zero |
 | Historical quota estimates | Correlated observations from 5-hour and weekly windows, with bounds and sample counts; other windows are not estimated, and current quotas are not spread over historical usage |
 | Reset forecasts and feeds | Third-party information with source, timestamp and stale states; a forecast does not guarantee a reset |
 
 Cached input is already part of input and is never added twice. One thread can span multiple dates, models and projects; a daily row is not presented as its complete lifecycle.
+
+The pace sampler makes a read-only query about every 60 seconds by default, with cooldowns for errors and rate limits. It sends no model requests and does not enable per-session Credits. Account changes, window resets, decreasing consumption or observation gaps over 10 minutes start new segments; readings older than about 6 minutes stop the estimate. Project/model shares describe today's local tokens, not the same share of subscription quota.
 
 **Activate window** sends a minimal model request through Codex CLI after explicit confirmation and may consume quota. Ordinary refresh never activates a window. Completion of the CLI request is checked separately from confirmation that the quota window became active.
 
@@ -62,6 +77,7 @@ Cached input is already part of input and is never added twice. One thread can s
 - Development defaults to `.local/data`. `PULSE_DATA_DIR` selects an absolute writable app-data directory; `PULSE_CODEX_HOME` selects the read-only log source.
 - Original session files are read-only. Replay reads messages and tool records; the app's indexes and caches are private material and should not be published without review.
 - The Rust process reads the existing sign-in to query official account services. Credentials are not exposed to the renderer, exports or public logs. The official Codex client remains responsible for sign-in and token renewal.
+- Pace observations use the same data folder and retain only a local identity hash; renderer and MCP snapshots expose neither the hash nor credentials.
 - Pulse adds no telemetry and does not upload local conversations. Per-session Credits send only the viewed thread IDs. Pricing and reset information have separate external sources.
 - Upgrading retains old data files and imports compatible appearance, language, refresh and widget preferences. The old executable-selection setting remains in its original configuration file.
 

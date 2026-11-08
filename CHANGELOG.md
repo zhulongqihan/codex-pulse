@@ -4,6 +4,28 @@ User-facing changes are grouped by release, following [Keep a Changelog](https:/
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-11-08
+
+### Added / 新增
+
+- Compact Windows companion at the top right of Codex, with a shared app icon and an expandable pace card without a text box. Follows the Microsoft Store client and hides outside it.
+- Codex 右上角 Windows 伴随提示，统一软件图标与无输入框节奏卡片；跟随商店版客户端，切到其他窗口时隐藏。
+- Personal quota pace from consecutive official observations: conservative time-to-limit ranges, relation to reset, and explicit sampling, slow, idle, stale, and unknown states.
+- 连续官方观测得到的个人额度节奏：保守触顶区间、与重置的先后关系，以及采样中、缓慢、无变化、陈旧和未知状态。
+- Today's local project/model token sources, kept separate from account quota. Read-only sampling sends no model requests and applies error/rate-limit cooldowns.
+- 今日项目／模型 Token 来源与账号额度独立呈现；只读采样不发模型请求，错误与限流时冷却。
+- Chinese/English product homepage with the actual interactive pace card, synthetic forecast/sampling/stale scenarios, and Windows downloads.
+- 中英产品首页、真实节奏卡片交互、合成预测／采样／陈旧场景及 Windows 下载入口。
+
+### Changed / 调整
+
+- Shared app identity across the executable, tray, companion, and interface. Clear and Meter remain available.
+- 程序、托盘、伴随窗口与界面统一软件图标，保留清爽／刻度。
+- The existing MCP sidebar entry remains available. Its host-owned composer cannot be reliably hidden; the corner card provides the input-free view.
+- 保留原有 MCP 侧栏入口；宿主输入框无法可靠隐藏，右上角卡片提供无输入框视图。
+
+[完整中英说明 / Full release notes](docs/releases/v0.6.0.md)
+
 ## [0.5.0] - 2026-11-08
 
 ### Added / 新增
@@ -49,7 +71,8 @@ User-facing changes are grouped by release, following [Keep a Changelog](https:/
 
 Earlier releases remain available in [GitHub Releases](https://github.com/zhulongqihan/codex-pulse/releases). / 更早版本保留在 GitHub Releases。
 
-[Unreleased]: https://github.com/zhulongqihan/codex-pulse/compare/v0.5.0...HEAD
+[Unreleased]: https://github.com/zhulongqihan/codex-pulse/compare/v0.6.0...HEAD
+[0.6.0]: https://github.com/zhulongqihan/codex-pulse/releases/tag/v0.6.0
 [0.5.0]: https://github.com/zhulongqihan/codex-pulse/releases/tag/v0.5.0
 [0.4.0]: https://github.com/zhulongqihan/codex-pulse/releases/tag/v0.4.0
 [0.3.0]: https://github.com/zhulongqihan/codex-pulse/releases/tag/v0.3.0

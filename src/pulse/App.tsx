@@ -15,6 +15,7 @@ import { ProjectUsageCard } from "@/components/project-usage-card";
 import { SettingsPage, type SettingsSection } from "@/components/settings-page";
 import { PulseAccountDrawer } from "@/components/pulse-account-drawer";
 import { PulseGettingStarted } from "@/components/pulse-getting-started";
+import { PulseBrandMark } from "@/components/pulse-brand-mark";
 import { SessionUsageTable } from "@/components/session-usage-table";
 import { SessionDetailModal } from "@/components/session-detail-modal";
 import { ProjectSessionsModal } from "@/components/project-sessions-modal";
@@ -29,6 +30,7 @@ import { usePulseCopy } from "@/lib/pulse-copy";
 import { usePulsePreferences } from "@/lib/pulse-appearance";
 import { useShellCopy } from "@/lib/shell-copy";
 import { invoke } from "@tauri-apps/api/core";
+import { listen } from "@tauri-apps/api/event";
 import { Sparkles, X, ChevronDown, ChevronUp, AlertTriangle, ArrowLeft, UserRound, Settings2, MonitorUp, CircleHelp } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useTranslation } from "react-i18next";
@@ -172,6 +174,27 @@ export default function App() {
     handleTrayCountdownUnitChange,
   } = useUsageDashboard();
 
+  const paceDetails = useRef<() => void>(() => {});
+  paceDetails.current = () => {
+    setSelectedProjectForModal(null);
+    setSelectedSession(null);
+    setIsResetHistoryOpen(false);
+    setAccountDrawerOpen(false);
+    setAccountExpanded(true);
+    savedScroll.current = 0;
+    void handleViewChange("dashboard");
+    requestAnimationFrame(() => document.getElementById("pulse-account-details")?.scrollIntoView({ block: "start" }));
+  };
+  useEffect(() => {
+    let disposed = false;
+    let stop: (() => void) | undefined;
+    void listen("pulse-show-pace-details", () => paceDetails.current()).then(unlisten => {
+      if (disposed) unlisten();
+      else stop = unlisten;
+    }).catch(() => { /* The public browser preview has no native window events. */ });
+    return () => { disposed = true; stop?.(); };
+  }, []);
+
   useEffect(() => {
     try {
       localStorage.setItem("sidebar_collapsed", String(sidebarCollapsed));
@@ -268,7 +291,7 @@ export default function App() {
   return (
     <div className="pulse-app relative flex h-screen flex-col overflow-hidden bg-background text-foreground">
       <header className="pulse-topbar">
-        <div className="pulse-brand"><span className="pulse-brand-mark" aria-hidden="true"><i/><i/><i/></span><strong>Pulse</strong>{document.documentElement.dataset.demo === "true" ? <span className="pulse-demo-label">{copy("sample")}</span> : null}<span className="pulse-page-label">{t(`common.${view === "models" ? "model" : view === "projects" ? "project" : view}`)}</span></div>
+        <div className="pulse-brand"><PulseBrandMark size={28}/><strong>Pulse</strong>{document.documentElement.dataset.demo === "true" ? <span className="pulse-demo-label">{copy("sample")}</span> : null}<span className="pulse-page-label">{t(`common.${view === "models" ? "model" : view === "projects" ? "project" : view}`)}</span></div>
         <div className="pulse-global-actions"><PulseStyleSwitcher/>
           <button type="button" data-testid="open-widget" className="pulse-shell-action pulse-widget-action" disabled={desktopAction !== null} aria-busy={desktopAction === "widget"} onClick={() => void runDesktopAction("widget")}><MonitorUp size={16}/><span>{shellCopy(desktopAction === "widget" ? "widgetBusy" : preferences.widgetVisible ? "widgetVisible" : "widget")}</span></button>
           <button type="button" data-testid="account-toggle" className="pulse-shell-action" aria-label={shellCopy("account")} aria-expanded={compactWindow ? accountDrawerOpen : accountExpanded} aria-controls={compactWindow ? "pulse-account-drawer" : "pulse-account-rail"} onClick={() => compactWindow ? setAccountDrawerOpen(true) : setAccountExpanded(value => !value)}><UserRound size={17}/><span>{shellCopy("account")}</span>{compactWindow && quotaSummary ? <small className="pulse-account-summary">{quotaSummary} {shellCopy("remaining")}</small> : null}</button>

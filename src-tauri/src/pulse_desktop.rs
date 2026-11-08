@@ -120,6 +120,7 @@ pub struct PulsePreferences {
     pub widget_visible: bool,
     pub widget_expanded: bool,
     pub widget_always_on_top: bool,
+    pub titlebar_enabled: bool,
     pub widget_x: Option<i32>,
     pub widget_y: Option<i32>,
 }
@@ -135,6 +136,7 @@ impl Default for PulsePreferences {
             widget_visible: false,
             widget_expanded: false,
             widget_always_on_top: true,
+            titlebar_enabled: true,
             widget_x: None,
             widget_y: None,
         }
@@ -144,7 +146,35 @@ impl Default for PulsePreferences {
 pub struct PreferenceStore {
     pub value: Mutex<PulsePreferences>,
     path: PathBuf,
+    titlebar_path: PathBuf,
     legacy: Option<LegacyPreferences>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct TitlebarPreferences {
+    enabled: bool,
+}
+
+/// Keep the established file readable by 0.5, whose parser rejects unknown fields.
+/// The IPC DTO still includes the complete current preference set.
+fn base_preferences(value: &PulsePreferences) -> Result<serde_json::Value, String> {
+    let mut stored = serde_json::to_value(value).map_err(|error| error.to_string())?;
+    stored
+        .as_object_mut()
+        .ok_or("Invalid preference object")?
+        .remove("titlebarEnabled");
+    Ok(stored)
+}
+
+fn write_preferences_file(path: &Path, bytes: &[u8]) -> Result<(), String> {
+    let temporary = path.with_extension("json.tmp");
+    fs::write(&temporary, bytes).map_err(|error| error.to_string())?;
+    if let Err(error) = fs::rename(&temporary, path) {
+        let _ = fs::remove_file(&temporary);
+        return Err(error.to_string());
+    }
+    Ok(())
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Default)]
@@ -229,6 +259,7 @@ fn migrate_legacy(value: &serde_json::Value) -> (PulsePreferences, LegacyPrefere
 impl PreferenceStore {
     pub fn load(data: &Path) -> Self {
         let path = data.join("pulse-preferences.json");
+        let titlebar_path = data.join("pulse-titlebar-preferences.json");
         let legacy_path = data.join("pulse-legacy-preferences.json");
         if !path.exists() {
             if let Some(legacy) = fs::read(data.join("settings.json"))
@@ -238,7 +269,9 @@ impl PreferenceStore {
                 let (migrated, legacy_preferences) = migrate_legacy(&legacy);
                 // Never rewrite the Electron file. Unknown fields and executable paths stay there.
                 if let (Ok(preferences), Ok(imported)) = (
-                    serde_json::to_vec_pretty(&migrated),
+                    base_preferences(&migrated).and_then(|value| {
+                        serde_json::to_vec_pretty(&value).map_err(|error| error.to_string())
+                    }),
                     serde_json::to_vec_pretty(&legacy_preferences),
                 ) {
                     if fs::write(&legacy_path, imported)
@@ -250,18 +283,69 @@ impl PreferenceStore {
                 }
             }
         }
-        let value = fs::read(&path)
+        let mut value = fs::read(&path)
             .ok()
             .and_then(|bytes| serde_json::from_slice::<PulsePreferences>(&bytes).ok())
             .filter(|value| validate_preferences(value).is_ok())
             .unwrap_or_default();
+        if let Some(titlebar) = fs::read(&titlebar_path)
+            .ok()
+            .and_then(|bytes| serde_json::from_slice::<TitlebarPreferences>(&bytes).ok())
+        {
+            value.titlebar_enabled = titlebar.enabled;
+        }
         Self {
             value: Mutex::new(value),
             path,
+            titlebar_path,
             legacy: fs::read(legacy_path)
                 .ok()
                 .and_then(|bytes| serde_json::from_slice(&bytes).ok()),
         }
+    }
+
+    fn persist(&self, value: &PulsePreferences) -> Result<(), String> {
+        let base = base_preferences(value)?;
+        let previous = fs::read(&self.path).ok();
+        let base_changed = previous
+            .as_ref()
+            .and_then(|bytes| serde_json::from_slice::<serde_json::Value>(bytes).ok())
+            .as_ref()
+            != Some(&base);
+        if base_changed {
+            write_preferences_file(
+                &self.path,
+                &serde_json::to_vec_pretty(&base).map_err(|error| error.to_string())?,
+            )?;
+        }
+        let existing_titlebar = fs::read(&self.titlebar_path)
+            .ok()
+            .and_then(|bytes| serde_json::from_slice::<TitlebarPreferences>(&bytes).ok());
+        if existing_titlebar
+            .map(|preferences| preferences.enabled)
+            .unwrap_or(true)
+            != value.titlebar_enabled
+        {
+            let titlebar = serde_json::to_vec_pretty(&TitlebarPreferences {
+                enabled: value.titlebar_enabled,
+            })
+            .map_err(|error| error.to_string())?;
+            if let Err(error) = write_preferences_file(&self.titlebar_path, &titlebar) {
+                // A combined patch must not leave the old preference file partly updated.
+                if base_changed {
+                    let rollback = if let Some(bytes) = previous {
+                        write_preferences_file(&self.path, &bytes)
+                    } else {
+                        fs::remove_file(&self.path).map_err(|error| error.to_string())
+                    };
+                    rollback.map_err(|rollback| {
+                        format!("{error}; preference rollback failed: {rollback}")
+                    })?;
+                }
+                return Err(error);
+            }
+        }
+        Ok(())
     }
 }
 
@@ -324,16 +408,11 @@ pub fn set_pulse_preferences(
         .lock()
         .map_err(|_| "Preference lock unavailable")?;
     let updated = merged_preferences(&saved, patch)?;
-    let temporary = state.path.with_extension("json.tmp");
-    fs::write(
-        &temporary,
-        serde_json::to_vec_pretty(&updated).map_err(|error| error.to_string())?,
-    )
-    .map_err(|error| error.to_string())?;
-    fs::rename(&temporary, &state.path).map_err(|error| error.to_string())?;
+    state.persist(&updated)?;
     *saved = updated.clone();
     drop(saved);
     apply_widget(&app, &updated)?;
+    crate::pulse_titlebar::apply_enabled(&app, updated.titlebar_enabled);
     app.emit("pulse-preferences-changed", &updated)
         .map_err(|error| error.to_string())?;
     Ok(updated)
@@ -496,9 +575,7 @@ pub fn save_widget_position(app: &tauri::AppHandle) {
             if let Ok(mut value) = store.value.lock() {
                 value.widget_x = Some(position.x);
                 value.widget_y = Some(position.y);
-                if let Ok(bytes) = serde_json::to_vec_pretty(&*value) {
-                    let _ = fs::write(&store.path, bytes);
-                }
+                let _ = store.persist(&value);
             };
         }
     }
@@ -527,6 +604,153 @@ pub fn open_pulse_data_dir(state: tauri::State<'_, PulsePaths>) -> Result<(), St
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    // The v0.5.0 on-disk schema: unknown fields reject the entire document.
+    #[derive(Debug, Serialize, Deserialize)]
+    #[serde(rename_all = "camelCase", deny_unknown_fields)]
+    struct Preferences050 {
+        skin_id: String,
+        theme: String,
+        motion_level: String,
+        compact_mode: bool,
+        respect_reduced_motion: bool,
+        widget_visible: bool,
+        widget_expanded: bool,
+        widget_always_on_top: bool,
+        widget_x: Option<i32>,
+        widget_y: Option<i32>,
+    }
+
+    fn preference_fixture() -> (PathBuf, Vec<u8>) {
+        let directory =
+            std::env::temp_dir().join(format!("pulse-preference-compat-{}", uuid::Uuid::new_v4()));
+        fs::create_dir_all(&directory).unwrap();
+        let original = serde_json::to_vec(
+            &base_preferences(&PulsePreferences {
+                skin_id: "meter".into(),
+                theme: "dark".into(),
+                motion_level: "off".into(),
+                compact_mode: true,
+                widget_visible: true,
+                widget_expanded: true,
+                widget_x: Some(-400),
+                widget_y: Some(80),
+                ..Default::default()
+            })
+            .unwrap(),
+        )
+        .unwrap();
+        fs::write(directory.join("pulse-preferences.json"), &original).unwrap();
+        (directory, original)
+    }
+
+    #[test]
+    fn titlebar_preferences_survive_downgrade_without_polluting_the_050_file() {
+        let (directory, original) = preference_fixture();
+        let store = PreferenceStore::load(&directory);
+        let mut current = store.value.lock().unwrap().clone();
+        // Reproduce the regression before checking the new storage boundary.
+        let inline = serde_json::to_vec(&current).unwrap();
+        assert!(serde_json::from_slice::<Preferences050>(&inline)
+            .unwrap_err()
+            .to_string()
+            .contains("titlebarEnabled"));
+        current.titlebar_enabled = false;
+        store.persist(&current).unwrap();
+        assert_eq!(
+            fs::read(&store.path).unwrap(),
+            original,
+            "Titlebar-only updates preserve even the old file formatting"
+        );
+        let mut old: Preferences050 =
+            serde_json::from_slice(&fs::read(&store.path).unwrap()).unwrap();
+        assert_eq!(old.skin_id, "meter");
+        assert_eq!(old.theme, "dark");
+        assert!(old.widget_expanded);
+        assert!(
+            !PreferenceStore::load(&directory)
+                .value
+                .lock()
+                .unwrap()
+                .titlebar_enabled
+        );
+        // Simulate a genuine old-version save between downgrade and upgrade.
+        old.theme = "light".into();
+        old.widget_x = Some(-500);
+        fs::write(&store.path, serde_json::to_vec_pretty(&old).unwrap()).unwrap();
+        let upgraded = PreferenceStore::load(&directory);
+        let mut value = upgraded.value.lock().unwrap().clone();
+        assert_eq!(value.theme, "light");
+        assert_eq!(value.widget_x, Some(-500));
+        assert!(!value.titlebar_enabled);
+        value.widget_y = Some(100);
+        upgraded.persist(&value).unwrap();
+        assert_eq!(
+            serde_json::from_slice::<Preferences050>(&fs::read(&store.path).unwrap())
+                .unwrap()
+                .widget_y,
+            Some(100)
+        );
+        fs::remove_dir_all(&directory).unwrap();
+    }
+
+    #[test]
+    fn invalid_titlebar_file_cannot_reset_the_established_preferences() {
+        let (directory, _) = preference_fixture();
+        fs::write(
+            directory.join("pulse-titlebar-preferences.json"),
+            b"{\"enabled\":\"invalid\"}",
+        )
+        .unwrap();
+        let store = PreferenceStore::load(&directory);
+        let value = store.value.lock().unwrap();
+        assert_eq!(value.skin_id, "meter");
+        assert_eq!(value.theme, "dark");
+        assert!(value.titlebar_enabled);
+        fs::remove_dir_all(&directory).unwrap();
+    }
+
+    #[test]
+    fn a_failed_extension_save_restores_the_previous_base_file() {
+        let (directory, original) = preference_fixture();
+        fs::create_dir(directory.join("pulse-titlebar-preferences.json")).unwrap();
+        let store = PreferenceStore::load(&directory);
+        let mut value = store.value.lock().unwrap().clone();
+        value.skin_id = "clear".into();
+        value.titlebar_enabled = false;
+        assert!(store.persist(&value).is_err());
+        assert_eq!(fs::read(&store.path).unwrap(), original);
+        fs::remove_dir_all(&directory).unwrap();
+    }
+
+    #[test]
+    fn an_unreleased_inline_titlebar_field_is_split_on_the_next_save() {
+        let (directory, _) = preference_fixture();
+        let mut value = PreferenceStore::load(&directory)
+            .value
+            .lock()
+            .unwrap()
+            .clone();
+        value.titlebar_enabled = false;
+        fs::write(
+            directory.join("pulse-preferences.json"),
+            serde_json::to_vec(&value).unwrap(),
+        )
+        .unwrap();
+        let store = PreferenceStore::load(&directory);
+        let loaded = store.value.lock().unwrap().clone();
+        assert!(!loaded.titlebar_enabled);
+        store.persist(&loaded).unwrap();
+        assert!(serde_json::from_slice::<Preferences050>(&fs::read(&store.path).unwrap()).is_ok());
+        assert!(
+            !PreferenceStore::load(&directory)
+                .value
+                .lock()
+                .unwrap()
+                .titlebar_enabled
+        );
+        fs::remove_dir_all(&directory).unwrap();
+    }
     #[test]
     fn portable_data_follows_the_executable_and_explicit_paths_must_be_absolute() {
         let executable = std::env::temp_dir().join("portable/pulse.exe");

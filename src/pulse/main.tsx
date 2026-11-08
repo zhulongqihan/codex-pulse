@@ -2,6 +2,7 @@ import React from "react";
 import ReactDOM from "react-dom/client";
 import "./i18n";
 import "./styles.css";
+import "./components/pulse-pace.css";
 import { isTauri } from "@tauri-apps/api/core";
 import { migrateLegacyPreferences } from "./lib/legacy-preferences";
 import { initializePulseAppearance } from "./lib/pulse-appearance";
@@ -11,6 +12,8 @@ if (isTauri() && navigator.platform.startsWith("Mac")) {
 }
 
 async function renderApp() {
+  const paceSurface = window.location.hash === "#pulse-badge" ? "badge" : window.location.hash === "#pulse-pace" ? "panel" : null;
+  if (paceSurface) document.documentElement.dataset.paceSurface = paceSurface;
   await migrateLegacyPreferences();
   if (!isTauri() && new URLSearchParams(location.search).get("demo") === "1") {
     await (await import("../demo/bridge")).installDemoBridge();
@@ -26,7 +29,11 @@ async function renderApp() {
     await import("@wdio/tauri-plugin");
   }
 
-  const App = window.location.hash === "#widget"
+  const App = paceSurface === "badge"
+    ? (await import("./components/pulse-pace")).PulsePaceBadge
+    : paceSurface === "panel"
+    ? (await import("./components/pulse-pace")).PulsePacePanel
+    : window.location.hash === "#widget"
     ? (await import("./components/pulse-widget")).PulseWidget
     : window.location.hash === "#tray"
     ? (await import("./components/tray-popover")).TrayPopover

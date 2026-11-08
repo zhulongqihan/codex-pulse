@@ -4,7 +4,9 @@
   "description": "Default desktop capability set",
   "windows": [
     "main",
-    "widget"
+    "widget",
+    "pulse-badge",
+    "pulse-pace"
   ],
   "permissions": [
     "core:default",

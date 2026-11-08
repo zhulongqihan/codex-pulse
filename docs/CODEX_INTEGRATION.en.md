@@ -1,10 +1,32 @@
-# Open Pulse inside Codex
+# Codex corner pace indicator and sidebar entry
 
 [简体中文](CODEX_INTEGRATION.md) · [Back to README](../README.en.md)
 
-Codex Pulse can connect to a Codex desktop client that supports MCP Apps as a local MCP plugin. Once installed, open Pulse from the client sidebar or a chat panel to see usage and quota without switching to a separate window. Codex controls the entry location, pinning behavior, and display mode. Pulse cannot place a button at arbitrary coordinates in the Windows title bar. These entrypoints are described in the [official OpenAI documentation](https://developers.openai.com/plugins/build/extensions).
+Codex Pulse offers two entrypoints: a Windows corner companion and a local MCP sidebar plugin. Pulse provides the corner indicator through its own Windows surface; Codex controls the plugin's location, pinning, and display mode. Keep Pulse running for both.
 
-## Add the shortcut
+## Corner pace indicator
+
+1. Start Pulse and enable the **Codex corner pace indicator** in settings.
+2. Open the Microsoft Store edition of Codex for Windows and bring it to the foreground. The top right shows the app icon and current pace state, without an extra Pulse brand word.
+3. Click the status to open a card without an input box. See a time-to-limit range for the actual quota window, its relation to reset, recent measured consumption, and today's local token sources by project/model.
+4. Press Esc, click outside, or use the close button to dismiss the card. Details opens the full Pulse workspace.
+
+The companion does not modify Codex installation files. It follows the client when moved or resized, and hides when another application is active, Codex is minimized, no supported client is found, or the window is too small. Settings explain why it is hidden. Corner following currently supports only the Microsoft Store edition of Codex for Windows, not Codex Web, macOS, or a regular CLI.
+
+### What the pace means
+
+- Estimates use consecutive read-only observations of official personal quota. Tokens, API costs, and Credits are never converted into quota percentages.
+- Account, workspace, selected log source, and actual quota window are isolated. A conservative time range requires at least 4 valid points over at least 15 minutes and significant positive consumption.
+- A range describes the trend if recent consumption continues. It does not guarantee working time, request counts, or whether the limit will actually be reached before or after reset.
+- Sampling, idle, slow, missing, stale, and expired states are explicit. Account changes, resets, decreasing consumption, or gaps over 10 minutes start new segments; readings older than about 6 minutes stop the forecast.
+- The sampler reads existing quota about every 60 seconds by default, with cooldowns for errors and rate limits. It sends no model requests. Activate window in the main workspace remains a separate, confirmed operation that may consume quota.
+- Project/model shares describe today's local tokens, not their share of personal quota. Official account readings may include consumption on other devices.
+
+Try the [actual pace card with synthetic data](https://zhulongqihan.github.io/codex-pulse/?demo=1&paceScenario=forecast#pulse-pace), or switch sampling and stale states on the [product homepage](https://zhulongqihan.github.io/codex-pulse/). The website does not connect to local Codex.
+
+## Add the MCP sidebar entry
+
+The local MCP plugin works with a Codex desktop client supporting MCP Apps; see the [official OpenAI documentation](https://developers.openai.com/plugins/build/extensions). Its bottom composer belongs to the Codex host and cannot be reliably hidden by Pulse. Use the corner card above for a view without an input box.
 
 1. Extract the complete portable package to a location you intend to keep. Start Codex Pulse and refresh its data once.
 2. In Pulse, go to **Settings → General → Codex desktop shortcut** and select **Add to Codex**.

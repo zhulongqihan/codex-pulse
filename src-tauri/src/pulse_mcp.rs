@@ -1,6 +1,7 @@
 //! A local, opt-in MCP view of the last Pulse UI snapshot.
 //! This mode does not initialize Tauri, scan logs, read credentials, or call a service.
 use chrono::{DateTime, NaiveDate, Utc};
+use base64::{engine::general_purpose::STANDARD, Engine};
 use serde::Serialize;
 use serde_json::{json, Value};
 use std::{
@@ -8,7 +9,7 @@ use std::{
     io::{BufRead, Read, Write},
     path::{Path, PathBuf},
     process::{Command, Stdio},
-    sync::Mutex,
+    sync::{LazyLock, Mutex},
 };
 
 const SNAPSHOT_NAME: &str = "integration-snapshot.json";
@@ -18,6 +19,9 @@ const MAX_AGE_SECONDS: i64 = 6 * 60;
 const RESOURCE_URI: &str = "ui://pulse/panel.html";
 const RESOURCE_MIME: &str = "text/html;profile=mcp-app";
 static SNAPSHOT_WRITE: Mutex<()> = Mutex::new(());
+static ICON_URI: LazyLock<String> = LazyLock::new(|| format!("data:image/png;base64,{}", STANDARD.encode(include_bytes!("../../integrations/codex/plugins/codex-pulse/assets/icon.png"))));
+
+fn icons() -> Value { json!([{"src": &*ICON_URI, "mimeType":"image/png", "sizes":["128x128"]}]) }
 
 #[derive(Clone, Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -43,6 +47,8 @@ pub struct IntegrationQuota {
 #[derive(Clone, Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct IntegrationSnapshot {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub pace: Option<crate::pulse_pace::PaceSnapshot>,
     pub schema_version: u8,
     pub application_version: String,
     pub captured_at: Option<String>,
@@ -106,6 +112,7 @@ fn project(value: &Value, now: DateTime<Utc>, captured: Option<DateTime<Utc>>) -
         }
     }
     IntegrationSnapshot {
+        pace: None,
         schema_version: 1,
         application_version: env!("CARGO_PKG_VERSION").into(),
         captured_at: captured.map(|date| date.to_rfc3339()),
@@ -158,7 +165,9 @@ pub fn read_snapshot(directory: &Path) -> IntegrationSnapshot {
         serde_json::from_slice(&bytes).ok()
     })().unwrap_or(Value::Null);
     let captured = timestamp(value.get("capturedAt"));
-    project(&value, now, captured)
+    let mut snapshot = project(&value, now, captured);
+    snapshot.pace = Some(crate::pulse_pace::read_snapshot(directory, now));
+    snapshot
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -181,6 +190,7 @@ fn tools() -> Value {
     json!({"tools": [
         {
             "name":"pulse_usage", "title":"Codex Pulse",
+            "icons": icons(),
             "description":"View the last local Pulse usage and account-window snapshot. Does not scan conversations, read credentials, activate models, or contact account services.",
             "inputSchema":{"type":"object","properties":{},"additionalProperties":false},
             "annotations":{"readOnlyHint":true,"destructiveHint":false,"openWorldHint":false},
@@ -230,7 +240,7 @@ fn dispatch(
             } else { "2025-11-25" };
             *initialized = true;
             json!({"protocolVersion":protocol,"capabilities":{"tools":{},"resources":{}},
-                "serverInfo":{"name":"codex-pulse","version":env!("CARGO_PKG_VERSION"),"title":"Codex Pulse"}})
+                "serverInfo":{"name":"codex-pulse","version":env!("CARGO_PKG_VERSION"),"title":"Codex Pulse", "icons":icons()}})
         },
         "ping" => json!({}),
         "tools/list" => tools(),
@@ -238,7 +248,7 @@ fn dispatch(
         "resources/templates/list" => json!({"resourceTemplates":[]}),
         "resources/read" if params.get("uri").and_then(Value::as_str) == Some(RESOURCE_URI) => json!({
             "contents":[{"uri":RESOURCE_URI,"mimeType":RESOURCE_MIME,
-                "text":include_str!("../../src/pulse/integration/panel.html").replace("__PULSE_VERSION__", env!("CARGO_PKG_VERSION")),
+                "text":include_str!("../../src/pulse/integration/panel.html").replace("__PULSE_VERSION__", env!("CARGO_PKG_VERSION")).replace("__PULSE_ICON__", &ICON_URI),
                 "_meta":{"ui":{"csp":{"connectDomains":[],"resourceDomains":[]}}}}]
         }),
         "resources/read" => return Some(rpc_error(id, -32602, "Unknown resource.")),
@@ -383,6 +393,9 @@ mod tests {
         let resource = dispatch(json!({"jsonrpc":"2.0","id":5,"method":"resources/read","params":{"uri":RESOURCE_URI}}), Path::new("missing"), &mut initialized, &mut open).unwrap();
         let html = resource["result"]["contents"][0]["text"].as_str().unwrap();
         assert!(!html.contains("__PULSE_VERSION__"));
+        assert!(!html.contains("__PULSE_ICON__"));
+        assert!(html.contains("data:image/png;base64,"));
+        assert_eq!(initialized_result["result"]["serverInfo"]["icons"][0]["src"], listed["result"]["tools"][0]["icons"][0]["src"]);
         let denied = dispatch(json!({"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"pulse_open","arguments":{"target":"shell","command":"ignored"}}}), Path::new("missing"), &mut initialized, &mut open).unwrap();
         assert_eq!(denied["error"]["code"], -32602);
         dispatch(json!({"jsonrpc":"2.0","id":4,"method":"tools/call","params":{"name":"pulse_open","arguments":{"target":"widget"}}}), Path::new("missing"), &mut initialized, &mut open);
