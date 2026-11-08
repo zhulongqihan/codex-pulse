@@ -1,5 +1,6 @@
 import { PulseAppearanceSettings, PulseWidgetSettings } from "./pulse-appearance-controls";
 import { PulseSourceSettings } from "./pulse-source-settings";
+import { PulseCodexIntegration } from "./pulse-codex-integration";
 import { usePulseCopy } from "@/lib/pulse-copy";
 import { useShellCopy } from "@/lib/shell-copy";
 import { quotaWindowLabel } from "@/lib/quota-windows";
@@ -189,6 +190,7 @@ export function SettingsPage({
 
   const generalContent = (
     <>
+      <PulseCodexIntegration />
       <Card>
         <CardHeader>
           <CardTitle>{t("settings.updates_title")}</CardTitle>

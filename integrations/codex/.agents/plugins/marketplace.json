@@ -1,0 +1,11 @@
+{
+  "name": "codex-pulse-local",
+  "plugins": [
+    {
+      "name": "codex-pulse",
+      "source": { "source": "local", "path": "./plugins/codex-pulse" },
+      "policy": { "installation": "AVAILABLE", "authentication": "ON_INSTALL" },
+      "category": "Productivity"
+    }
+  ]
+}

@@ -17,6 +17,7 @@ Explore local token usage, official account capacity and complete recorded conve
 - **Optional per-session Credits:** off by default; query only the real thread IDs currently being viewed, without sending conversation bodies. Preserve exact decimals, negative adjustments, cached values, cooldowns and unavailable states.
 - **Local sources and maintenance:** incremental scanning, compressed archives, one selected native/WSL environment, targeted session/project rescans, diagnostics and cache rebuilding.
 - **Desktop companions:** a tray information panel and an independent draggable, pinnable, expandable widget, with separate metric configuration. Launch at sign-in and automatic refresh are supported.
+- **Codex desktop entry:** a local MCP plugin shows quota and today's summary in a desktop client with MCP Apps support, with actions to open the dashboard or widget. Clear and Meter panels use Chinese or English; see the [installation guide](docs/CODEX_INTEGRATION.en.md).
 - **Two styles and six languages:** Clear/Meter, light/dark/system, density and motion are independent preferences that preserve your working state. Supports Simplified Chinese, Traditional Chinese, English, Japanese, Korean and German.
 - **Exports and updates:** XLSX/Markdown contain range summary, daily, model and project statistics. Pulse updates verify the release signature, product, platform and package digest, preserving data and restoring the previous executable if startup fails.
 
@@ -36,6 +37,8 @@ Both styles share the same capabilities. Clear uses lightweight comparisons and 
 4. Confirm your Codex Home in settings, then choose appearance, refresh interval and widget preferences. Account queries require an existing ChatGPT sign-in; API key mode does not expose subscription quotas.
 
 To add desktop and Start menu entries, use the app's shortcut action or run **Create-Codex-Pulse-Shortcuts.cmd** from the portable package. Recreate the shortcuts after moving the application directory.
+
+For a shortcut inside Codex, choose **Settings → General → Codex desktop shortcut → Add to Codex**, install on the client plugin page, and pin the entry. The panel reads a local snapshot; keep Pulse running. The client controls entry placement; arbitrary Windows title-bar coordinates are not supported.
 
 Opening the app again restores the window for the same data folder. Closing the main window hides it to the tray. Choose **Quit** in the tray menu to exit completely. Check for updates in settings, or exit the app and replace program files with a newer release while keeping `data`.
 

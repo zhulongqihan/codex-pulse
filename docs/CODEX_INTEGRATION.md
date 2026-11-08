@@ -1,0 +1,67 @@
+# 在 Codex 中打开 Pulse
+
+[English](CODEX_INTEGRATION.en.md) · [返回首页](../README.md)
+
+Codex Pulse 可作为本地 MCP 插件接入支持 MCP Apps 的 Codex 桌面客户端。安装后，可以从客户端侧栏或会话面板打开 Pulse，用量和额度无需切换到独立窗口查看。入口的具体位置、固定方式和显示模式由 Codex 客户端决定；Pulse 不能指定 Windows 标题栏中的任意坐标。相关扩展由 [OpenAI 官方文档](https://developers.openai.com/plugins/build/extensions)说明。
+
+## 添加快捷入口
+
+1. 将完整便携包解压到准备长期使用的位置，启动 Codex Pulse，并完成一次数据刷新。
+2. 在 Pulse 的 **设置 → 常规 → Codex 客户端快捷入口** 中，点击 **添加到 Codex**。
+3. 在打开的 Codex 插件详情页中检查信息并选择 **Install / 安装**。如果客户端显示额外确认，按客户端提示完成。
+4. 在 Codex 侧栏中打开 **Codex Pulse**。客户端提供会话面板入口时，也可以在当前会话中打开；若提供固定选项，可将入口固定到侧栏。
+
+添加操作会在 Pulse 程序目录下生成 `integrations/codex` 本地插件，并打开客户端的插件详情页。安装由 Codex 完成。无需 Node.js、API Key 或额外的后台 Web 服务。设置入口使用程序内置的插件模板；仅更新 Pulse 可执行文件后也可重新准备插件。
+
+首次打开后，面板可以查看今日 tokens、估算金额，以及实际额度窗口的剩余额度和重置时间。窗口时长按 Pulse 获得的数据标注。面板还提供刷新、打开 Pulse 主窗口和打开桌面挂件的按钮。无法取得的数据会显示为空或过期状态。
+
+## 数据与刷新
+
+插件读取 Pulse 最近保存的本地汇总快照。Pulse 刷新后会更新这份快照；面板里的刷新按钮重新读取快照。它不会独立登录账号、读取认证文件或向额度接口发起请求。
+
+- 今日金额使用 Pulse 的本地估算口径，不等同于账单金额。
+- 额度来自 Pulse 已获取的个人使用额度信息，显示剩余百分比及重置时间。
+- Pulse 没有运行、尚未生成快照或数据已过期时，面板会明确提示；请先打开 Pulse 刷新，再刷新面板。
+- MCP 模式只提供汇总读取和打开本机 Pulse 窗口的操作，不向插件暴露聊天内容、账号凭据或原始会话日志。
+
+## 手动准备与注册
+
+也可在完整便携包目录中打开 PowerShell，运行：
+
+```powershell
+.\install-codex-plugin.ps1 -AppDirectory $PWD.Path
+```
+
+脚本生成插件、通过已安装的 Codex CLI 注册 `codex-pulse-local` 本地市场，然后打开官方插件详情页。仍需在详情页完成安装。Codex CLI 不在 PATH 中时，可使用 `-CodexExecutable` 指定 CLI 路径；也可以直接使用 Pulse 设置内的入口。
+
+脚本把数据目录固定到插件配置中：优先使用 `-DataDirectory`，其次使用当前 PowerShell 的 `PULSE_DATA_DIR`，未设置时使用程序旁的 `data`。自定义目录必须为绝对路径；准备操作不会创建或修改该数据目录。已运行的 Codex 不会继承此 PowerShell 的环境变量，因此更换 Pulse 数据目录后需重新添加插件。
+
+```powershell
+.\install-codex-plugin.ps1 -AppDirectory $PWD.Path -DataDirectory 'F:\PulseData'
+```
+
+只生成供检查的文件和安装链接，不更改 Codex 配置、不打开客户端：
+
+```powershell
+.\install-codex-plugin.ps1 -AppDirectory $PWD.Path -PrepareOnly -Json
+```
+
+该模式仍会写入程序目录下的 `integrations/codex`。返回内容包括可执行文件路径、插件目录、市场文件和 `deepLink`。需要继续安装时，可在 PowerShell 中用 `Start-Process` 打开该链接。
+
+测试指定 Codex 配置目录的市场注册，并保持客户端界面关闭：
+
+```powershell
+.\install-codex-plugin.ps1 -AppDirectory $PWD.Path -CodexHome 'F:\CodexProfiles\PulseTest' -NoOpen -Json
+```
+
+`-CodexHome` 仅控制此次 CLI 注册使用的 Codex 配置目录；它不会隔离 Pulse 的用量数据。隔离注册检查请同时使用 `-NoOpen`，避免链接交由当前正在运行的桌面客户端处理。脚本只注册自己的市场，不替换其他插件设置。
+
+## 兼容与维护
+
+- 这是桌面本地 stdio 插件。Codex Web、手机端和普通 CLI 不能提供相同的客户端侧栏界面。
+- 客户端需要支持 MCP Apps 和 global/thread 入口；组织策略可能限制本地插件安装。缺少相应入口时，应先检查客户端版本与插件权限。
+- 通过客户端插件页安装后，支持热加载的客户端可直接发现工具。若仍未显示，先检查插件是否已启用，再尝试新会话；需要时正常退出并重新打开客户端。
+- 插件通过可执行文件名及绑定安装目录的 PATH 启动 Pulse。安装目录不能包含分号。移动便携目录后，请移除 Codex 中旧的 Pulse 插件，再从新位置重新添加。升级后若客户端仍使用旧插件缓存，也应在插件页重新安装。
+- 在 Codex 插件页卸载 **Codex Pulse** 即可停用客户端入口，Pulse 本身和已有用量数据继续保留。
+
+插件的 stdio 配置、`${PLUGIN_ROOT}` 路径与本地安装方式见 [OpenAI 插件打包说明](https://developers.openai.com/plugins/build/plugins)和[桌面本地 MCP 说明](https://developers.openai.com/plugins/deploy/desktop-only)。

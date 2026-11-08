@@ -5,6 +5,7 @@ Codex Pulse for Windows x64
 
 将完整压缩包解压到可写目录，双击 Start-Codex-Pulse.cmd 或 CodexPulse.exe。
 需要桌面和开始菜单入口，可在程序内创建，或双击 Create-Codex-Pulse-Shortcuts.cmd；移动文件夹后重新创建。
+需要 Codex 客户端入口，在设置→常规中选择“添加到 Codex”，然后在客户端插件页安装并固定。需支持本地 MCP Apps 的桌面客户端；移动目录后重新添加。
 需要 Windows 10/11 x64 和 Microsoft Edge WebView2 Evergreen Runtime。
 WebView2 下载：https://developer.microsoft.com/microsoft-edge/webview2/
 
@@ -20,6 +21,7 @@ English
 
 Extract the complete archive into a writable folder. Run Start-Codex-Pulse.cmd or CodexPulse.exe.
 Create desktop and Start menu entries from the app, or run Create-Codex-Pulse-Shortcuts.cmd. Recreate them after moving the folder.
+For an entry inside Codex, choose Add to Codex in General settings, then install and pin it in the client. Requires a desktop client with local MCP Apps support; add it again after moving Pulse.
 Requires Windows 10/11 x64 and Microsoft Edge WebView2 Evergreen Runtime.
 Runtime download: https://developer.microsoft.com/microsoft-edge/webview2/
 

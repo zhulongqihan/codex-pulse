@@ -24,6 +24,8 @@ pub fn plugin(paths: &crate::pulse_desktop::PulsePaths) -> tauri::plugin::TauriP
             if arguments.iter().any(|argument| argument == "--quit") {
                 crate::pulse_desktop::save_widget_position(app);
                 app.exit(0);
+            } else if arguments.iter().any(|argument| argument == "--show-widget") {
+                request_widget(app);
             } else if !arguments.iter().any(|argument| argument == "--hidden") {
                 if let Some(window) = app.get_webview_window("main") {
                     let _ = window.show();
@@ -33,6 +35,28 @@ pub fn plugin(paths: &crate::pulse_desktop::PulsePaths) -> tauri::plugin::TauriP
             }
         })
         .build()
+}
+
+#[cfg(windows)]
+pub fn request_widget(app: &tauri::AppHandle) {
+    use tauri::Manager;
+    if app.try_state::<crate::pulse_desktop::PreferenceStore>().is_some()
+        && app.get_webview_window("widget").is_some() {
+        let _ = crate::pulse_desktop::widget_action(app.clone(), "show".into());
+        return;
+    }
+    // A second launch can arrive while the first portable process is still setting up.
+    let app = app.clone();
+    std::thread::spawn(move || {
+        for _ in 0..50 {
+            if app.try_state::<crate::pulse_desktop::PreferenceStore>().is_some()
+                && app.get_webview_window("widget").is_some() {
+                let _ = crate::pulse_desktop::widget_action(app.clone(), "show".into());
+                return;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(100));
+        }
+    });
 }
 
 #[cfg(test)]

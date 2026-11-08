@@ -4,10 +4,18 @@ User-facing changes are grouped by release, following [Keep a Changelog](https:/
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-11-08
+
 ### Added / 新增
 
+- Local Codex desktop plugin with Clear/Meter quota and today panels, local snapshot refresh, and dashboard/widget actions.
+- Codex 桌面本地插件，提供清爽／刻度额度与今日面板、本地快照刷新及主窗／浮窗操作。
+- Add-to-Codex action in General settings, with plugin templates embedded in the executable for portable and executable-only updates.
+- 常规设置内的“添加到 Codex”，程序内置插件模板，支持便携包和仅可执行文件更新。
 - Contributor version-synchronization tooling and release consistency checks.
 - 开发者版本同步工具与发布一致性检查。
+
+[完整中英说明 / Full release notes](docs/releases/v0.5.0.md)
 
 ## [0.4.0] - 2026-11-07
 
@@ -41,6 +49,7 @@ User-facing changes are grouped by release, following [Keep a Changelog](https:/
 
 Earlier releases remain available in [GitHub Releases](https://github.com/zhulongqihan/codex-pulse/releases). / 更早版本保留在 GitHub Releases。
 
-[Unreleased]: https://github.com/zhulongqihan/codex-pulse/compare/v0.4.0...HEAD
+[Unreleased]: https://github.com/zhulongqihan/codex-pulse/compare/v0.5.0...HEAD
+[0.5.0]: https://github.com/zhulongqihan/codex-pulse/releases/tag/v0.5.0
 [0.4.0]: https://github.com/zhulongqihan/codex-pulse/releases/tag/v0.4.0
 [0.3.0]: https://github.com/zhulongqihan/codex-pulse/releases/tag/v0.3.0

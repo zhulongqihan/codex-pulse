@@ -1,0 +1,23 @@
+{
+  "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+  "name": "codex-pulse",
+  "version": "0.0.0",
+  "description": "View the latest local Codex Pulse usage and quota snapshot in the Codex desktop app.",
+  "author": { "name": "Codex Pulse" },
+  "license": "MIT",
+  "extensions": {
+    "com.openai": {
+      "interface": {
+        "displayName": "Codex Pulse",
+        "shortDescription": "Local usage and quota at a glance",
+        "longDescription": "Open your latest Codex Pulse snapshot from the desktop sidebar or a chat panel. Refresh the panel or open the Pulse dashboard and widget.",
+        "developerName": "Codex Pulse",
+        "category": "Productivity",
+        "capabilities": ["Read"],
+        "brandColor": "#147566",
+        "composerIcon": "./assets/icon.png",
+        "logo": "./assets/icon.png"
+      }
+    }
+  }
+}

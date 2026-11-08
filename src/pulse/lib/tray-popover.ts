@@ -1,4 +1,7 @@
+import type { PulseIntegrationData } from "./pulse-integration";
+
 export type TrayPopoverData = {
+  integration?: PulseIntegrationData;
   updatedAt?: string | null;
   stale?: boolean;
   account: string | null;

@@ -13,6 +13,8 @@ mod pricing;
 mod pulse_desktop;
 mod pulse_shortcuts;
 mod pulse_instance;
+mod pulse_integration;
+mod pulse_mcp;
 mod pulse_update;
 mod project_sessions;
 mod scanner;
@@ -888,6 +890,7 @@ fn setup_app_menu(app: &mut tauri::App) -> tauri::Result<()> {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    if pulse_mcp::run_if_requested() { return; }
     let paths = pulse_desktop::prepare_paths().expect("Cannot prepare portable Codex Pulse data directory");
     let log_directory = paths.logs.clone();
     let builder = tauri::Builder::default();
@@ -995,9 +998,13 @@ pub fn run() {
             tauri::WebviewWindowBuilder::new(app, "main", tauri::WebviewUrl::App("index.html".into()))
                 .title("Codex Pulse").data_directory(paths.profile.clone())
                 .inner_size(1440.0, 960.0).min_inner_size(760.0, 540.0)
-                .visible(!std::env::args().any(|arg| arg == "--hidden" || arg == "--quit"))
+                .visible(!std::env::args().any(|arg| arg == "--hidden" || arg == "--quit" || arg == "--show-widget"))
                 .build()?;
             pulse_desktop::setup_widget(app, &paths, &preferences)?;
+            #[cfg(windows)]
+            if std::env::args().any(|argument| argument == "--show-widget") {
+                pulse_instance::request_widget(app.handle());
+            }
             setup_app_menu(app)?;
             #[cfg(any(target_os = "macos", target_os = "windows"))]
             tray_popover::setup(app)?;
@@ -1085,6 +1092,7 @@ pub fn run() {
             pulse_desktop::widget_action,
             pulse_desktop::get_pulse_paths,
             pulse_shortcuts::create_pulse_shortcuts,
+            pulse_integration::prepare_codex_integration,
             pulse_desktop::open_pulse_data_dir,
             pulse_desktop::get_widget_snapshot,
             pulse_desktop::update_widget_snapshot,

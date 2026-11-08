@@ -1,5 +1,5 @@
 import { $, browser, expect } from '@wdio/globals';
-import { mkdirSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 const output = process.env.PULSE_TEST_OUTPUT!;
@@ -152,6 +152,20 @@ describe('Pulse native parity', () => {
       await invoke('set_pulse_preferences', { patch: { skinId: skin, theme: 'light', motionLevel: 'off' } });
       await browser.waitUntil(async () => await browser.execute(() => document.documentElement.dataset.skin) === skin);
       await verifyTodayAndRange(skin);
+      if (skin === 'clear') {
+        const path = join(process.env.PULSE_DATA_DIR!, 'integration-snapshot.json');
+        await browser.waitUntil(async () => existsSync(path));
+        const today = await invoke<any>('fetch_overview', { range: '1d' });
+        const snapshot = JSON.parse(readFileSync(path, 'utf8'));
+        const row = today.daily.find((day: any) => day.date === snapshot.today.date);
+        expect(snapshot.schemaVersion).toBe(1);
+        expect(snapshot.today.totalTokens).toBe(row.totalTokens);
+        expect(snapshot.today.costUSD).toBe(row.costUSD);
+        expect(snapshot.account).toBeUndefined();
+        expect(snapshot.workspace).toBeUndefined();
+        expect(snapshot.quotas.every((quota: any) => !('account' in quota))).toBe(true);
+        evidence('native-integration-producer', { schemaVersion: snapshot.schemaVersion, todayMatchesScanner: true, identityFieldsAbsent: true });
+      }
       for (const route of ['dashboard', 'sessions', 'models', 'daily', 'monthly', 'projects', 'settings']) {
         const tab = $(`[data-testid="${route}-nav-tab"]`);
         await tab.waitForDisplayed(); await tab.click();
@@ -265,6 +279,8 @@ describe('Pulse native parity', () => {
       await expect($('#settings-tab-appearance')).toHaveAttribute('aria-selected', 'true');
       await $('#settings-tab-general').click();
       await expect($('#settings-section-general')).toBeDisplayed();
+      await expect($('[data-testid="add-to-codex"]')).toBeDisplayed();
+      await expect($('[data-testid="add-to-codex"]')).toBeEnabled();
       await expect($('#settings-section-appearance')).not.toBeDisplayed();
       const back = $('button=返回');
       const location = await back.getLocation();

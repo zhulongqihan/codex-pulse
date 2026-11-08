@@ -29,6 +29,9 @@ pub fn update_widget_snapshot(
     data: serde_json::Value,
 ) -> Result<(), String> {
     *state.0.lock().map_err(|_| "Widget state unavailable")? = Some(data.clone());
+    if let Some(paths) = app.try_state::<PulsePaths>() {
+        crate::pulse_mcp::publish_widget_snapshot(&data, &paths.data);
+    }
     app.emit_to("widget", "widget-snapshot-updated", data)
         .map_err(|error| error.to_string())
 }

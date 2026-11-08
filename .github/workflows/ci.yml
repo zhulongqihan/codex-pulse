@@ -59,3 +59,7 @@ jobs:
         run: pnpm exec tauri build --debug --no-bundle --features e2e --config src-tauri/tauri.e2e.conf.json
       - name: Verify native windows using synthetic sources
         run: pnpm exec wdio run ./wdio.pulse.conf.ts
+      - name: Verify the shipped Codex installer against the built executable
+        run: |
+          $env:CODEX_PULSE_TEST_EXE = Join-Path $env:CARGO_TARGET_DIR 'debug/codex-pulse.exe'
+          node --test scripts/install-codex-plugin.test.mjs
