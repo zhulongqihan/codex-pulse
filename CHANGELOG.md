@@ -4,7 +4,16 @@ User-facing changes are grouped by release, following [Keep a Changelog](https:/
 
 ## [Unreleased]
 
-## [0.6.2] - 2026-11-08
+## [0.7.0] - 2026-11-09
+
+### Added / 新增
+
+- Quota pacing across the corner card, desktop widget and workspace: remaining quota, personal reset time, consumption versus time progress, and a clearly labelled daily or hourly reference allocation.
+- 右上角卡片、桌面浮窗与主界面统一额度配速：余量、个人周期重置时间、消耗与时间进度比较，以及明确标注的日均或每小时分配参考。
+- Partial daily observations for the current cycle, a near-reset surplus hint and conditional remaining-at-reset ranges when measured trends support them. Missing history is never treated as zero.
+- 本轮逐日部分观测、临近重置余量提示，以及数据充分时的重置余量条件区间；缺失记录不会当作零。
+- Background reset notices with visible third-party source, expected time, unread state and deduplication. A global notice does not confirm a personal reset.
+- 后台重置预告提供醒目的来源、预计时间、未读状态与去重；全局消息不等于本人额度已重置。
 
 ### Fixed / 修复
 
@@ -14,8 +23,10 @@ User-facing changes are grouped by release, following [Keep a Changelog](https:/
 - 官方未说明整数百分比舍入方式时，靠近额度上限也保留更保守的时间误差范围。
 - Explain why an estimate is unavailable, show known reset times and actual local token totals, and distinguish a window the service did not return from a zero balance.
 - 无法预测时说明原因，保留已知重置时间与本机实际 Token 数量；区分接口未返回的窗口和额度为零。
+- Follow Codex movement through Windows location events and coalesced updates instead of the old quarter-second polling interval, while retaining focus and host validation.
+- 通过 Windows 窗口位置事件和合并更新跟随 Codex，替代原先每四分之一秒轮询，并保留焦点与宿主校验。
 
-[完整中英说明 / Full release notes](docs/releases/v0.6.2.md)
+[完整中英说明 / Full release notes](docs/releases/v0.7.0.md)
 
 ## [0.6.1] - 2026-11-08
 

@@ -10,16 +10,17 @@ mod db;
 mod exporter;
 mod overview;
 mod pricing;
+mod project_sessions;
 mod pulse_desktop;
-mod pulse_shortcuts;
 mod pulse_instance;
 mod pulse_integration;
 mod pulse_mcp;
 mod pulse_pace;
 mod pulse_pace_view;
+mod pulse_coach;
+mod pulse_shortcuts;
 mod pulse_titlebar;
 mod pulse_update;
-mod project_sessions;
 mod scanner;
 mod session_credits;
 mod session_file;
@@ -31,9 +32,7 @@ mod usage_diagnostics;
 
 use std::io::ErrorKind;
 use std::path::{Path, PathBuf};
-use std::sync::{
-    Arc, Condvar, Mutex,
-};
+use std::sync::{Arc, Condvar, Mutex};
 use std::time::{Duration, Instant};
 use tauri::menu::{Menu, MenuItem, MenuItemKind};
 use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
@@ -42,8 +41,8 @@ use types::{
     CodexLimitsResponse, CodexQuotaForecastResponse, CodexResetAnnouncement,
     CodexWindowActivationResponse, ExportResponse, ModelPricingCatalogResponse,
     MonthlyUsageResponse, OverviewResponse, ProjectAnalyticsResponse, ScanResponse,
-    SessionDetailRow, SessionReplayDetail, UpdateCheckResponse,
-    UpdateInstallResponse, UsageRefreshResponse,
+    SessionDetailRow, SessionReplayDetail, UpdateCheckResponse, UpdateInstallResponse,
+    UsageRefreshResponse,
 };
 
 const DEFAULT_BACKGROUND_RESCAN_INTERVAL: Duration = Duration::from_secs(5 * 60);
@@ -378,9 +377,11 @@ async fn activate_codex_window(
 async fn fetch_codex_quota_forecast(
     locale: Option<String>,
 ) -> Result<CodexQuotaForecastResponse, String> {
-    tauri::async_runtime::spawn_blocking(move || codex_forecast::fetch(locale.as_deref().unwrap_or("en")))
-        .await
-        .map_err(|error| error.to_string())?
+    tauri::async_runtime::spawn_blocking(move || {
+        codex_forecast::fetch(locale.as_deref().unwrap_or("en"))
+    })
+    .await
+    .map_err(|error| error.to_string())?
 }
 
 #[tauri::command]
@@ -455,7 +456,9 @@ async fn fetch_session_credits(
     let database = state.database_path.clone();
     tauri::async_runtime::spawn_blocking(move || {
         session_credits::fetch(&database, threads, force, cache_only, &scope, revision)
-    }).await.map_err(|error| error.to_string())?
+    })
+    .await
+    .map_err(|error| error.to_string())?
 }
 
 #[tauri::command]
@@ -589,7 +592,8 @@ async fn check_for_updates(
     let _ = etag;
     let version = app.package_info().version.to_string();
     tauri::async_runtime::spawn_blocking(move || pulse_update::check(&version))
-        .await.map_err(|error| error.to_string())?
+        .await
+        .map_err(|error| error.to_string())?
 }
 
 #[tauri::command]
@@ -598,14 +602,17 @@ async fn download_and_install_update(
 ) -> Result<UpdateInstallResponse, String> {
     let data = app.state::<pulse_desktop::PulsePaths>().data.clone();
     tauri::async_runtime::spawn_blocking(move || pulse_update::stage(&app, &data))
-        .await.map_err(|error| error.to_string())?
+        .await
+        .map_err(|error| error.to_string())?
 }
 
 #[tauri::command]
 async fn restart_app(app: tauri::AppHandle) -> Result<(), String> {
     pulse_desktop::save_widget_position(&app);
     let data = app.state::<pulse_desktop::PulsePaths>().data.clone();
-    if pulse_update::restart_if_staged(&app, &data)? { return Ok(()); }
+    if pulse_update::restart_if_staged(&app, &data)? {
+        return Ok(());
+    }
     #[cfg(target_os = "macos")]
     {
         let executable = tauri::process::current_binary(&app.env())
@@ -750,13 +757,9 @@ fn update_tray(app: tauri::AppHandle, payload: TrayMenuUpdate) -> Result<(), Str
                 {
                     return Err("Invalid tray icon dimensions".to_string());
                 }
-                let icon = tauri::image::Image::new_owned(
-                    icon.rgba,
-                    icon.width,
-                    icon.height,
-                )
-                .try_into()
-                .map_err(|error: tauri::Error| error.to_string())?;
+                let icon = tauri::image::Image::new_owned(icon.rgba, icon.width, icon.height)
+                    .try_into()
+                    .map_err(|error: tauri::Error| error.to_string())?;
                 // Set the image and template flag together to avoid a color flash.
                 tray.with_inner_tray_icon(move |tray| {
                     tray.set_icon_with_as_template(Some(icon), true)
@@ -893,13 +896,17 @@ fn setup_app_menu(app: &mut tauri::App) -> tauri::Result<()> {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    if pulse_mcp::run_if_requested() { return; }
-    let paths = pulse_desktop::prepare_paths().expect("Cannot prepare portable Codex Pulse data directory");
+    if pulse_mcp::run_if_requested() {
+        return;
+    }
+    let paths =
+        pulse_desktop::prepare_paths().expect("Cannot prepare portable Codex Pulse data directory");
     let log_directory = paths.logs.clone();
     let builder = tauri::Builder::default();
     #[cfg(windows)]
     let builder = builder.plugin(pulse_instance::plugin(&paths));
-    let builder = builder.plugin(
+    let builder = builder
+        .plugin(
             tauri_plugin_log::Builder::new()
                 .targets([
                     tauri_plugin_log::Target::new(tauri_plugin_log::TargetKind::Stdout),
@@ -920,7 +927,12 @@ pub fn run() {
 
     let app = builder
         .on_window_event(|window, event| {
-            if window.label() == "widget" && matches!(event, tauri::WindowEvent::Resized(_) | tauri::WindowEvent::ScaleFactorChanged { .. }) {
+            if window.label() == "widget"
+                && matches!(
+                    event,
+                    tauri::WindowEvent::Resized(_) | tauri::WindowEvent::ScaleFactorChanged { .. }
+                )
+            {
                 let _ = pulse_desktop::keep_widget_visible(window.app_handle());
             }
             if window.label() == "tray" {
@@ -949,7 +961,8 @@ pub fn run() {
                     api.prevent_close();
                 } else if window.label() == "widget" {
                     pulse_desktop::save_widget_position(window.app_handle());
-                    let _ = pulse_desktop::widget_action(window.app_handle().clone(), "hide".into());
+                    let _ =
+                        pulse_desktop::widget_action(window.app_handle().clone(), "hide".into());
                     api.prevent_close();
                 }
             }
@@ -977,6 +990,7 @@ pub fn run() {
 
             let app_data_dir = paths.data.clone();
             pulse_pace::configure(&app_data_dir);
+            pulse_coach::configure(&app_data_dir);
             let store = pulse_desktop::PreferenceStore::load(&app_data_dir);
             let preferences = store.value.lock().unwrap().clone();
             app.manage(paths.clone());
@@ -999,14 +1013,24 @@ pub fn run() {
             let background_refresh_schedule = Arc::new(BackgroundRefreshSchedule::new());
             app.manage(background_refresh_schedule.clone());
 
-            tauri::WebviewWindowBuilder::new(app, "main", tauri::WebviewUrl::App("index.html".into()))
-                .title("Codex Pulse").data_directory(paths.profile.clone())
-                .inner_size(1440.0, 960.0).min_inner_size(760.0, 540.0)
-                .visible(!std::env::args().any(|arg| arg == "--hidden" || arg == "--quit" || arg == "--show-widget"))
-                .build()?;
+            tauri::WebviewWindowBuilder::new(
+                app,
+                "main",
+                tauri::WebviewUrl::App("index.html".into()),
+            )
+            .title("Codex Pulse")
+            .data_directory(paths.profile.clone())
+            .inner_size(1440.0, 960.0)
+            .min_inner_size(760.0, 540.0)
+            .visible(
+                !std::env::args()
+                    .any(|arg| arg == "--hidden" || arg == "--quit" || arg == "--show-widget"),
+            )
+            .build()?;
             pulse_desktop::setup_widget(app, &paths, &preferences)?;
             pulse_titlebar::setup(app, &paths, preferences.titlebar_enabled)?;
             pulse_pace_view::start_sampler(app.handle().clone());
+            pulse_coach::start_worker(app.handle().clone());
             #[cfg(windows)]
             if std::env::args().any(|argument| argument == "--show-widget") {
                 pulse_instance::request_widget(app.handle());
@@ -1014,7 +1038,6 @@ pub fn run() {
             setup_app_menu(app)?;
             #[cfg(any(target_os = "macos", target_os = "windows"))]
             tray_popover::setup(app)?;
-
 
             // Set up the menu bar / system tray item
             #[cfg(not(target_os = "macos"))]
@@ -1104,6 +1127,7 @@ pub fn run() {
             pulse_desktop::update_widget_snapshot,
             pulse_pace_view::fetch_pulse_pace,
             pulse_pace_view::refresh_pulse_pace,
+            pulse_coach::mark_pulse_notice_read,
             pulse_titlebar::titlebar_action,
             pulse_titlebar::get_titlebar_status,
             fetch_usage_diagnostics,
@@ -1149,17 +1173,17 @@ pub fn run() {
         return;
     }
     app.run(|app, event| {
-            if matches!(event, tauri::RunEvent::Exit) {
-                pulse_desktop::save_widget_position(app);
+        if matches!(event, tauri::RunEvent::Exit) {
+            pulse_desktop::save_widget_position(app);
+        }
+        #[cfg(target_os = "macos")]
+        if let tauri::RunEvent::Reopen { .. } = event {
+            if let Some(window) = app.get_webview_window("main") {
+                let _ = window.show();
+                let _ = window.set_focus();
             }
-            #[cfg(target_os = "macos")]
-            if let tauri::RunEvent::Reopen { .. } = event {
-                if let Some(window) = app.get_webview_window("main") {
-                    let _ = window.show();
-                    let _ = window.set_focus();
-                }
-            }
-        });
+        }
+    });
 }
 
 #[cfg(test)]

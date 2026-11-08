@@ -10,25 +10,25 @@ import "./pulse-browser-welcome.css";
 const repository = "https://github.com/zhulongqihan/codex-pulse";
 const messages = {
   zh: {
-    title: "看见额度的消耗节奏。",
-    lead: "给 Windows 上的 Codex，一个随手可看的节奏提示。观察个人额度的变化，估算触顶区间，再看看本机 Token 花在了哪些项目和模型上。",
+    title: "余量与时间，一起看。",
+    lead: "给 Windows 上的 Codex，一个随手可看的额度配速提示。看清还剩多少、何时重置，知道可以从容安排任务，还是该给后半程留些余量。",
     download: "下载 Windows 版", demo: "打开完整工作台", source: "源码", docs: "使用说明",
     requirement: "Windows 10 / 11 x64 · 便携版 · 需要 WebView2",
-    preview: "亲手试一下", previewDetail: "这里运行的就是软件中的节奏卡片。可切换项目 / 模型、界面风格和数据状态。",
+    preview: "亲手试一下", previewDetail: "这里运行的就是软件中的配速卡片。切换余量、预告和陈旧状态，试试清爽与刻度。",
     synthetic: "合成数据演示，不读取你的账号或文件。", frame: "Codex Pulse 节奏卡片，合成数据演示",
-    scenarios: "演示数据状态", forecast: "有足够样本", sampling: "采样中", stale: "数据陈旧",
-    stateDetail: "切换状态即可重新打开卡片。时间区间是消耗趋势估计，不保证还能工作多久。",
-    difference: "官方告诉你剩多少。Pulse 帮你看变化。",
+    scenarios: "演示数据状态", roomy: "余量宽裕", fast: "用量偏快", notice: "重置预告", stale: "数据陈旧",
+    stateDetail: "分配参考把当前余量均摊到重置前，不代表每天新增额度或保证工作时长。",
+    difference: "让额度数字，变成安排任务的参考。",
     features: [
-      ["个人消耗节奏", "使用连续的官方额度观测，估算当前窗口的触顶时间区间，提示触顶是否可能早于重置。样本不足时，明确显示采样中。"],
-      ["本机 Token 来源", "按项目与模型查看今日 Token 占比，定位主要来源。这是本机日志统计，不能拿来分摊或换算账号额度。"],
+      ["本轮额度配速", "余量、重置时间与时间进度一起判断，配上日均或每小时分配参考。百分比暂未变化时，基本信息仍然可用。"],
+      ["有依据的新提醒", "本轮每日观测明确覆盖范围；新重置预告显示第三方来源与待确认状态。不会把缺记录当零，也不把全局消息当个人已重置。"],
       ["需要时才展开", "小图标与状态条贴在 Codex 右上角。点击展开无输入框卡片；离开 Codex 时隐藏。清爽与刻度两版保持同样的能力。"],
     ],
     install: "几步放到手边。",
     steps: [
       ["解压，打开", "从 GitHub Release 下载便携包，完整解压到可写文件夹，运行 CodexPulse.exe。"],
       ["打开右上角提示", "在设置中开启 Codex 右上角节奏提示，保持 Pulse 运行。也可创建桌面快捷方式或设置登录启动。"],
-      ["让真实样本积累", "沿用已有 ChatGPT 登录。至少 15 分钟的同账号、同窗口有效观测后，满足条件才显示时间区间。"],
+      ["查看你的实际配速", "沿用已有 ChatGPT 登录，读取真实余量与个人周期时间。趋势与逐日记录随后积累，缺少历史不影响基本配速信息。"],
     ],
     questions: "先了解这几个边界。",
     faqs: [
@@ -41,25 +41,25 @@ const messages = {
     footer: "本地记录，清楚呈现。", release: "版本记录", feedback: "反馈与建议", skip: "跳到产品介绍",
   },
   en: {
-    title: "See the pace behind your quota.",
-    lead: "A quiet companion for Codex on Windows. Observe changes in your personal quota, estimate a range for reaching the limit, and see which projects and models account for local tokens.",
+    title: "Quota and time, together.",
+    lead: "A quiet quota-pacing companion for Codex on Windows. See what remains and when it resets, then plan upcoming tasks with a clear view of the current window’s pace.",
     download: "Download for Windows", demo: "Explore the workspace", source: "Source", docs: "User guide",
     requirement: "Windows 10 / 11 x64 · Portable · WebView2 required",
-    preview: "Try the real interface", previewDetail: "This is the app’s pace card. Switch projects / models, appearance, and data states to explore it.",
+    preview: "Try the real interface", previewDetail: "This is the app’s pacing card. Explore Clear and Meter with roomy, fast, reset-notice and stale states.",
     synthetic: "Synthetic demo. Your account and files are not accessed.", frame: "Codex Pulse pace card with synthetic demonstration data",
-    scenarios: "Demo data state", forecast: "Enough samples", sampling: "Sampling", stale: "Stale data",
-    stateDetail: "Choose a state to reopen the card. The range estimates a quota trend, not guaranteed working time.",
-    difference: "Official readings show what remains. Pulse shows how it changes.",
+    scenarios: "Demo data state", roomy: "Roomy quota", fast: "High pace", notice: "Reset notice", stale: "Stale data",
+    stateDetail: "Reference allocations spread the current remainder until reset; they are not daily refills or guaranteed working hours.",
+    difference: "Turn quota readings into a planning reference.",
     features: [
-      ["Your quota pace", "Consecutive official quota observations produce a range for reaching the current window’s limit, with an indication of whether that could happen before reset. Insufficient evidence stays in a sampling state."],
-      ["Local token sources", "See today’s token shares by project and model. These come from local logs; they do not allocate or convert account quota."],
+      ["This window’s pace", "View remaining quota, reset time and time progress together, with daily or hourly reference allocations. Basic information remains useful even when the percentage has not changed."],
+      ["Grounded observations and notices", "Daily records state their coverage. Reset notices retain their third-party source and unconfirmed state. Missing history is not zero, and global news is not a personal reset confirmation."],
       ["Expand when needed", "An app icon and compact status follow the top right of Codex. Click for a card without a text box; it hides when you leave Codex. Clear and Meter share the same capabilities."],
     ],
     install: "Keep it within reach.",
     steps: [
       ["Extract and open", "Download the portable archive from GitHub Releases, extract the complete folder to a writable location, and run CodexPulse.exe."],
       ["Enable the corner status", "Turn on the Codex corner pace indicator in settings and keep Pulse running. Create desktop shortcuts or enable launch at sign-in if helpful."],
-      ["Let observations accumulate", "Use your existing ChatGPT sign-in. A time range appears only after at least 15 minutes of valid observations for the same account and quota window, when the evidence supports it."],
+      ["See your current pace", "Use your existing ChatGPT sign-in to read current quota and the personal window time. Trends and daily observations accumulate afterward; basic pacing does not require a full history."],
     ],
     questions: "A few things to know.",
     faqs: [
@@ -78,10 +78,10 @@ export function PulseBrowserWelcome() {
   const language = (i18n.resolvedLanguage ?? i18n.language).startsWith("zh") ? "zh" : "en";
   const copy = messages[language];
   const { skinId } = usePulsePreferences();
-  const [scenario, setScenario] = useState<"forecast" | "sampling" | "stale">("forecast");
+  const [scenario, setScenario] = useState<"roomy" | "fast" | "notice" | "stale">("roomy");
   const [previewRevision, setPreviewRevision] = useState(0);
-  const demo = new URL(location.href); demo.search = "?demo=1"; demo.hash = "";
-  const preview = new URL(demo); preview.searchParams.set("paceScenario", scenario); preview.hash = "pulse-pace";
+  const demo = new URL(location.href); demo.search = "?demo=1&coachScenario=roomy"; demo.hash = "";
+  const preview = new URL(demo); preview.searchParams.set("coachScenario", scenario); preview.hash = "pulse-pace";
   const setLanguage = (value: "zh" | "en") => {
     try { localStorage.setItem("language", value); } catch { /* Language remains usable without storage. */ }
     document.documentElement.lang = value === "zh" ? "zh-CN" : "en";
@@ -107,7 +107,7 @@ export function PulseBrowserWelcome() {
         <div className="pulse-site-preview">
           <div className="pulse-site-preview-heading"><h2>{copy.preview}</h2><PulseStyleSwitcher/></div><p>{copy.previewDetail}</p>
           <iframe key={`${language}-${skinId}-${scenario}-${previewRevision}`} src={preview.href} title={copy.frame} className="pulse-site-frame"/>
-          <div className="pulse-site-scenarios" role="group" aria-label={copy.scenarios}>{(["forecast", "sampling", "stale"] as const).map(value => <button type="button" key={value} aria-pressed={scenario === value} onClick={() => { setScenario(value); setPreviewRevision(previous => previous + 1); }}>{copy[value]}</button>)}</div>
+          <div className="pulse-site-scenarios" role="group" aria-label={copy.scenarios}>{(["roomy", "fast", "notice", "stale"] as const).map(value => <button type="button" key={value} aria-pressed={scenario === value} onClick={() => { setScenario(value); setPreviewRevision(previous => previous + 1); }}>{copy[value]}</button>)}</div>
           <p className="pulse-site-synthetic">{copy.synthetic} {copy.stateDetail}</p>
         </div>
       </section>

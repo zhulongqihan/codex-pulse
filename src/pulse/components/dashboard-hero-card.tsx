@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { Download, FileSpreadsheet, FileText, ArrowUpRight, ArrowRight } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { RangeSwitcher } from "@/components/range-switcher";
@@ -22,9 +22,10 @@ type DashboardHeroCardProps = {
   onRangeChange: (value: RangeKey) => void; onExport: (format: ExportFormat) => void;
   metrics: MetricCardData[]; codexLimits: CodexLimitsResponse | null;
   onOpenDay?: (date: string) => void; onOpenToday?: () => void;
+  coach?: ReactNode;
 };
 
-export function DashboardHeroCard({overview, range, isBusy, isExporting, exportError, todayOverview = null, todayUnavailable = false, todayStale = false, onRangeChange, onExport, metrics, codexLimits, onOpenDay, onOpenToday}: DashboardHeroCardProps) {
+export function DashboardHeroCard({overview, range, isBusy, isExporting, exportError, todayOverview = null, todayUnavailable = false, todayStale = false, onRangeChange, onExport, metrics, codexLimits, onOpenDay, onOpenToday, coach}: DashboardHeroCardProps) {
   const {t,i18n} = useTranslation();
   const copy = usePulseCopy();
   const home = useHomeCopy();
@@ -67,6 +68,7 @@ export function DashboardHeroCard({overview, range, isBusy, isExporting, exportE
       <div className="pulse-today-actions">{onOpenToday ? <button type="button" className="pulse-text-button" onClick={onOpenToday} disabled={!todayKnown}>{home("todaySessions")}<ArrowRight size={14}/></button> : null}<p className={todayStale ? "pulse-today-stale" : undefined}>{!todayKnown ? home("todayUnavailable") : todayStale ? home("stale") : updatedTime ? `${home("updated")} ${updatedTime}` : home("noUpdated")}</p></div>
       {todayKnown ? <details className="pulse-today-breakdown"><summary>{home("todayBreakdown")}</summary><dl><div><dt>{copy("input")}</dt><dd>{formatNumber(todayRow!.inputTokens)}</dd></div><div><dt>{copy("cached")}</dt><dd>{formatNumber(todayRow!.cachedInputTokens)}</dd></div><div><dt>{copy("output")}</dt><dd>{formatNumber(todayRow!.outputTokens)}</dd></div><div><dt>{copy("cache")}</dt><dd>{todayRow!.inputTokens>0 ? formatPercent(todayRow!.cachedInputTokens/todayRow!.inputTokens) : "—"}</dd></div></dl></details> : null}
     </section>
+    {coach}
     <section data-testid="range-summary" className="pulse-period-summary" aria-label={home("period")}>
       <div className="pulse-range-toolbar"><div><h2>{home("period")}</h2><RangeSwitcher value={range} onChange={onRangeChange}/></div>
         <DropdownMenu><DropdownMenuTrigger asChild><Button variant="secondary" size="sm" disabled={isBusy}><Download size={15}/>{isExporting === null ? t("hero.export") : t("hero.exporting")}</Button></DropdownMenuTrigger><DropdownMenuContent align="end"><DropdownMenuItem onSelect={() => onExport("xlsx")}><FileSpreadsheet size={16}/>{t("hero.export_excel")}</DropdownMenuItem><DropdownMenuItem onSelect={() => onExport("markdown")}><FileText size={16}/>{t("hero.export_markdown")}</DropdownMenuItem></DropdownMenuContent></DropdownMenu>

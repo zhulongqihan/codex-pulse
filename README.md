@@ -1,6 +1,6 @@
 # Codex Pulse — 看见个人额度的消耗节奏
 
-给 Windows 上的 Codex 一个随手可看的节奏提示：从连续官方额度观测估算触顶区间，提示是否可能早于重置；再按项目和模型查看本机 Token 来源。提供 **清爽 Clear** 与 **刻度 Meter**、完整用量工作台与会话回放。
+给 Windows 上的 Codex 一个随手可看的额度配速提示：余量、重置时间、消耗与时间进度一起看，知道何时可从容安排任务、何时该留些余量。提供 **清爽 Clear** 与 **刻度 Meter**、完整用量工作台与会话回放。
 
 **[English](README.en.md)** · **[下载 Windows 版](https://github.com/zhulongqihan/codex-pulse/releases/latest)** · [产品与交互演示](https://zhulongqihan.github.io/codex-pulse/) · [完整工作台演示](https://zhulongqihan.github.io/codex-pulse/?demo=1) · [截图](https://zhulongqihan.github.io/codex-pulse/gallery.html) · [反馈](https://github.com/zhulongqihan/codex-pulse/issues)
 
@@ -8,8 +8,10 @@
 
 ## 功能
 
-- **Codex 右上角节奏提示**：统一软件图标加紧凑状态，不占一行品牌文字。点击展开无输入框卡片，查看触顶区间、与重置的先后关系和今日本机 Token 来源。跟随 Windows 商店版 Codex 客户端，切到其他窗口、最小化或空间不足时隐藏。
-- **个人额度趋势**：至少 4 个有效观测、跨度至少 15 分钟，按同账号、工作区、来源与真实额度窗口分别采样。给出保守区间；未知、采样中、缓慢、无变化、陈旧和过期均保持独立状态。时间区间不是可工作时长或请求次数承诺。
+- **统一额度配速**：右上角卡片、独立桌面浮窗和主界面共享余量、个人重置时间、配速建议与日均／每小时分配参考。基本读数不依赖触顶预测，只有周窗口的账号也能看到有效信息。
+- **顺滑客户端入口**：统一图标与紧凑状态，不写一行品牌文字；无输入框卡片通过 Windows 位置事件跟随商店版 Codex，切到其他窗口、最小化或空间不足时隐藏。
+- **有依据的趣味指标**：本轮每日已观测增长与覆盖情况、临近重置的余量提示，以及数据充分时的重置余量条件区间；没有记录不当作零。分配参考不代表新增额度，预测不保证工作时长。
+- **醒目重置预告**：后台更新的新预告显示来源、预计时段和待确认状态，支持已读去重。第三方全局消息与个人周期结束分开，不冒充本人已重置。
 - **先看今天与现在**：本机今日用量独立于历史筛选，账号剩余额度与重置时间保持可见。完整区间的趋势和主要消耗来源集中呈现，再按需展开逐日细节。
 - **六个工作视图**：总览、会话、模型、按日、按月、项目；另有设置与可选诊断日志。导航可折叠、调宽，设置返回原页。
 - **完整范围统计**：九种日期预设、全部留存和自定义闭区间；日均按自然日计算。按月独立展示当前月至今及前 11 个自然月，区分无留存、部分留存和零活动。
@@ -27,9 +29,9 @@
 
 | 清爽 Clear | 刻度 Meter |
 |---|---|
-| ![清爽产品首页与真实节奏卡片，合成数据](docs/screenshots/pace-clear.png) | ![刻度产品首页与真实节奏卡片，合成数据](docs/screenshots/pace-meter.png) |
+| ![清爽额度配速卡片，合成数据](docs/screenshots/pace-clear.png) | ![刻度额度配速卡片，合成数据](docs/screenshots/pace-meter.png) |
 
-直接试用 [触顶区间](https://zhulongqihan.github.io/codex-pulse/?demo=1&paceScenario=forecast#pulse-pace)、[采样中](https://zhulongqihan.github.io/codex-pulse/?demo=1&paceScenario=sampling#pulse-pace)和[数据陈旧](https://zhulongqihan.github.io/codex-pulse/?demo=1&paceScenario=stale#pulse-pace)。这里运行已实现的界面组件，读数全部为合成示例。
+直接试用 [余量宽裕](https://zhulongqihan.github.io/codex-pulse/?demo=1&coachScenario=roomy#pulse-pace)、[用量偏快](https://zhulongqihan.github.io/codex-pulse/?demo=1&coachScenario=fast#pulse-pace)、[重置预告](https://zhulongqihan.github.io/codex-pulse/?demo=1&coachScenario=notice#pulse-pace)和[数据陈旧](https://zhulongqihan.github.io/codex-pulse/?demo=1&coachScenario=stale#pulse-pace)。这里运行已实现的界面组件，读数和预告全部为合成示例。
 
 ## 两版工作台
 
@@ -60,7 +62,7 @@
 |---|---|
 | 本机 Token 与会话 | 实际保留的 Codex 日志，按本机时区统计；无法恢复已删除记录或其他设备未同步的日志 |
 | 账号额度、Credits | 官方账号服务实际返回的字段，可能包含其他设备消耗；缺字段显示未知 |
-| 个人节奏与触顶区间 | 同账号、同真实窗口的连续官方额度观测，至少 15 分钟且有足够正消耗后估算；量化误差与近期变化扩宽区间，不将本机 Token 换算为额度 |
+| 额度配速与条件预测 | 配速比较同一实际窗口的剩余额度与剩余时间；预测还需至少 15 分钟且有足够正消耗的连续观测，量化误差与近期变化扩宽区间，不将本机 Token 换算为额度 |
 | API 参考成本 | 模型参考价格，**不是订阅账单、Credits 扣款或额外收费**；无价格显示未知，免费模型才显示零 |
 | 历史额度估计 | 基于可关联的 5 小时／周窗口观测样本，保留上下界和样本量；其他窗口不可估，不把当前额度摊到历史 |
 | 重置预测与 Feed | 第三方信息，显示来源、时间与陈旧状态；预测不保证实际发生 |
@@ -69,7 +71,7 @@
 
 节奏采样默认约每 60 秒只读查询，错误与限流时冷却；不发起模型请求，不启用逐会话 Credits。换账号、窗口重置、负增量或超过 10 分钟的观测间隔会重新分段；超过约 6 分钟未更新时停止预测。项目／模型占比只代表本机今日 Token，不代表它们占用了同等比例的订阅额度。
 
-周额度的较慢变化会积累更长的连续观测。百分比暂未变化不代表没有使用；无法预测时，卡片会说明原因，并显示已知重置时间与本机今日 Token。某些账号只返回周窗口，未返回短周期额度不等于额度为零。
+周额度的较慢变化会积累更长的连续观测。百分比暂未变化不代表没有使用；没有预测时仍显示已知余量与重置时间，本机今日 Token 保留在工作台。某些账号只返回周窗口，未返回短周期额度不等于额度为零。
 
 “启动窗口”会在明确确认后通过 Codex CLI 发出最小模型请求，可能消耗额度；普通刷新不会激活窗口。CLI 请求结束后还需重新查询额度确认结果。
 

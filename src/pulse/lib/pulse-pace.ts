@@ -29,6 +29,16 @@ export type PaceLocalUsage = {
   projects: { label: string; totalTokens: number; sharePercent: number | null }[];
   models: { label: string; totalTokens: number; sharePercent: number | null }[];
 };
+export type PaceDailyObservation = { date: string; consumedPercentPoints: number | null; coveredMinutes: number; partial: boolean };
+export type PaceResetNotice = {
+  id: string; summary: string; sourceUrl: string; sourceLabel: string; startAt: string | null; endAt: string | null;
+  publishedAt: string; updatedAt: string; isUnread: boolean; verification: "third_party"; scope: "global";
+};
+export type PaceCoachExtras = {
+  observedWindow?: { kind: PaceWindow["kind"]; windowMinutes: number; resetsAt: string } | null;
+  dailyObservations: PaceDailyObservation[];
+  resetNotice: PaceResetNotice | null;
+};
 export type PaceSnapshot = {
   schemaVersion: 1;
   generatedAt: string;
@@ -40,6 +50,7 @@ export type PaceSnapshot = {
   localUsage?: PaceLocalUsage | null;
   refreshFailed?: boolean;
   refreshAfterSeconds?: number;
+  coachExtras?: PaceCoachExtras;
 };
 export const paceStates: PaceState[] = ["unavailable", "sampling", "stale", "expired", "idle", "slow", "forecast", "exhausted"];
 export function primaryPaceWindow(data: PaceSnapshot | null): PaceWindow | null {
@@ -88,10 +99,38 @@ export function syntheticPaceSnapshot(state: PaceState = "forecast", now = new D
 }
 
 const demo = () => new URLSearchParams(location.search).get("demo") === "1";
+export type SyntheticCoachScenario = "roomy" | "balanced" | "fast" | "notice" | "stale";
+const coachScenarios: SyntheticCoachScenario[] = ["roomy", "balanced", "fast", "notice", "stale"];
+const demoReadNotices = new Set<string>();
+export function syntheticCoachSnapshot(scenario: SyntheticCoachScenario = "roomy", now = new Date()): PaceSnapshot {
+  const data = syntheticPaceSnapshot("idle", now), at = now.getTime();
+  const remaining = scenario === "fast" ? 20 : scenario === "balanced" ? 71.4 : 80;
+  const reset = new Date(at + 5 * 86_400_000).toISOString();
+  Object.assign(data.windows[0], { remainingPercent: null, windowMinutes: null, resetsAt: null, state: "unavailable", trend: [], sampleCount: 0, sampleSpanMinutes: 0, observedMinutes: null, consumedPercentPoints: null });
+  Object.assign(data.windows[1], { remainingPercent: remaining, resetsAt: reset, state: scenario === "stale" ? "stale" : "idle", sampleCount: 7, sampleSpanMinutes: 60, observedMinutes: 60, consumedPercentPoints: 0, trend: Array.from({ length: 7 }, (_, index) => ({ at: new Date(at - (6 - index) * 600_000).toISOString(), remainingPercent: remaining })) });
+  data.primaryKind = "weekly"; data.status = scenario === "stale" ? "stale" : "idle";
+  if (scenario === "stale") data.updatedAt = new Date(at - 600_000).toISOString();
+  data.coachExtras = {
+    observedWindow: { kind: "weekly", windowMinutes: 10080, resetsAt: reset },
+    dailyObservations: [
+      { date: new Date(at - 2 * 86_400_000).toISOString().slice(0, 10), consumedPercentPoints: null, coveredMinutes: 0, partial: true },
+      { date: new Date(at - 86_400_000).toISOString().slice(0, 10), consumedPercentPoints: 1, coveredMinutes: 30, partial: true },
+      { date: now.toISOString().slice(0, 10), consumedPercentPoints: 0, coveredMinutes: 15, partial: true },
+    ],
+    resetNotice: scenario === "notice" ? { id: "synthetic-reset-notice-v3", summary: "Synthetic reset-notice example — not a real announcement.", sourceUrl: "https://example.org/", sourceLabel: "Synthetic third-party example", startAt: new Date(at + 7_200_000).toISOString(), endAt: new Date(at + 10_800_000).toISOString(), publishedAt: new Date(at - 1_200_000).toISOString(), updatedAt: now.toISOString(), isUnread: true, verification: "third_party", scope: "global" } : null,
+  };
+  return data;
+}
 let pendingRead: Promise<PaceSnapshot> | null = null;
 export function fetchPulsePace(refresh = false): Promise<PaceSnapshot> {
   if (demo()) {
     const query = new URLSearchParams(location.search);
+    const coachScenario = query.get("coachScenario") as SyntheticCoachScenario;
+    if (coachScenarios.includes(coachScenario)) {
+      const value = syntheticCoachSnapshot(coachScenario);
+      if (value.coachExtras?.resetNotice && demoReadNotices.has(value.coachExtras.resetNotice.id)) value.coachExtras.resetNotice.isUnread = false;
+      return Promise.resolve(value);
+    }
     const state = (query.get("paceScenario") ?? query.get("paceState")) as PaceState;
     return Promise.resolve(syntheticPaceSnapshot(paceStates.includes(state) ? state : "forecast"));
   }
@@ -114,12 +153,16 @@ export function usePulsePace() {
   const [data, setData] = useState<PaceSnapshot | null>(null);
   const [error, setError] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+  const [noticePending, setNoticePending] = useState(false);
+  const [noticeError, setNoticeError] = useState(false);
+  const noticeReadPending = useRef(false);
   const current = useRef<PaceSnapshot | null>(null);
   const failedAt = useRef<{ updatedAt: string | null } | null>(null);
   const requestRevision = useRef(0);
   const manualPending = useRef(false);
   const mounted = useRef(false);
   const accept = useCallback((value: PaceSnapshot) => {
+    if (current.current?.coachExtras?.resetNotice?.id !== value.coachExtras?.resetNotice?.id) setNoticeError(false);
     if (value.refreshFailed) failedAt.current = { updatedAt: value.updatedAt };
     else if (failedAt.current && value.updatedAt !== failedAt.current.updatedAt) failedAt.current = null;
     current.current = value;
@@ -150,5 +193,24 @@ export function usePulsePace() {
     catch { if (mounted.current) { failedAt.current = { updatedAt: current.current?.updatedAt ?? null }; setError(true); } }
     finally { manualPending.current = false; if (mounted.current) setRefreshing(false); }
   }, [accept]);
-  return { data, error, refreshing, refresh };
+  const markNoticeRead = useCallback(async (id: string) => {
+    const notice = current.current?.coachExtras?.resetNotice;
+    if (noticeReadPending.current || !notice?.isUnread || notice.id !== id) return;
+    noticeReadPending.current = true;
+    setNoticePending(true); setNoticeError(false);
+    try {
+      if (demo()) {
+        demoReadNotices.add(id);
+        const value = current.current;
+        if (value?.coachExtras && mounted.current) accept({ ...value, coachExtras: { ...value.coachExtras, resetNotice: { ...notice, isUnread: false } } });
+      } else {
+        await invoke("mark_pulse_notice_read", { id });
+        const ownRevision = ++requestRevision.current;
+        const value = await invoke<PaceSnapshot>("fetch_pulse_pace");
+        if (mounted.current && ownRevision === requestRevision.current) accept(value);
+      }
+    } catch { if (mounted.current) setNoticeError(true); }
+    finally { noticeReadPending.current = false; if (mounted.current) setNoticePending(false); }
+  }, [accept]);
+  return { data, error, refreshing, refresh, markNoticeRead, noticePending, noticeError };
 }

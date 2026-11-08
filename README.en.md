@@ -1,6 +1,6 @@
 # Codex Pulse — See the Pace Behind Your Quota
 
-A quiet companion for Codex on Windows: estimate a range for reaching a quota limit from consecutive official observations, see whether that could happen before reset, and inspect local token sources by project and model. Includes **Clear** and **Meter**, a full usage workspace, and session replay.
+A quiet quota-pacing companion for Codex on Windows: view remaining quota and reset time together, compare consumption with the window's time progress, and plan upcoming tasks. Includes **Clear** and **Meter**, a full usage workspace, and session replay.
 
 **[简体中文](README.md)** · **[Download for Windows](https://github.com/zhulongqihan/codex-pulse/releases/latest)** · [Product and interactive preview](https://zhulongqihan.github.io/codex-pulse/) · [Full workspace demo](https://zhulongqihan.github.io/codex-pulse/?demo=1) · [Screenshots](https://zhulongqihan.github.io/codex-pulse/gallery.html) · [Issues](https://github.com/zhulongqihan/codex-pulse/issues)
 
@@ -8,8 +8,10 @@ A quiet companion for Codex on Windows: estimate a range for reaching a quota li
 
 ## Features
 
-- **Codex corner pace indicator:** a shared app icon and compact status, with no brand word taking extra space. Click for a card without an input box, showing a range for reaching the limit, its relation to reset, and today's local token sources. Follows the Microsoft Store edition of Codex for Windows; hides when another app is active, Codex is minimized, or space is insufficient.
-- **Personal quota trends:** at least 4 valid observations spanning at least 15 minutes, isolated by account, workspace, source, and actual quota window. Conservative ranges coexist with explicit unknown, sampling, slow, idle, stale, and expired states. The estimate does not guarantee working time or request counts.
+- **Shared quota pacing:** the corner card, desktop widget and workspace share remaining quota, personal reset time, plain-language advice and daily/hourly reference allocations. Basic readings do not depend on a depletion forecast, and accounts returning only a weekly window remain useful.
+- **Smooth client shortcut:** a shared icon and compact status without a brand word. The input-free card follows verified Microsoft Store Codex windows through Windows location events, hiding when another app is active, Codex is minimized or space is insufficient.
+- **Grounded extra indicators:** daily recorded changes and coverage in this cycle, a surplus-near-reset hint, and conditional remaining-at-reset ranges when sufficient observations exist. Missing history is not zero. Allocations are not new quota, and forecasts do not guarantee working time.
+- **Visible reset notices:** background notices show their source, expected window and unconfirmed state, with read/deduplication support. Third-party global news stays separate from personal window expiry and is not presented as a personal reset confirmation.
 - **Today and current capacity first**: today's local activity stays independent of historical filters, alongside account capacity and reset times. The complete-range trend and main usage drivers appear together, with daily detail available when needed.
 - **Six work views:** dashboard, sessions, models, daily, monthly and projects, plus settings and optional diagnostics. Collapse or resize navigation and return from settings to your previous view.
 - **Complete date ranges:** nine presets, all retained history and custom inclusive ranges. Daily averages use calendar days. The monthly view independently queries the current month to date and the previous 11 calendar months, distinguishing missing retention, partial retention and zero activity.
@@ -18,7 +20,7 @@ A quiet companion for Codex on Windows: estimate a range for reaching a quota li
 - **Account and reset information:** show account, workspace, subscription, quota windows, countdowns, Credits and reset credits actually returned by the official service. Read-only refresh is separate from confirmed window activation. Reset announcements, history, calendar, forecasts and feeds expose source and freshness.
 - **Optional per-session Credits:** off by default; query only the real thread IDs currently being viewed, without sending conversation bodies. Preserve exact decimals, negative adjustments, cached values, cooldowns and unavailable states.
 - **Local sources and maintenance:** incremental scanning, compressed archives, one selected native/WSL environment, targeted session/project rescans, diagnostics and cache rebuilding.
-- **Desktop companions:** a tray information panel and an independent draggable, pinnable, expandable widget, with separate metric configuration. Launch at sign-in and automatic refresh are supported.
+- **Desktop companions:** a configurable tray information panel and an independent draggable, pinnable, expandable quota-pacing widget. Launch at sign-in and automatic refresh are supported.
 - **Codex desktop entry:** a local MCP plugin shows quota and today's summary in a desktop client with MCP Apps support, with actions to open the dashboard or widget. Clear and Meter panels use Chinese or English; see the [installation guide](docs/CODEX_INTEGRATION.en.md).
 - **Two styles and six languages:** Clear/Meter, light/dark/system, density and motion are independent preferences that preserve your working state. Supports Simplified Chinese, Traditional Chinese, English, Japanese, Korean and German.
 - **Exports and updates:** XLSX/Markdown contain range summary, daily, model and project statistics. Pulse updates verify the release signature, product, platform and package digest, preserving data and restoring the previous executable if startup fails.
@@ -27,9 +29,9 @@ A quiet companion for Codex on Windows: estimate a range for reaching a quota li
 
 | Clear | Meter |
 |---|---|
-| ![Clear product homepage and actual pace card with synthetic data](docs/screenshots/pace-clear.png) | ![Meter product homepage and actual pace card with synthetic data](docs/screenshots/pace-meter.png) |
+| ![Clear quota-pacing card with synthetic data](docs/screenshots/pace-clear.png) | ![Meter quota-pacing card with synthetic data](docs/screenshots/pace-meter.png) |
 
-Try the [time-to-limit range](https://zhulongqihan.github.io/codex-pulse/?demo=1&paceScenario=forecast#pulse-pace), [sampling](https://zhulongqihan.github.io/codex-pulse/?demo=1&paceScenario=sampling#pulse-pace), and [stale data](https://zhulongqihan.github.io/codex-pulse/?demo=1&paceScenario=stale#pulse-pace) states. These run the implemented interface components with synthetic example readings only.
+Try the [roomy quota](https://zhulongqihan.github.io/codex-pulse/?demo=1&coachScenario=roomy#pulse-pace), [high pace](https://zhulongqihan.github.io/codex-pulse/?demo=1&coachScenario=fast#pulse-pace), [reset notice](https://zhulongqihan.github.io/codex-pulse/?demo=1&coachScenario=notice#pulse-pace), and [stale data](https://zhulongqihan.github.io/codex-pulse/?demo=1&coachScenario=stale#pulse-pace) states. These run the implemented interface components with synthetic readings and notices only.
 
 ## Clear and Meter workspaces
 
@@ -60,7 +62,7 @@ Opening the app again restores the window for the same data folder. Closing the 
 |---|---|
 | Local tokens and conversations | Retained Codex logs, grouped in the local time zone; deleted records or unsynced history from other devices cannot be reconstructed |
 | Account capacity and Credits | Fields actually returned by the official account service; these may include other devices; missing fields remain unknown |
-| Personal pace and time-to-limit range | Consecutive official observations for the same account and actual window, with at least 15 minutes and significant positive consumption; quantization and recent variation widen the range, and local tokens are never converted to quota |
+| Quota pacing and conditional forecasts | Pacing compares the remaining quota and time in the same actual window. Forecasts additionally require at least 15 minutes and significant observed consumption; quantization and recent variation widen the range, and local tokens are never converted to quota |
 | API reference costs | Model reference prices, **not subscription bills, Credits charges or extra fees**; missing prices remain unknown, while genuinely free models show zero |
 | Historical quota estimates | Correlated observations from 5-hour and weekly windows, with bounds and sample counts; other windows are not estimated, and current quotas are not spread over historical usage |
 | Reset forecasts and feeds | Third-party information with source, timestamp and stale states; a forecast does not guarantee a reset |
@@ -69,7 +71,7 @@ Cached input is already part of input and is never added twice. One thread can s
 
 The pace sampler makes a read-only query about every 60 seconds by default, with cooldowns for errors and rate limits. It sends no model requests and does not enable per-session Credits. Account changes, window resets, decreasing consumption or observation gaps over 10 minutes start new segments; readings older than about 6 minutes stop the estimate. Project/model shares describe today's local tokens, not the same share of subscription quota.
 
-Slower weekly changes accumulate a longer continuous observation span. An unchanged percentage does not mean no usage. When no estimate is possible, the card explains why and shows known reset times and actual local daily tokens. Some accounts return only a weekly window; an omitted short window does not mean zero remaining quota.
+Slower weekly changes accumulate a longer continuous observation span. An unchanged percentage does not mean no usage. Basic pacing still shows known quota and reset time without a forecast; local daily tokens remain in the workspace. Some accounts return only a weekly window; an omitted short window does not mean zero remaining quota.
 
 **Activate window** sends a minimal model request through Codex CLI after explicit confirmation and may consume quota. Ordinary refresh never activates a window. Completion of the CLI request is checked separately from confirmation that the quota window became active.
 

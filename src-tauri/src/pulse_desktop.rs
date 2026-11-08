@@ -424,9 +424,9 @@ pub fn setup_widget(
     preferences: &PulsePreferences,
 ) -> tauri::Result<()> {
     let height = if preferences.widget_expanded {
-        350.0
+        480.0
     } else {
-        112.0
+        156.0
     };
     tauri::WebviewWindowBuilder::new(
         app,
@@ -435,7 +435,7 @@ pub fn setup_widget(
     )
     .title("Codex Pulse · Widget")
     .data_directory(paths.profile.clone())
-    .inner_size(340.0, height)
+    .inner_size(350.0, height)
     .visible(preferences.widget_visible)
     .focused(false)
     .decorations(false)
@@ -482,11 +482,11 @@ fn apply_widget(app: &tauri::AppHandle, preferences: &PulsePreferences) -> Resul
             .map_err(|error| error.to_string())?;
         window
             .set_size(tauri::LogicalSize::new(
-                340.0,
+                350.0,
                 if preferences.widget_expanded {
-                    350.0
+                    480.0
                 } else {
-                    112.0
+                    156.0
                 },
             ))
             .map_err(|error| error.to_string())?;

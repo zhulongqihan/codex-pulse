@@ -8,22 +8,26 @@ Codex Pulse offers two entrypoints: a Windows corner companion and a local MCP s
 
 1. Start Pulse and enable the **Codex corner pace indicator** in settings.
 2. Open the Microsoft Store edition of Codex for Windows and bring it to the foreground. The top right shows the app icon and current pace state, without an extra Pulse brand word.
-3. Click the status to open a card without an input box. See a time-to-limit range for the actual quota window, its relation to reset, recent measured consumption, and today's local token sources by project/model.
+3. Click the status to open a card without an input box. See remaining quota, time until personal reset, consumption compared with time progress, and a daily/hourly reference allocation. New reset notices include their source.
 4. Press Esc, click outside, or use the close button to dismiss the card. Details opens the full Pulse workspace.
 
 The companion does not modify Codex installation files. It follows the client when moved or resized, and hides when another application is active, Codex is minimized, no supported client is found, or the window is too small. Settings explain why it is hidden. Corner following currently supports only the Microsoft Store edition of Codex for Windows, not Codex Web, macOS, or a regular CLI.
 
 ### What the pace means
 
+- The primary view shows remaining quota, personal reset time and consumption versus time-progress advice. It does not need a depletion forecast to remain useful. The workspace and desktop widget use the same calculation.
+- Daily/hourly references spread the current remainder until personal reset; they are not new daily quota. Accounts returning only a weekly window are assessed within that window without invented short-window values.
+- Daily records show only observed changes and coverage; upgrading does not manufacture history. New global reset notices show a third-party source, expected window and unconfirmed state, without repeatedly presenting old messages as new.
+
 - Estimates use consecutive read-only observations of official personal quota. Tokens, API costs, and Credits are never converted into quota percentages.
 - Account, workspace, selected log source, and actual quota window are isolated. A conservative time range requires at least 4 valid points over at least 15 minutes and significant positive consumption.
 - A range describes the trend if recent consumption continues. It does not guarantee working time, request counts, or whether the limit will actually be reached before or after reset.
 - Sampling, idle, slow, missing, stale, and expired states are explicit. Account changes, resets, decreasing consumption, or gaps over 10 minutes start new segments; readings older than about 6 minutes stop the forecast.
 - The sampler reads existing quota about every 60 seconds by default, with cooldowns for errors and rate limits. It sends no model requests. Activate window in the main workspace remains a separate, confirmed operation that may consume quota.
-- Slow weekly changes accumulate a longer continuous observation span, avoiding lost trends caused by unchanged rounded percentages over a short slice. Flat observations still produce no estimate. The card shows the reason, known reset times and actual local daily tokens. A short window omitted by the service is not a zero balance.
-- Project/model shares describe today's local tokens, not their share of personal quota. Official account readings may include consumption on other devices.
+- Slow weekly changes accumulate a longer continuous observation span, avoiding lost trends caused by unchanged rounded percentages over a short slice. Flat observations produce no forecast; known quota and reset time remain useful. A short window omitted by the service is not a zero balance.
+- Project/model shares in the workspace describe local tokens, not their share of personal quota. Official account readings may include consumption on other devices.
 
-Try the [actual pace card with synthetic data](https://zhulongqihan.github.io/codex-pulse/?demo=1&paceScenario=forecast#pulse-pace), or switch sampling and stale states on the [product homepage](https://zhulongqihan.github.io/codex-pulse/). The website does not connect to local Codex.
+Try the [pace card with synthetic data](https://zhulongqihan.github.io/codex-pulse/?demo=1&coachScenario=roomy#pulse-pace), or switch high pace, reset notice and stale states on the [product homepage](https://zhulongqihan.github.io/codex-pulse/). The website does not connect to local Codex.
 
 ## Add the MCP sidebar entry
 

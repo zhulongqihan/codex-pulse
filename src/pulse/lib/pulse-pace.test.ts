@@ -2,7 +2,7 @@
 import { act, renderHook } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { invoke } from "@tauri-apps/api/core";
-import { compactPaceRange, fetchPulsePace, hasPaceEstimate, paceRange, paceStates, primaryPaceWindow, syntheticPaceSnapshot, usePulsePace } from "./pulse-pace";
+import { compactPaceRange, fetchPulsePace, hasPaceEstimate, paceRange, paceStates, primaryPaceWindow, syntheticCoachSnapshot, syntheticPaceSnapshot, usePulsePace } from "./pulse-pace";
 
 vi.mock("@tauri-apps/api/core", () => ({ invoke: vi.fn() }));
 beforeEach(() => { vi.mocked(invoke).mockReset(); history.replaceState(null, "", "/"); });
@@ -35,6 +35,18 @@ describe("quota forecast presentation", () => {
   it("uses the public scenario fixture without requesting a local account", async () => {
     history.replaceState(null, "", "/?demo=1&paceScenario=stale#pulse-pace");
     expect((await fetchPulsePace(true)).status).toBe("stale");
+    expect(invoke).not.toHaveBeenCalled();
+  });
+  it("supports approved coach scenarios independently of the legacy forecast demo", async () => {
+    const date = new Date("2026-11-09T08:00:00Z");
+    expect(syntheticCoachSnapshot("roomy", date).windows[1].remainingPercent).toBe(80);
+    expect(syntheticCoachSnapshot("fast", date).windows[1].remainingPercent).toBe(20);
+    expect(syntheticCoachSnapshot("balanced", date).windows[1].remainingPercent).toBe(71.4);
+    expect(syntheticCoachSnapshot("roomy", date).coachExtras?.dailyObservations[0].consumedPercentPoints).toBeNull();
+    history.replaceState(null, "", "/?demo=1&coachScenario=notice#pulse-pace");
+    const value = await fetchPulsePace(true);
+    expect(value.coachExtras?.resetNotice?.summary).toContain("Synthetic");
+    expect(value.coachExtras?.resetNotice?.verification).toBe("third_party");
     expect(invoke).not.toHaveBeenCalled();
   });
 
@@ -80,5 +92,31 @@ describe("quota forecast presentation", () => {
     await act(async () => { await result.current.refresh(); });
     await act(async () => { resolve(initial); });
     expect(result.current.data?.updatedAt).toBe(fresh.updatedAt);
+  });
+
+  it("only acknowledges the explicit current notice ID and re-reads local state without refreshing the account", async () => {
+    const initial = syntheticPaceSnapshot();
+    const now = new Date().toISOString();
+    initial.coachExtras = { dailyObservations: [], resetNotice: { id: "notice-a", summary: "Synthetic notice", sourceUrl: "https://example.org/notice", sourceLabel: "Example feed", startAt: null, endAt: null, publishedAt: now, updatedAt: now, isUnread: true, verification: "third_party", scope: "global" } };
+    const read = { ...initial, coachExtras: { ...initial.coachExtras, resetNotice: { ...initial.coachExtras.resetNotice!, isUnread: false } } };
+    vi.mocked(invoke).mockImplementation(async command => command === "mark_pulse_notice_read" ? undefined : vi.mocked(invoke).mock.calls.some(([name]) => name === "mark_pulse_notice_read") ? read : initial);
+    const { result } = renderHook(() => usePulsePace());
+    await act(async () => {});
+    await act(async () => { await result.current.markNoticeRead("old-notice"); });
+    expect(invoke).not.toHaveBeenCalledWith("mark_pulse_notice_read", expect.anything());
+    await act(async () => { await result.current.markNoticeRead("notice-a"); });
+    expect(invoke).toHaveBeenCalledWith("mark_pulse_notice_read", { id: "notice-a" });
+    expect(invoke).not.toHaveBeenCalledWith("refresh_pulse_pace");
+    expect(result.current.data?.coachExtras?.resetNotice?.isUnread).toBe(false);
+  });
+
+  it("retains an unread notice and exposes an acknowledgement failure", async () => {
+    const initial = syntheticPaceSnapshot(), now = new Date().toISOString();
+    initial.coachExtras = { dailyObservations: [], resetNotice: { id: "notice-a", summary: "Synthetic notice", sourceUrl: "https://example.org/notice", sourceLabel: "Example feed", startAt: null, endAt: null, publishedAt: now, updatedAt: now, isUnread: true, verification: "third_party", scope: "global" } };
+    vi.mocked(invoke).mockImplementation(async command => { if (command === "mark_pulse_notice_read") throw Error("unavailable"); return initial; });
+    const { result } = renderHook(() => usePulsePace()); await act(async () => {});
+    await act(async () => { await result.current.markNoticeRead("notice-a"); });
+    expect(result.current.noticeError).toBe(true); expect(result.current.noticePending).toBe(false);
+    expect(result.current.data?.coachExtras?.resetNotice?.isUnread).toBe(true);
   });
 });

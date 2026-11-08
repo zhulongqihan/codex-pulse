@@ -4,10 +4,21 @@ import { mockIPC, mockWindows } from "@tauri-apps/api/mocks";
 import appManifest from "../../package.json";
 import type { TrayPopoverData } from "../pulse/lib/tray-popover";
 import type { PulsePreferences } from "../pulse/lib/pulse-appearance";
+import { syntheticCoachSnapshot } from "../pulse/lib/pulse-pace";
 import { account, catalog, forecast, monthly, now, overview, projectAnalytics, projectDaySessions, projectSessionDays, replay, resets, retainedFrom, sessions, today } from "./fixtures";
 
 const unavailable = () => { throw new Error("此操作需要 Codex Pulse 桌面版。合成演示不会访问本机文件、账号或执行模型请求。 / Available in the desktop app only."); };
 const stamp = () => new Date().toISOString();
+function coachAccount() {
+  const result = account();
+  const scenario = typeof location === "undefined" ? null : new URLSearchParams(location.search).get("coachScenario");
+  if (!scenario || !["roomy", "balanced", "fast", "notice", "stale"].includes(scenario)) return result;
+  const snapshot = syntheticCoachSnapshot(scenario as Parameters<typeof syntheticCoachSnapshot>[0]);
+  const weekly = snapshot.windows.find(window => window.kind === "weekly");
+  if (!weekly || weekly.remainingPercent == null) return result;
+  return { ...result, session: null, weekly: { usedPercent: 100 - weekly.remainingPercent, remainingPercent: weekly.remainingPercent,
+    windowMinutes: weekly.windowMinutes, resetsAt: weekly.resetsAt }, updatedAt: snapshot.updatedAt ?? result.updatedAt };
+}
 const scan = () => ({ importedDays: overview("all").daily.length, scannedAt: stamp(), timezone: "Asia/Shanghai", metrics: { totalMs: 0, pricingMs: 0, parseMs: 0, dbMs: 0, filesScanned: sessions.length, filesParsed: 0, filesReused: sessions.length, bytesRead: 0 } });
 const paths = { data: "F:/Demo/CodexPulse/data", logs: "F:/Demo/CodexPulse/data/logs", profile: "F:/Demo/CodexPulse/data/webview", temporary: "F:/Demo/CodexPulse/data/tmp", exports: "F:/Demo/CodexPulse/data/exports" };
 const preferences: PulsePreferences = { skinId: "clear", theme: "system", motionLevel: "gentle", compactMode: false, respectReducedMotion: true, widgetVisible: false, widgetExpanded: false, widgetAlwaysOnTop: true, titlebarEnabled: true };
@@ -46,7 +57,7 @@ export function installDemoBridge() {
     const args = (input ?? {}) as Record<string, any>;
     switch (command) {
       case "scan_usage": case "rescan_project": return scan();
-      case "refresh_usage_data": return { scan: scan(), limits: account(), limitsError: null, limitsSkipped: false, refreshedAt: stamp() };
+      case "refresh_usage_data": return { scan: scan(), limits: coachAccount(), limitsError: null, limitsSkipped: false, refreshedAt: stamp() };
       case "fetch_overview": return overview(args.range);
       case "fetch_monthly_usage": return monthly();
       case "fetch_project_analytics": return projectAnalytics(args.project, args.range);
@@ -56,7 +67,7 @@ export function installDemoBridge() {
       case "fetch_project_session_days": return projectSessionDays(args.project, args.range, args.query ?? "", args.before);
       case "fetch_project_day_sessions": return projectDaySessions(args.project, args.date, args.query ?? "");
       case "fetch_model_pricing_catalog": case "refresh_model_pricing": return catalog();
-      case "fetch_codex_limits": return account();
+      case "fetch_codex_limits": return coachAccount();
       case "fetch_codex_quota_forecast": return forecast();
       case "fetch_latest_codex_reset": return resets[0];
       case "fetch_codex_reset_history": return resets.filter(row => Date.parse(row.announcedAt) >= now.getTime() - Number(args.days ?? 30) * 86_400_000);

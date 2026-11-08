@@ -41,6 +41,8 @@ public static class PulseTitlebarFixture {
     [DllImport("user32.dll",CharSet=CharSet.Unicode)] static extern int GetWindowTextW(IntPtr window,StringBuilder text,int capacity);
     [DllImport("user32.dll")] static extern bool GetWindowRect(IntPtr window,out Rect rect);
     [DllImport("user32.dll")] static extern bool IsIconic(IntPtr window);
+    delegate bool EnumProc(IntPtr window,IntPtr parameter);
+    [DllImport("user32.dll")] static extern bool EnumWindows(EnumProc procedure,IntPtr parameter);
     [DllImport("user32.dll")] static extern bool DestroyWindow(IntPtr window);
     [DllImport("user32.dll")] static extern uint GetDpiForWindow(IntPtr window);
     [DllImport("user32.dll")] static extern IntPtr MonitorFromWindow(IntPtr window,uint flags);
@@ -53,12 +55,14 @@ public static class PulseTitlebarFixture {
     [DllImport("kernel32.dll")] static extern IntPtr OpenProcess(uint access,bool inherit,uint process);
     [DllImport("kernel32.dll",CharSet=CharSet.Unicode)] static extern bool QueryFullProcessImageNameW(IntPtr process,uint flags,StringBuilder path,ref uint length);
     [DllImport("kernel32.dll")] static extern bool CloseHandle(IntPtr handle);
+    [DllImport("kernel32.dll")] static extern bool GetProcessTimes(IntPtr process,out long created,out long exited,out long kernel,out long user);
     static WndProc procedure = WindowProcedure;
     static IntPtr host, other;
     static string directory, lastId = "";
     static string commandError="";
     static int physicalBadgeClicks=0;
     static bool pendingPhysicalClick=false;
+    static bool pendingMotion=false;
     static System.Windows.Forms.Timer releaseTimer;
     static JavaScriptSerializer serializer = new JavaScriptSerializer();
     static DateTime started = DateTime.UtcNow;
@@ -136,6 +140,106 @@ public static class PulseTitlebarFixture {
         releaseTimer.Start();
         return "";
     }
+    static IntPtr DebugBadge() {
+        string expected=Environment.GetEnvironmentVariable("PULSE_TITLEBAR_EXPECTED_APP_BINARY");
+        if(String.IsNullOrEmpty(expected))throw new Exception("expected_debug_image_missing");
+        IntPtr found=IntPtr.Zero;
+        EnumWindows(delegate(IntPtr window,IntPtr parameter) {
+            if(ExpectedDebugWindow(window,"Codex Pulse \u00b7 Titlebar",expected)) { found=window;return false; }
+            return true;
+        },IntPtr.Zero);
+        if(found==IntPtr.Zero)throw new Exception("expected_debug_badge_missing");
+        return found;
+    }
+    static double ProcessCpuMs(IntPtr process) {
+        long created,exited,kernel,user;
+        if(!GetProcessTimes(process,out created,out exited,out kernel,out user))throw new Exception("Cannot read owned app CPU time");
+        return (kernel+user)/10000.0;
+    }
+    static void MeasureFollow() {
+        if(pendingMotion)throw new Exception("motion_probe_already_running");
+        if(GetForegroundWindow()!=host)throw new Exception("owned_host_not_foreground_for_motion");
+        IntPtr badge=DebugBadge();
+        uint processId;GetWindowThreadProcessId(badge,out processId);
+        IntPtr app=OpenProcess(0x1000,false,processId);
+        if(app==IntPtr.Zero)throw new Exception("owned_debug_cpu_handle_unavailable");
+        Rect frame,work=WorkArea(host);GetWindowRect(host,out frame);
+        int width=frame.right-frame.left,height=frame.bottom-frame.top;
+        int startX=work.left+16,travel=Math.Min(240,work.right-startX-width-16);
+        if(travel<64)throw new Exception("work_area_too_small_for_motion_probe");
+        SetWindowPos(host,IntPtr.Zero,startX,frame.top,width,height,0x0010|0x0004);
+        pendingMotion=true;
+        System.Diagnostics.Stopwatch watch=System.Diagnostics.Stopwatch.StartNew();
+        double idleStart=ProcessCpuMs(app),motionStart=0;
+        double motionAt=0,finalAt=0;int step=0,offset=0,previousBadgeX=Int32.MinValue,updates=0;
+        bool moving=false,finished=false;
+        List<Dictionary<string,object>> requests=new List<Dictionary<string,object>>();
+        List<Dictionary<string,object>> samples=new List<Dictionary<string,object>>();
+        List<double> latencies=new List<double>();
+        double idlePercent=0;
+        System.Windows.Forms.Timer timer=new System.Windows.Forms.Timer();timer.Interval=16;
+        Action<string> finish=delegate(string failure) {
+            if(finished)return;finished=true;timer.Stop();timer.Dispose();pendingMotion=false;
+            double elapsed=watch.Elapsed.TotalMilliseconds;
+            double cpu=ProcessCpuMs(app);
+            double activeMs=Math.Max(1,elapsed-motionAt);
+            double motionPercent=moving?(cpu-motionStart)/activeMs*100:0;
+            List<double> sorted=new List<double>(latencies);sorted.Sort();
+            double p95=sorted.Count>0?sorted[(int)Math.Floor((sorted.Count-1)*0.95)]:-1;
+            double max=sorted.Count>0?sorted[sorted.Count-1]:-1;
+            Rect currentHost,currentBadge;GetWindowRect(host,out currentHost);GetWindowRect(badge,out currentBadge);
+            bool finalAligned=moving&&step==64&&currentBadge.left==currentHost.left+offset;
+            Dictionary<string,object> result=new Dictionary<string,object> {
+                {"scope","Owned synthetic host only; no user host input or movement"},
+                {"passed",failure==""&&finalAligned&&updates>=16&&p95<=100&&max<=200&&motionPercent<80},
+                {"failure",failure},{"hostMoves",step},{"badgeUpdates",updates},{"samples",samples},
+                {"requests",requests},{"p95ObservedLagMs",p95},{"maxObservedLagMs",max},
+                {"sampleIntervalRequestedMs",16},{"finalAligned",finalAligned},{"finalSettleMs",moving?elapsed-finalAt:-1},
+                {"idleOneCoreCpuPercent",idlePercent},{"motionOneCoreCpuPercent",motionPercent},
+                {"cpuSource","GetProcessTimes kernel+user; native app process only, excludes WebView subprocesses"},
+                {"idleCpuMs",motionStart-idleStart},{"motionCpuMs",cpu-motionStart},
+                {"motionDurationMs",moving?activeMs:0},{"foregroundPreserved",GetForegroundWindow()==host}
+            };
+            File.WriteAllText(Path.Combine(directory,"motion.json"),serializer.Serialize(result));
+            if(failure!="")commandError=failure;
+            CloseHandle(app);
+        };
+        timer.Tick+=delegate(object sender,EventArgs args) {
+            try {
+                if(GetForegroundWindow()!=host) { finish("foreground_changed_during_owned_motion");return; }
+                double now=watch.Elapsed.TotalMilliseconds;
+                if(!moving) {
+                    if(now<1000)return;
+                    Rect baseline;GetWindowRect(badge,out baseline);GetWindowRect(host,out frame);
+                    if(!IsWindowVisible(badge)) { finish("badge_hidden_before_motion");return; }
+                    offset=baseline.left-frame.left;previousBadgeX=baseline.left;
+                    motionStart=ProcessCpuMs(app);idlePercent=(motionStart-idleStart)/now*100;
+                    motionAt=now;moving=true;
+                }
+                if(step<64) {
+                    step++;int x=startX+(int)Math.Round(travel*step/64.0);
+                    double requested=watch.Elapsed.TotalMilliseconds;
+                    if(!SetWindowPos(host,IntPtr.Zero,x,frame.top,width,height,0x0010|0x0004)) { finish("owned_host_move_failed");return; }
+                    requests.Add(new Dictionary<string,object>{{"atMs",requested},{"hostX",x},{"badgeX",x+offset}});
+                    if(step==64)finalAt=requested;
+                }
+                Rect actual;GetWindowRect(badge,out actual);
+                now=watch.Elapsed.TotalMilliseconds;
+                samples.Add(new Dictionary<string,object>{{"atMs",now},{"badgeX",actual.left},{"foregroundHost",GetForegroundWindow()==host}});
+                if(actual.left!=previousBadgeX) {
+                    updates++;previousBadgeX=actual.left;
+                    for(int index=requests.Count-1;index>=0;index--) {
+                        if(Convert.ToInt32(requests[index]["badgeX"])==actual.left) { latencies.Add(now-Convert.ToDouble(requests[index]["atMs"]));break; }
+                    }
+                }
+                if(step==64) {
+                    if(actual.left==startX+travel+offset)finish("");
+                    else if(now-finalAt>500)finish("final_position_did_not_settle");
+                }
+            } catch(Exception error) { finish("motion_probe_"+error.GetType().Name); }
+        };
+        timer.Start();
+    }
     static void Tick(object sender,EventArgs args) {
         if(DateTime.UtcNow-started>TimeSpan.FromMinutes(10)) { PostQuitMessage(0); return; }
         string command=Path.Combine(directory,"command.json");
@@ -147,6 +251,7 @@ public static class PulseTitlebarFixture {
                     string action=Convert.ToString(value["action"]);
                     commandError="";
                     if(action=="move") SetWindowPos(host,IntPtr.Zero,Number(value,"x",120),Number(value,"y",100),Number(value,"width",1280),Number(value,"height",800),0x0010|0x0004);
+                    else if(action=="measure-follow") MeasureFollow();
                     else if(action=="click-badge") commandError=ClickBadge(Number(value,"x",-1),Number(value,"y",-1),false);
                     else if(action=="toggle-badge") commandError=ClickBadge(Number(value,"x",-1),Number(value,"y",-1),true);
                     else if(action=="minimize") ShowWindow(host,6);
@@ -166,6 +271,7 @@ public static class PulseTitlebarFixture {
                 {"processId",System.Diagnostics.Process.GetCurrentProcess().Id},{"window",host.ToInt64()},
                 {"otherWindow",other.ToInt64()},{"commandId",lastId},{"foreground",GetForegroundWindow()==host},
                 {"commandError",commandError},{"physicalBadgeClicks",physicalBadgeClicks},{"pendingPhysicalClick",pendingPhysicalClick},
+                {"pendingMotion",pendingMotion},
                 {"minimized",IsIconic(host)},{"dpi",GetDpiForWindow(host)},
                 {"x",rect.left},{"y",rect.top},{"width",rect.right-rect.left},{"height",rect.bottom-rect.top},
                 {"workArea",new Dictionary<string,object>{{"x",workArea.left},{"y",workArea.top},{"width",workArea.right-workArea.left},{"height",workArea.bottom-workArea.top}}}

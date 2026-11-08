@@ -3,169 +3,147 @@ import { fireEvent, render, screen, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import i18n from "../i18n";
 import { paceCopy } from "@/lib/pulse-pace-copy";
-import { syntheticPaceSnapshot } from "@/lib/pulse-pace";
+import { syntheticPaceSnapshot, type PaceResetNotice, type PaceSnapshot } from "@/lib/pulse-pace";
+import { formatCoachCountdown, quotaCoachBadgeCopy, quotaCoachCopy } from "@/lib/quota-pace-coach-copy";
 import { PulsePaceBadgeView, PulsePaceCard } from "./pulse-pace";
 
-beforeEach(async () => { vi.restoreAllMocks(); history.replaceState(null, "", "/"); await i18n.changeLanguage("en"); });
+const now = Date.parse("2026-11-09T08:00:00Z");
+const iso = (minutes: number) => new Date(now + minutes * 60_000).toISOString();
+beforeEach(async () => { vi.restoreAllMocks(); vi.spyOn(Date, "now").mockReturnValue(now); history.replaceState(null, "", "/"); await i18n.changeLanguage("en"); });
 const actions = () => ({ onRefresh: vi.fn(), onClose: vi.fn(), onDetails: vi.fn() });
-function weeklyOnly(state: "idle" | "slow" = "idle") {
-  const at = Date.parse("2026-11-08T08:00:00Z");
-  vi.spyOn(Date, "now").mockReturnValue(at);
-  const data = syntheticPaceSnapshot(state, new Date(at));
+function cycle(remaining = 80): PaceSnapshot {
+  const data = syntheticPaceSnapshot("idle", new Date(now));
   data.primaryKind = "weekly";
-  Object.assign(data.windows[0], { state: "unavailable", remainingPercent: null, windowMinutes: null, resetsAt: null, trend: [], sampleCount: 0 });
-  Object.assign(data.windows[1], { state, remainingPercent: 82, resetsAt: "2026-11-14T13:00:00Z", sampleCount: 13, sampleSpanMinutes: 60, observedMinutes: 60, consumedPercentPoints: state === "idle" ? 0 : .5 });
-  Object.assign(data.localUsage!, { totalTokens: 343_000_000, projects: [{ label: "Example project", totalTokens: 343_000_000, sharePercent: 100 }] });
+  Object.assign(data.windows[0], { state: "unavailable", remainingPercent: null, windowMinutes: null, resetsAt: null });
+  Object.assign(data.windows[1], { state: "idle", remainingPercent: remaining, resetsAt: iso(7260), windowMinutes: 10080 });
   return data;
 }
+const notice = (): PaceResetNotice => ({ id: "synthetic-notice", summary: "Synthetic maintenance under review", sourceUrl: "https://example.org/notice", sourceLabel: "Example third-party feed", startAt: iso(60), endAt: iso(120), publishedAt: iso(-10), updatedAt: iso(-1), isUnread: true, verification: "third_party", scope: "global" });
+function withNotice(data = cycle()) { data.coachExtras = { dailyObservations: [], resetNotice: notice() }; return data; }
 
-describe("title bar usage companion", () => {
-  it.each(["en", "zh", "zh-Hant", "ja", "ko", "de"])("shows reset, official remaining and actual local totals for a weekly-only unchanged reading in %s", async language => {
+describe("shared cycle pace card", () => {
+  it.each(["en", "zh", "zh-Hant", "ja", "ko", "de"])("renders both approved states with the same time and full comparison in %s", async language => {
     await i18n.changeLanguage(language);
-    render(<PulsePaceCard data={weeklyOnly()} {...actions()}/>);
-    expect(screen.getByTestId("pace-estimate")).toHaveTextContent(paceCopy(language, "resetDays", { days: 6, hours: 5 }));
-    expect(screen.getByText(paceCopy(language, "sessionMissing"))).toBeVisible();
-    expect(screen.getByText(paceCopy(language, "idleDetail"))).toBeVisible();
-    expect(screen.getByRole("region", { name: paceCopy(language, "official") })).toHaveTextContent("82%");
-    expect(screen.getByTestId("pace-token-total")).toHaveTextContent(new Intl.NumberFormat(language).format(343_000_000));
-    expect(document.querySelector('time[datetime="2026-11-14T13:00:00Z"]')).toHaveTextContent("2026");
-    expect(screen.queryByText("2–3")).not.toBeInTheDocument();
-  });
-
-  it("uses fresh local tokens in a non-forecast badge, while retaining warning and forecast priority", () => {
-    const data = weeklyOnly();
-    const { rerender } = render(<PulsePaceBadgeView data={data} onToggle={vi.fn()}/>);
-    expect(screen.getByTestId("pace-badge")).toHaveTextContent("343M Token");
-    expect(screen.getByTestId("pace-badge")).toHaveAccessibleName(expect.stringContaining("Today’s local tokens: 343,000,000"));
-    for (const state of ["stale", "exhausted", "unavailable", "expired"] as const) {
-      data.status = state;
-      rerender(<PulsePaceBadgeView data={data} onToggle={vi.fn()}/>);
-      expect(screen.getByTestId("pace-badge")).not.toHaveTextContent("343M");
-      expect(screen.getByTestId("pace-badge")).toHaveTextContent(paceCopy("en", state));
-    }
-    data.status = "idle";
-    rerender(<PulsePaceBadgeView data={data} failed onToggle={vi.fn()}/>);
-    expect(screen.getByTestId("pace-badge")).toHaveTextContent("Refresh needed");
-    rerender(<PulsePaceBadgeView data={syntheticPaceSnapshot()} onToggle={vi.fn()}/>);
-    expect(screen.getByTestId("pace-badge")).toHaveTextContent("≈2–3h");
-  });
-
-  it("never uses stale, invalid-time or previous-day local totals as a badge fallback", () => {
-    for (const invalid of ["stale", "timestamp", "day", "number"] as const) {
-      const data = weeklyOnly();
-      if (invalid === "stale") data.localUsage!.stale = true;
-      if (invalid === "timestamp") data.localUsage!.updatedAt = "2026-11-08T07:00:00Z";
-      if (invalid === "day") data.localUsage!.date = "2026-11-07";
-      if (invalid === "number") data.localUsage!.totalTokens = Number.NaN;
-      const view = render(<PulsePaceBadgeView data={data} onToggle={vi.fn()}/>);
-      expect(view.getByTestId("pace-badge")).toHaveTextContent(paceCopy("en", "idle"));
-      view.unmount();
-    }
-  });
-
-  it("does not invent a reset or a forecast from local tokens when the reset is missing or invalid", () => {
-    const data = weeklyOnly("slow");
-    data.windows[1].resetsAt = "invalid";
-    render(<PulsePaceCard data={data} {...actions()}/>);
-    expect(screen.getByText(paceCopy("en", "resetUnknown"))).toBeVisible();
-    expect(screen.getByTestId("pace-estimate")).toHaveTextContent(paceCopy("en", "slowHeadline"));
-    expect(screen.getByTestId("pace-token-total")).toHaveTextContent("343,000,000");
-    expect(screen.queryByText("2–3")).not.toBeInTheDocument();
-  });
-
-  it.each(["en", "zh", "zh-Hant", "ja", "ko", "de"])("visibly labels a directly opened synthetic card and accessibly labels its badge in %s", async language => {
-    history.replaceState(null, "", "/?demo=1#pulse-pace");
-    await i18n.changeLanguage(language);
-    render(<><PulsePaceCard data={syntheticPaceSnapshot()} {...actions()}/><PulsePaceBadgeView data={syntheticPaceSnapshot()} onToggle={vi.fn()}/></>);
-    const label = paceCopy(language, "demo");
-    expect(within(screen.getByTestId("pace-popover")).getByText(label)).toBeVisible();
-    const badge = screen.getByTestId("pace-badge");
-    expect(badge).toHaveAccessibleName(expect.stringContaining(label));
-    expect(badge).toHaveAttribute("title", expect.stringContaining(label));
-    expect(badge).not.toHaveTextContent(label);
-  });
-
-  it("does not label a regular desktop card as synthetic even when a test fixture supplies its data", () => {
-    render(<PulsePaceCard data={syntheticPaceSnapshot()} {...actions()}/>);
-    expect(screen.queryByText("Synthetic demo")).not.toBeInTheDocument();
-    expect(document.querySelector(".pulse-pace-demo-label")).toBeNull();
-  });
-
-  it("keeps the badge compact and labels the specific quota window accessibly", () => {
-    const onToggle = vi.fn();
-    render(<PulsePaceBadgeView data={syntheticPaceSnapshot()} onToggle={onToggle}/>);
-    const badge = screen.getByRole("button", { name: "Open usage rhythm · 5-hour window · ≈2–3h" });
-    expect(badge).toHaveTextContent("≈2–3h");
-    expect(badge).not.toHaveTextContent("Pulse");
-    fireEvent.click(badge); expect(onToggle).toHaveBeenCalledOnce();
-  });
-
-  it.each(["en", "zh", "zh-Hant", "ja", "ko", "de"])("renders truthful non-forecast states in %s", async language => {
-    await i18n.changeLanguage(language);
-    const data = syntheticPaceSnapshot("sampling"); delete data.localUsage;
-    render(<PulsePaceBadgeView data={data} onToggle={vi.fn()}/>);
-    expect(screen.getByTestId("pace-badge")).toHaveTextContent(paceCopy(language, "sampling"));
-    expect(screen.getByTestId("pace-badge")).not.toHaveTextContent("≈");
-  });
-
-  it("shows real observation duration and keeps local token attribution distinct from account quota", () => {
-    const data = syntheticPaceSnapshot();
-    data.windows[0].observedMinutes = 45; data.windows[0].consumedPercentPoints = 2.5;
-    render(<PulsePaceCard data={data} {...actions()}/>);
-    expect(screen.getByText("2–3")).toBeVisible();
-    expect(screen.getByText("45 min observed · 2.5 percentage points used")).toBeVisible();
-    expect(screen.getByText("Estimate applies to this window; other limits may apply.")).toBeVisible();
-    expect(screen.getByText("Local tokens do not attribute account quota.")).toBeVisible();
-    const sources = screen.getByRole("region", { name: "Local token sources" });
-    expect(within(sources).getByText("62%")).toBeVisible();
-    fireEvent.click(screen.getByRole("button", { name: "Models" }));
-    expect(within(sources).getByText("gpt-6.1")).toBeVisible();
-    expect(within(sources).getByText("74%")).toBeVisible();
-    expect(within(sources).queryByText("Project Atlas")).not.toBeInTheDocument();
-    expect(screen.getByRole("region", { name: "Official remaining" })).toHaveTextContent("28%");
+    const { rerender } = render(<PulsePaceCard data={cycle(80)} {...actions()}/>);
+    expect(screen.getByTestId("coach-remaining")).toHaveTextContent("80%");
+    expect(screen.getByTestId("coach-countdown")).toHaveTextContent(formatCoachCountdown(7260, language));
+    expect(screen.getByTestId("coach-comparison")).toHaveTextContent(quotaCoachCopy(language, "comparison", { used: 20, elapsed: 28 }));
+    expect(screen.getByText(quotaCoachCopy(language, "roomyLabel"))).toBeVisible();
+    expect(screen.getByTestId("coach-reference")).toHaveTextContent("16");
+    rerender(<PulsePaceCard data={cycle(20)} {...actions()}/>);
+    expect(screen.getByTestId("coach-remaining")).toHaveTextContent("20%");
+    expect(screen.getByTestId("coach-countdown")).toHaveTextContent(formatCoachCountdown(7260, language));
+    expect(screen.getByText(quotaCoachCopy(language, "fastLabel"))).toBeVisible();
+    expect(screen.getByTestId("coach-reference")).toHaveTextContent("4");
     expect(screen.queryByRole("textbox")).not.toBeInTheDocument();
   });
 
-  it("retains the last reading on failure while removing the obsolete estimate", () => {
-    render(<PulsePaceCard data={syntheticPaceSnapshot()} failed {...actions()}/>);
-    expect(screen.getByTestId("pace-estimate")).toHaveTextContent("Refresh needed");
-    expect(screen.getByRole("alert")).toHaveTextContent("last reading is retained");
-    expect(screen.getByRole("region", { name: "Official remaining" })).toHaveTextContent("28%");
-    expect(screen.queryByText("2–3")).not.toBeInTheDocument();
+  it("does not let local tokens replace the quota core or treat a missing short window as exhaustion", () => {
+    const data = cycle(); data.localUsage!.totalTokens = 343_000_000;
+    render(<PulsePaceCard data={data} {...actions()}/>);
+    expect(screen.getByText("7-day window")).toBeVisible();
+    expect(screen.getByText(quotaCoachCopy("en", "scope"), { exact: false })).toBeVisible();
+    expect(screen.getByText(quotaCoachCopy("en", "roomyLabel"))).toBeVisible();
+    expect(screen.queryByText("343,000,000")).not.toBeInTheDocument();
+    expect(screen.queryByText(paceCopy("en", "sessionMissing"))).not.toBeInTheDocument();
   });
 
-  it("does not claim to retain a reading when the initial request failed", () => {
-    render(<PulsePaceCard data={null} failed {...actions()}/>);
-    expect(screen.getByTestId("pace-estimate")).toHaveTextContent("No data");
-    expect(screen.getByRole("alert")).not.toHaveTextContent("last reading is retained");
-    expect(screen.queryByText("2–3")).not.toBeInTheDocument();
+  it.each(["failed", "stale", "exhausted", "expired", "unavailable"] as const)("keeps %s ahead of reassuring pace guidance", status => {
+    const data = cycle();
+    if (status === "stale") data.updatedAt = iso(-7);
+    if (status === "exhausted") data.windows[1].remainingPercent = 0;
+    if (status === "expired") data.windows[1].resetsAt = iso(-1);
+    if (status === "unavailable") { data.windows[1].remainingPercent = null; data.windows[1].resetsAt = null; }
+    render(<><PulsePaceCard data={data} failed={status === "failed"} {...actions()}/><PulsePaceBadgeView data={data} failed={status === "failed"} onToggle={vi.fn()}/></>);
+    expect(screen.getByRole("status")).toHaveTextContent(quotaCoachCopy("en", status));
+    expect(screen.getByTestId("pace-popover")).not.toHaveClass("tone-roomy");
+    expect(screen.queryByTestId("coach-reference")).not.toBeInTheDocument();
+    expect(screen.getByTestId("pace-badge")).toHaveTextContent(quotaCoachBadgeCopy("en", status));
   });
 
-  it("supports keyboard close, details and pending refresh without a composer", () => {
-    const handlers = actions();
-    render(<PulsePaceCard data={syntheticPaceSnapshot()} refreshing {...handlers}/>);
+  it("selects a depleted short window rather than the older weekly primary", () => {
+    const data = cycle(); Object.assign(data.windows[0], { windowMinutes: 300, resetsAt: iso(120), remainingPercent: 0, state: "exhausted" });
+    render(<PulsePaceCard data={data} {...actions()}/>);
+    expect(screen.getByTestId("coach-remaining")).toHaveTextContent("0%");
+    expect(screen.getByText("5-hour window")).toBeVisible();
+    expect(screen.getByRole("status")).toHaveTextContent(quotaCoachCopy("en", "exhausted"));
+  });
+
+  it("preserves keyboard close, details, and a visibly pending refresh in the popover", () => {
+    const handlers = actions(); render(<PulsePaceCard data={cycle()} refreshing {...handlers}/>);
     expect(screen.getByRole("button", { name: "Close usage rhythm" })).toHaveFocus();
     expect(screen.getByRole("button", { name: "Refresh account readings" })).toBeDisabled();
     fireEvent.keyDown(document, { key: "Escape" }); expect(handlers.onClose).toHaveBeenCalledOnce();
     fireEvent.click(screen.getByRole("button", { name: "View usage details" })); expect(handlers.onDetails).toHaveBeenCalledOnce();
-    expect(document.querySelector("input,textarea,[contenteditable=true]")).toBeNull();
   });
 
-  it("does not invent local sources when no local data was returned", () => {
-    const data = syntheticPaceSnapshot(); delete data.localUsage;
-    render(<PulsePaceCard data={data} {...actions()}/>);
-    expect(screen.getByText("Project/model breakdown unavailable")).toBeVisible();
-    expect(screen.queryByText("62%")).not.toBeInTheDocument();
+  it.each(["workspace", "widget", "compact"] as const)("reuses the same metrics without an extra close action in %s", variant => {
+    const handlers = actions(); render(<PulsePaceCard data={cycle()} variant={variant} {...handlers}/>);
+    expect(screen.getByTestId("coach-remaining")).toHaveTextContent("80%");
+    expect(screen.getByTestId("coach-countdown")).toHaveTextContent("5d 1h");
+    expect(screen.queryByRole("button", { name: "Close usage rhythm" })).not.toBeInTheDocument();
+    fireEvent.keyDown(document, { key: "Escape" }); expect(handlers.onClose).not.toHaveBeenCalled();
+    if (variant === "compact") { expect(screen.queryByTestId("coach-reference")).not.toBeInTheDocument(); expect(screen.queryByRole("button", { name: "View usage details" })).not.toBeInTheDocument(); }
   });
 
-  it("marks outdated local sources with their own update time without invalidating account pace", () => {
-    const data = syntheticPaceSnapshot();
-    data.localUsage!.stale = true;
-    data.localUsage!.updatedAt = "2026-11-08T03:00:00Z";
-    render(<PulsePaceCard data={data} {...actions()}/>);
-    const sources = screen.getByRole("region", { name: "Local token sources" });
-    expect(within(sources).getByRole("status")).toHaveTextContent("Awaiting update");
-    expect(sources.querySelector("time")).toHaveAttribute("dateTime", "2026-11-08T03:00:00Z");
-    expect(screen.getByTestId("pace-estimate")).toHaveTextContent("2–3");
+  it("shows a fresh global notice and only marks its explicit ID read from the read button", () => {
+    const data = withNotice(), onRead = vi.fn();
+    const { rerender } = render(<><PulsePaceCard data={data} {...actions()} onMarkNoticeRead={onRead}/><PulsePaceBadgeView data={data} onToggle={vi.fn()}/></>);
+    expect(screen.getByTestId("pace-badge")).toHaveTextContent("Reset notice");
+    const banner = screen.getByRole("note", { name: "Reset notice" });
+    expect(within(banner).getByText(quotaCoachCopy("en", "noticeClass"))).toBeVisible();
+    const link = within(banner).getByRole("link", { name: /Example third-party feed/ });
+    expect(link).toHaveAttribute("href", "https://example.org/notice");
+    expect(within(banner).getByText(quotaCoachCopy("en", "noticeScope"))).toBeVisible();
+    expect(onRead).not.toHaveBeenCalled();
+    fireEvent.click(within(banner).getByRole("button", { name: "Mark read" }));
+    expect(onRead).toHaveBeenCalledExactlyOnceWith("synthetic-notice");
+    data.coachExtras!.resetNotice!.isUnread = false;
+    rerender(<><PulsePaceCard data={data} {...actions()} onMarkNoticeRead={onRead}/><PulsePaceBadgeView data={data} onToggle={vi.fn()}/></>);
+    expect(screen.getByTestId("pace-badge")).not.toHaveTextContent("Reset notice");
+    expect(screen.getByRole("note", { name: "Reset notice" })).toHaveTextContent("Read");
+  });
+
+  it.each(["failed", "stale", "exhausted", "expired", "unavailable"] as const)("keeps the %s label and an unread notice indicator together", status => {
+    const data = withNotice();
+    if (status === "stale") data.updatedAt = iso(-7);
+    if (status === "exhausted") data.windows[1].remainingPercent = 0;
+    if (status === "expired") data.windows[1].resetsAt = iso(-1);
+    if (status === "unavailable") { data.windows[1].remainingPercent = null; data.windows[1].resetsAt = null; }
+    render(<><PulsePaceCard data={data} failed={status === "failed"} {...actions()}/><PulsePaceBadgeView data={data} failed={status === "failed"} onToggle={vi.fn()}/></>);
+    const badge = screen.getByTestId("pace-badge");
+    expect(badge).toHaveTextContent(quotaCoachBadgeCopy("en", status));
+    expect(badge).toHaveAccessibleName(expect.stringContaining(quotaCoachCopy("en", status)));
+    expect(badge).toHaveClass("has-reset-notice");
+    expect(badge).toHaveAccessibleName(expect.stringContaining("Reset notice"));
+    expect(badge).toHaveAttribute("title", expect.stringContaining("Example third-party feed"));
+    expect(screen.getByRole("status")).toHaveTextContent(quotaCoachCopy("en", status));
+    expect(screen.getByRole("note", { name: "Reset notice" })).toBeVisible();
+  });
+
+  it("reports an explicit notice acknowledgement failure without hiding the quota state", () => {
+    const data = withNotice(); data.windows[1].remainingPercent = 0;
+    render(<><PulsePaceCard data={data} {...actions()} onMarkNoticeRead={vi.fn()} noticeFailed/><PulsePaceBadgeView data={data} onToggle={vi.fn()}/></>);
+    expect(screen.getByTestId("pace-badge")).toHaveTextContent(quotaCoachBadgeCopy("en", "exhausted"));
+    expect(screen.getByRole("alert")).toHaveTextContent(quotaCoachCopy("en", "markFailed"));
+    expect(screen.getByRole("note", { name: "Reset notice" })).toBeVisible();
+  });
+
+  it("preserves unknown versus recorded zero and hides another window's daily history", () => {
+    const data = cycle(); data.coachExtras = { observedWindow: { kind: "weekly", windowMinutes: 10080, resetsAt: data.windows[1].resetsAt! }, resetNotice: null, dailyObservations: [{ date: "2026-11-08", consumedPercentPoints: null, coveredMinutes: 0, partial: true }, { date: "2026-11-09", consumedPercentPoints: 0, coveredMinutes: 30, partial: true }] };
+    const { rerender } = render(<PulsePaceCard data={data} {...actions()}/>);
+    fireEvent.click(screen.getByText("Daily observations this cycle"));
+    expect(screen.getByText("Not observed")).toBeVisible(); expect(screen.getByText("0 pp")).toBeVisible();
+    expect(screen.getByText(quotaCoachCopy("en", "dailyNote"))).toBeVisible();
+    data.coachExtras.observedWindow!.resetsAt = iso(9999); rerender(<PulsePaceCard data={data} {...actions()}/>);
+    expect(screen.queryByText("Daily observations this cycle")).not.toBeInTheDocument();
+  });
+
+  it.each(["en", "zh", "zh-Hant", "ja", "ko", "de"])("labels demo cards and compact badges without adding a brand word in %s", async language => {
+    await i18n.changeLanguage(language); history.replaceState(null, "", "/?demo=1#pulse-pace");
+    render(<><PulsePaceCard data={cycle()} {...actions()}/><PulsePaceBadgeView data={cycle()} onToggle={vi.fn()}/></>);
+    expect(within(screen.getByTestId("pace-popover")).getByText(paceCopy(language, "demo"))).toBeVisible();
+    expect(screen.getByTestId("pace-badge")).toHaveAccessibleName(expect.stringContaining(paceCopy(language, "demo")));
+    expect(screen.getByTestId("pace-badge")).not.toHaveTextContent("Pulse");
   });
 });

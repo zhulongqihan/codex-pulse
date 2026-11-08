@@ -27,7 +27,7 @@ async function command(action: string, data: Record<string, number> = {}) {
   });
   await browser.waitUntil(async () => {
     const state = nativeState();
-    return state?.commandId === id && !state.pendingPhysicalClick;
+    return state?.commandId === id && !state.pendingPhysicalClick && !state.pendingMotion;
   });
   const commandError = nativeState()?.commandError;
   if (commandError) throw new Error(`Owned native input was blocked: ${commandError}`);
@@ -105,6 +105,19 @@ describe('Pulse attached titlebar in a real owned native host', () => {
     await visible(true); const moved = await synchronizedGeometry();
     expect(moved.hostRect).toEqual(movement);
     expect(moved.badgeRect!.x).not.toBe(initial.badgeRect!.x);
+    await command('measure-follow');
+    const motion = JSON.parse(readFileSync(join(process.env.PULSE_TITLEBAR_CONTROL_DIR!, 'motion.json'), 'utf8'));
+    record('continuous-native-motion', motion);
+    console.log('[Pulse owned native motion]', JSON.stringify({ hostMoves: motion.hostMoves, badgeUpdates: motion.badgeUpdates,
+      p95ObservedLagMs: motion.p95ObservedLagMs, maxObservedLagMs: motion.maxObservedLagMs, finalSettleMs: motion.finalSettleMs,
+      idleOneCoreCpuPercent: motion.idleOneCoreCpuPercent, motionOneCoreCpuPercent: motion.motionOneCoreCpuPercent,
+      finalAligned: motion.finalAligned, foregroundPreserved: motion.foregroundPreserved, failure: motion.failure }));
+    expect(motion.passed).toBe(true);
+    expect(motion.foregroundPreserved).toBe(true);
+    expect(motion.badgeUpdates).toBeGreaterThanOrEqual(16);
+    expect(motion.p95ObservedLagMs).toBeLessThanOrEqual(100);
+    expect(motion.finalAligned).toBe(true);
+    await synchronizedGeometry();
     await command('minimize'); const minimized = await visible(false);
     expect(minimized.popupOpen).toBe(false);
     await command('restore'); await visible(true); const restored = await synchronizedGeometry();

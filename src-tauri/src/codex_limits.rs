@@ -4,8 +4,8 @@ use crate::codex_auth::{load_codex_auth, CodexAuth};
 use crate::{
     codex_environment::{selected_codex_environment, CodexEnvironment, CodexRuntime},
     types::{
-        CodexCredits, CodexLimitWindow, CodexLimitsResponse,
-        CodexResetCredit, CodexWindowActivationResponse, CodexWindowActivationStatus,
+        CodexCredits, CodexLimitWindow, CodexLimitsResponse, CodexResetCredit,
+        CodexWindowActivationResponse, CodexWindowActivationStatus,
     },
 };
 use chrono::{Local, SecondsFormat, TimeZone, Utc};
@@ -174,7 +174,10 @@ pub fn fetch_codex_limits() -> Result<CodexLimitsResponse, String> {
     let environment = selected_codex_environment();
     let auth = match load_codex_auth() {
         Ok(auth) => auth,
-        Err(error) => { crate::pulse_pace::unavailable("login_required"); return Err(error); }
+        Err(error) => {
+            crate::pulse_pace::unavailable("login_required");
+            return Err(error);
+        }
     };
     if !auth.is_chatgpt {
         crate::pulse_pace::unavailable("api_key");
@@ -183,10 +186,22 @@ pub fn fetch_codex_limits() -> Result<CodexLimitsResponse, String> {
     let pace_identity = crate::pulse_pace::begin_account(&auth, &environment);
     // A flight can be shared only by the same credentials and selected source.
     use sha2::{Digest, Sha256};
-    let identity = format!("{:x}", Sha256::digest(format!("{:?}|{:?}|{}", environment.home, auth.account_id, auth.access_token).as_bytes()));
+    let identity = format!(
+        "{:x}",
+        Sha256::digest(
+            format!(
+                "{:?}|{:?}|{}",
+                environment.home, auth.account_id, auth.access_token
+            )
+            .as_bytes()
+        )
+    );
     let result = fetch_codex_limits_single_flight(&identity, || {
         log::info!("Starting fetch_codex_limits...");
-        let limits = fetch_codex_limits_with(|| fetch_oauth_limits(&auth), || fetch_account_snapshot(&auth))?;
+        let limits = fetch_codex_limits_with(
+            || fetch_oauth_limits(&auth),
+            || fetch_account_snapshot(&auth),
+        )?;
         #[cfg(debug_assertions)]
         let limits = if window_activation_debug_enabled() {
             let mut debug_limits = limits;
@@ -205,7 +220,8 @@ pub fn fetch_codex_limits() -> Result<CodexLimitsResponse, String> {
         };
         Ok(limits)
     });
-    if selected_codex_environment() != environment || load_codex_auth().ok().as_ref() != Some(&auth) {
+    if selected_codex_environment() != environment || load_codex_auth().ok().as_ref() != Some(&auth)
+    {
         crate::pulse_pace::failed(pace_identity.as_deref());
         return Err("identityChanged".into());
     }
@@ -217,7 +233,10 @@ pub fn fetch_codex_limits() -> Result<CodexLimitsResponse, String> {
         crate::pulse_pace::unavailable("synthetic");
     } else {
         match &result {
-            Ok(limits) => crate::pulse_pace::observe(pace_identity.as_deref(), limits),
+            Ok(limits) => {
+                crate::pulse_pace::observe(pace_identity.as_deref(), limits);
+                crate::pulse_coach::observe(pace_identity.as_deref(), limits);
+            }
             Err(_) => crate::pulse_pace::failed(pace_identity.as_deref()),
         }
     }
@@ -261,7 +280,10 @@ fn fetch_codex_limits_single_flight(
         match in_flight.as_ref() {
             Some(flight) if flight.identity == identity => (Arc::clone(flight), false),
             _ => {
-                let flight = Arc::new(LimitsFetchFlight { identity: identity.into(), ..Default::default() });
+                let flight = Arc::new(LimitsFetchFlight {
+                    identity: identity.into(),
+                    ..Default::default()
+                });
                 *in_flight = Some(Arc::clone(&flight));
                 (flight, true)
             }
@@ -294,7 +316,12 @@ fn fetch_codex_limits_single_flight(
     let mut in_flight = LIMITS_FETCH_IN_FLIGHT
         .lock()
         .map_err(|_| "Codex limits fetch lock was poisoned.".to_string())?;
-    if in_flight.as_ref().is_some_and(|current| Arc::ptr_eq(current, &flight)) { *in_flight = None; }
+    if in_flight
+        .as_ref()
+        .is_some_and(|current| Arc::ptr_eq(current, &flight))
+    {
+        *in_flight = None;
+    }
     result
 }
 
@@ -484,9 +511,7 @@ fn run_codex_window_activation(working_directory: &Path) -> Result<(), String> {
                 );
                 return Ok(());
             }
-            log::warn!(
-                "Codex window activation command failed. pid={pid}, status={status}"
-            );
+            log::warn!("Codex window activation command failed. pid={pid}, status={status}");
             return Err(format!("Codex CLI activation exited with status {status}. Check the official Codex client sign-in and try again after the cooldown."));
         }
         if Instant::now() >= deadline {
@@ -597,13 +622,12 @@ fn fetch_oauth_reset_credits_uncached(
         .map_err(|error| format!("Failed to read Codex reset credit details: {error}"))?;
 
     if !status.is_success() {
-        return Err(format!(
-            "Codex reset credit details API returned {status}"
-        ));
+        return Err(format!("Codex reset credit details API returned {status}"));
     }
 
-    let details = serde_json::from_str::<OAuthResetCreditsResponse>(&body)
-        .map_err(|_| "Codex reset credits API returned an unsupported response format".to_string())?;
+    let details = serde_json::from_str::<OAuthResetCreditsResponse>(&body).map_err(|_| {
+        "Codex reset credits API returned an unsupported response format".to_string()
+    })?;
     Ok(OAuthResetCreditsSnapshot {
         available_count: details.available_count,
         credits: normalize_oauth_reset_credits(details.credits),
@@ -814,9 +838,7 @@ fn fetch_subscription_info(auth: &CodexAuth) -> Result<SubscriptionInfo, String>
         .map_err(|error| format!("Failed to read ChatGPT account check response: {error}"))?;
 
     if !status.is_success() {
-        return Err(format!(
-            "ChatGPT account check API returned {status}"
-        ));
+        return Err(format!("ChatGPT account check API returned {status}"));
     }
 
     let value = serde_json::from_str::<Value>(&body)
@@ -859,10 +881,14 @@ fn parse_subscription_info(value: &Value, account_id: Option<&str>) -> Subscript
 fn subscription_account_value<'a>(value: &'a Value, account_id: Option<&str>) -> Option<&'a Value> {
     let accounts = value.get("accounts")?;
     // A selected workspace must never inherit another workspace's entitlement.
-    if let Some(account_id) = account_id { return accounts.get(account_id); }
+    if let Some(account_id) = account_id {
+        return accounts.get(account_id);
+    }
     accounts.get("default").or_else(|| {
         let accounts = accounts.as_object()?;
-        (accounts.len() == 1).then(|| accounts.values().next()).flatten()
+        (accounts.len() == 1)
+            .then(|| accounts.values().next())
+            .flatten()
     })
 }
 
@@ -1479,14 +1505,19 @@ mod tests {
             assert!(Instant::now() < deadline, "second fetch did not join");
             thread::yield_now();
         }
-        assert_eq!(fetch_codex_limits_single_flight("another-account", || Err("isolated result".into())).unwrap_err(), "isolated result");
+        assert_eq!(
+            fetch_codex_limits_single_flight("another-account", || Err("isolated result".into()))
+                .unwrap_err(),
+            "isolated result"
+        );
         release_tx.send(()).unwrap();
 
         let first_result = first.join().unwrap().unwrap();
         assert_eq!(second.join().unwrap().unwrap(), first_result);
         assert_eq!(first_result.source, "first");
 
-        let fresh = fetch_codex_limits_single_flight("test-account", || Err("new fetch".to_string()));
+        let fresh =
+            fetch_codex_limits_single_flight("test-account", || Err("new fetch".to_string()));
         assert_eq!(fresh.unwrap_err(), "new fetch");
     }
 
@@ -2187,12 +2218,18 @@ mod tests {
             "default": {"entitlement": {"has_active_subscription": true, "expires_at": "2030-01-01"}},
             "other-workspace": {"entitlement": {"has_active_subscription": true}}
         }});
-        assert_eq!(parse_subscription_info(&value, Some("missing-workspace")), SubscriptionInfo::default());
+        assert_eq!(
+            parse_subscription_info(&value, Some("missing-workspace")),
+            SubscriptionInfo::default()
+        );
         let ambiguous = json!({"accounts": {
             "a": {"entitlement": {"has_active_subscription": true}},
             "b": {"entitlement": {"has_active_subscription": true}}
         }});
-        assert_eq!(parse_subscription_info(&ambiguous, None), SubscriptionInfo::default());
+        assert_eq!(
+            parse_subscription_info(&ambiguous, None),
+            SubscriptionInfo::default()
+        );
     }
 
     #[test]
@@ -2200,9 +2237,19 @@ mod tests {
         let marker = command_v_fixture("confirmed-activation-marker");
         let _ = fs::remove_file(&marker);
         let fetches = Cell::new(0);
-        let response = activate_codex_window_with(&marker, 1_789_000_000,
-            || { fetches.set(fetches.get() + 1); Ok(limits_with_session(if fetches.get() == 1 { 0.0 } else { 1.0 }, "2026-09-10T05:00:00.000Z")) },
-            || Ok(())).unwrap();
+        let response = activate_codex_window_with(
+            &marker,
+            1_789_000_000,
+            || {
+                fetches.set(fetches.get() + 1);
+                Ok(limits_with_session(
+                    if fetches.get() == 1 { 0.0 } else { 1.0 },
+                    "2026-09-10T05:00:00.000Z",
+                ))
+            },
+            || Ok(()),
+        )
+        .unwrap();
         assert_eq!(response.status, CodexWindowActivationStatus::Started);
         fs::remove_file(marker).unwrap();
     }

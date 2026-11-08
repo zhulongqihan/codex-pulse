@@ -144,6 +144,8 @@ pub struct TitlebarController {
     status: Arc<Mutex<TitlebarStatus>>,
     #[cfg(windows)]
     host: Arc<Mutex<Option<native::Host>>>,
+    #[cfg(windows)]
+    surfaces: Arc<Mutex<native::Surfaces>>,
 }
 impl TitlebarController {
     fn new(enabled: bool) -> Self {
@@ -153,6 +155,8 @@ impl TitlebarController {
             status: Arc::new(Mutex::new(TitlebarStatus::initial(enabled))),
             #[cfg(windows)]
             host: Arc::new(Mutex::new(None)),
+            #[cfg(windows)]
+            surfaces: Arc::new(Mutex::new(native::Surfaces::default())),
         }
     }
 }
@@ -162,11 +166,19 @@ fn update_status(app: &tauri::AppHandle, state: &TitlebarController, status: Tit
         .status
         .lock()
         .map(|mut current| {
-            if *current == status {
-                return false;
-            }
+            // Native geometry is available to diagnostics immediately. Moving a host
+            // must not broadcast an IPC update to every WebView on every frame.
+            let changed = current.enabled != status.enabled
+                || current.supported != status.supported
+                || current.host_found != status.host_found
+                || current.badge_visible != status.badge_visible
+                || current.badge_foreground != status.badge_foreground
+                || current.popup_open != status.popup_open
+                || current.popup_foreground != status.popup_foreground
+                || current.reason != status.reason
+                || current.dpi != status.dpi;
             *current = status.clone();
-            true
+            changed
         })
         .unwrap_or(false);
     if changed {
@@ -223,6 +235,7 @@ pub fn setup(
             .transparent(true)
             .shadow(shadow)
             .build()?;
+            native::cache_surface(&controller, label, &window)?;
             if label == BADGE_LABEL {
                 native::make_click_activatable(&window);
             }
@@ -249,17 +262,10 @@ pub fn setup(
                 _ => (),
             });
         }
-        let app = app.handle().clone();
-        std::thread::Builder::new()
-            .name("pulse-titlebar".into())
-            .spawn(move || loop {
-                if app.get_webview_window("main").is_none() {
-                    break;
-                }
-                native::tick(&app, &controller);
-                std::thread::sleep(std::time::Duration::from_millis(250));
-            })
-            .map_err(|error| tauri::Error::Io(error))?;
+        if let Some(main) = app.get_webview_window("main") {
+            native::cache_surface(&controller, "main", &main)?;
+        }
+        native::start_watcher(app.handle().clone(), controller)?;
     }
     #[cfg(not(windows))]
     let _ = paths;
@@ -365,9 +371,11 @@ pub fn titlebar_action(
 #[cfg(windows)]
 mod native {
     use super::*;
+    use std::cell::Cell;
     use std::ffi::c_void;
     #[cfg(feature = "e2e")]
     use std::path::Path;
+    use std::time::{Duration, Instant};
     type Hwnd = isize;
     #[repr(C)]
     #[derive(Clone, Copy, Default)]
@@ -385,6 +393,18 @@ mod native {
         work: Rect,
         flags: u32,
     }
+    #[repr(C)]
+    #[derive(Default)]
+    struct Message {
+        window: Hwnd,
+        message: u32,
+        w: usize,
+        l: isize,
+        time: u32,
+        point: [i32; 2],
+        private: u32,
+    }
+    type WinEventCallback = unsafe extern "system" fn(isize, u32, Hwnd, i32, i32, u32, u32);
     #[link(name = "user32")]
     extern "system" {
         fn GetForegroundWindow() -> Hwnd;
@@ -413,6 +433,33 @@ mod native {
         fn GetWindowLongPtrW(window: Hwnd, index: i32) -> isize;
         fn SetWindowLongPtrW(window: Hwnd, index: i32, value: isize) -> isize;
         fn SetThreadDpiAwarenessContext(context: isize) -> isize;
+        fn IsWindow(window: Hwnd) -> i32;
+        fn SetWinEventHook(
+            first: u32,
+            last: u32,
+            module: isize,
+            callback: WinEventCallback,
+            process: u32,
+            thread: u32,
+            flags: u32,
+        ) -> isize;
+        fn UnhookWinEvent(hook: isize) -> i32;
+        fn PeekMessageW(
+            message: *mut Message,
+            window: Hwnd,
+            first: u32,
+            last: u32,
+            remove: u32,
+        ) -> i32;
+        fn TranslateMessage(message: *const Message) -> i32;
+        fn DispatchMessageW(message: *const Message) -> isize;
+        fn MsgWaitForMultipleObjectsEx(
+            count: u32,
+            handles: *const isize,
+            timeout: u32,
+            wake_mask: u32,
+            flags: u32,
+        ) -> u32;
     }
     #[link(name = "kernel32")]
     extern "system" {
@@ -425,6 +472,7 @@ mod native {
         ) -> i32;
         fn GetPackageFamilyName(process: isize, length: *mut u32, family: *mut u16) -> i32;
         fn CloseHandle(handle: isize) -> i32;
+        fn WaitForSingleObject(handle: isize, timeout: u32) -> u32;
     }
     #[link(name = "dwmapi")]
     extern "system" {
@@ -435,10 +483,43 @@ mod native {
             size: u32,
         ) -> i32;
     }
-    #[derive(Clone, Copy)]
+    struct VerifiedProcess(isize);
+    impl Drop for VerifiedProcess {
+        fn drop(&mut self) {
+            unsafe {
+                CloseHandle(self.0);
+            }
+        }
+    }
+    #[derive(Clone)]
     pub(super) struct Host {
         window: Hwnd,
         process: u32,
+        thread: u32,
+        class: String,
+        identity: Arc<VerifiedProcess>,
+    }
+    #[derive(Clone, Copy, Default)]
+    pub(super) struct Surfaces {
+        badge: Hwnd,
+        panel: Hwnd,
+        main: Hwnd,
+    }
+    pub(super) fn cache_surface(
+        state: &TitlebarController,
+        label: &str,
+        window: &tauri::WebviewWindow,
+    ) -> tauri::Result<()> {
+        let handle = window.hwnd()?.0 as Hwnd;
+        if let Ok(mut surfaces) = state.surfaces.lock() {
+            match label {
+                BADGE_LABEL => surfaces.badge = handle,
+                PANEL_LABEL => surfaces.panel = handle,
+                "main" => surfaces.main = handle,
+                _ => (),
+            }
+        }
+        Ok(())
     }
 
     fn rectangle(rect: Rect) -> Rectangle {
@@ -450,10 +531,20 @@ mod native {
         }
     }
     fn handle(app: &tauri::AppHandle, label: &str) -> Option<Hwnd> {
-        app.get_webview_window(label)?
-            .hwnd()
-            .ok()
-            .map(|handle| handle.0 as Hwnd)
+        let state = app.try_state::<TitlebarController>()?;
+        let surfaces = *state.surfaces.lock().ok()?;
+        let window = match label {
+            BADGE_LABEL => surfaces.badge,
+            PANEL_LABEL => surfaces.panel,
+            "main" => surfaces.main,
+            _ => 0,
+        };
+        let mut process = 0;
+        (window != 0
+            && unsafe { IsWindow(window) } != 0
+            && unsafe { GetWindowThreadProcessId(window, &mut process) } != 0
+            && process == std::process::id())
+        .then_some(window)
     }
     pub(super) fn make_click_activatable(window: &tauri::WebviewWindow) {
         if let Ok(window) = window.hwnd() {
@@ -531,12 +622,15 @@ mod native {
         const FRAME_AND_CONTROLS: isize = 0x00c70000;
         style & FRAME_AND_CONTROLS == FRAME_AND_CONTROLS
     }
-    fn process_identity(process: u32) -> Option<(String, String)> {
+    fn process_identity(process: u32) -> Option<(String, String, Arc<VerifiedProcess>)> {
         unsafe {
-            let handle = OpenProcess(0x1000, 0, process); // PROCESS_QUERY_LIMITED_INFORMATION only
+            // Keep this verified process object alive. Its zero-time wait distinguishes
+            // an exited process from a subsequently reused PID without reopening it per frame.
+            let handle = OpenProcess(0x1000 | 0x00100000, 0, process);
             if handle == 0 {
                 return None;
             }
+            let identity = Arc::new(VerifiedProcess(handle));
             let result = (|| {
                 let mut path = vec![0u16; 32768];
                 let mut length = path.len() as u32;
@@ -565,9 +659,8 @@ mod native {
                 } else {
                     String::new()
                 };
-                Some((path, family))
+                Some((path, family, identity))
             })();
-            CloseHandle(handle);
             result
         }
     }
@@ -607,7 +700,7 @@ mod native {
                 return None;
             }
             let mut process = 0;
-            GetWindowThreadProcessId(window, &mut process);
+            let thread = GetWindowThreadProcessId(window, &mut process);
             if process == 0 || process == std::process::id() {
                 return None;
             }
@@ -617,16 +710,242 @@ mod native {
                 return None;
             }
             let class = String::from_utf16(&class[..length as usize]).ok()?;
-            let (path, family) = process_identity(process)?;
+            let (path, family, identity) = process_identity(process)?;
             let accepted =
                 class == "Chrome_WidgetWin_1" && valid_packaged_executable(&path, &family);
             #[cfg(feature = "e2e")]
             let accepted = accepted || valid_fixture(process, &path, &class);
-            accepted.then_some(Host { window, process })
+            accepted.then_some(Host {
+                window,
+                process,
+                thread,
+                class,
+                identity,
+            })
         }
     }
-    fn host_still_valid(host: Host) -> bool {
-        trusted_window(host.window).is_some_and(|current| current.process == host.process)
+    fn host_still_valid(host: &Host) -> bool {
+        host_quick_valid(host)
+            && trusted_window(host.window).is_some_and(|current| current.process == host.process)
+    }
+    fn host_quick_valid(host: &Host) -> bool {
+        unsafe {
+            if WaitForSingleObject(host.identity.0, 0) != 258
+                || IsWindowVisible(host.window) == 0
+                || IsIconic(host.window) != 0
+                || GetAncestor(host.window, 2) != host.window
+                || !main_window_style(GetWindowLongPtrW(host.window, -16))
+            {
+                return false;
+            }
+            let mut process = 0;
+            if GetWindowThreadProcessId(host.window, &mut process) != host.thread
+                || process != host.process
+            {
+                return false;
+            }
+            let mut class = [0u16; 128];
+            let length = GetClassNameW(host.window, class.as_mut_ptr(), class.len() as i32);
+            length > 0 && String::from_utf16_lossy(&class[..length as usize]) == host.class
+        }
+    }
+    const FRAME: Duration = Duration::from_millis(16);
+    const WATCHDOG: Duration = Duration::from_millis(500);
+    #[derive(Clone, Copy, Debug, PartialEq)]
+    enum HostEvent {
+        Ignore,
+        Geometry,
+        Refresh,
+        Destroyed,
+    }
+    fn host_event(event: u32, window: Hwnd, object: i32, child: i32, bound: Hwnd) -> HostEvent {
+        if event == 3 {
+            return HostEvent::Refresh;
+        } // foreground, including our own surfaces
+        if bound == 0 || window != bound || object != 0 || child != 0 {
+            return HostEvent::Ignore;
+        }
+        match event {
+            0x8001 => HostEvent::Destroyed,
+            0x800b => HostEvent::Geometry,
+            0x8002 | 0x8003 | 0x000a | 0x000b | 0x0016 | 0x0017 => HostEvent::Refresh,
+            _ => HostEvent::Ignore,
+        }
+    }
+    thread_local! {
+        static BOUND: Cell<Hwnd> = const { Cell::new(0) };
+        static DIRTY: Cell<bool> = const { Cell::new(false) };
+        static REFRESH: Cell<bool> = const { Cell::new(false) };
+        static DESTROYED: Cell<bool> = const { Cell::new(false) };
+    }
+    unsafe extern "system" fn on_event(
+        _: isize,
+        event: u32,
+        window: Hwnd,
+        object: i32,
+        child: i32,
+        _: u32,
+        _: u32,
+    ) {
+        // OUTOFCONTEXT callbacks run on our hook thread. Never call Tauri, mutate
+        // the host, or perform identity queries from a potentially reentrant hook.
+        match BOUND.with(|bound| host_event(event, window, object, child, bound.get())) {
+            HostEvent::Ignore => (),
+            HostEvent::Geometry => DIRTY.with(|value| value.set(true)),
+            HostEvent::Refresh => {
+                DIRTY.with(|value| value.set(true));
+                REFRESH.with(|value| value.set(true));
+            }
+            HostEvent::Destroyed => {
+                DIRTY.with(|value| value.set(true));
+                REFRESH.with(|value| value.set(true));
+                DESTROYED.with(|value| value.set(true));
+            }
+        }
+    }
+    struct EventHooks(Vec<isize>);
+    impl Drop for EventHooks {
+        fn drop(&mut self) {
+            for hook in &self.0 {
+                unsafe {
+                    UnhookWinEvent(*hook);
+                }
+            }
+        }
+    }
+    pub(super) fn start_watcher(
+        app: tauri::AppHandle,
+        state: TitlebarController,
+    ) -> tauri::Result<()> {
+        std::thread::Builder::new()
+            .name("pulse-titlebar-events".into())
+            .spawn(move || {
+                // Zero flags = OUTOFCONTEXT: no DLL injection or host message subclassing.
+                let hooks = EventHooks(
+                    [
+                        (3, 3),
+                        (0x800b, 0x800b),
+                        (0x8001, 0x8003),
+                        (0x000a, 0x000b),
+                        (0x0016, 0x0017),
+                    ]
+                    .into_iter()
+                    .filter_map(|(first, last)| {
+                        let hook = unsafe { SetWinEventHook(first, last, 0, on_event, 0, 0, 0) };
+                        (hook != 0).then_some(hook)
+                    })
+                    .collect(),
+                );
+                let degraded = hooks.0.len() != 5;
+                if degraded {
+                    log::warn!(
+                        "Pulse titlebar events unavailable; using bounded watchdog fallback"
+                    );
+                }
+                let watchdog = if degraded {
+                    Duration::from_millis(250)
+                } else {
+                    WATCHDOG
+                };
+                let pending = Arc::new(AtomicBool::new(false));
+                let full = Arc::new(AtomicBool::new(true));
+                let invalidate = Arc::new(AtomicBool::new(false));
+                let mut dirty = true;
+                let mut last_frame = Instant::now() - FRAME;
+                let mut last_watchdog = Instant::now() - watchdog;
+                loop {
+                    let main = state.surfaces.lock().map(|value| value.main).unwrap_or(0);
+                    if main == 0 || unsafe { IsWindow(main) } == 0 {
+                        break;
+                    }
+                    BOUND.with(|bound| {
+                        bound.set(
+                            state
+                                .host
+                                .lock()
+                                .ok()
+                                .and_then(|value| value.as_ref().map(|host| host.window))
+                                .unwrap_or(0),
+                        )
+                    });
+                    let mut message = Message::default();
+                    while unsafe { PeekMessageW(&mut message, 0, 0, 0, 1) } != 0 {
+                        if message.message == 0x0012 {
+                            return;
+                        }
+                        unsafe {
+                            TranslateMessage(&message);
+                            DispatchMessageW(&message);
+                        }
+                    }
+                    dirty |= DIRTY.with(|value| value.replace(false));
+                    if REFRESH.with(|value| value.replace(false)) {
+                        full.store(true, Ordering::Release);
+                    }
+                    if DESTROYED.with(|value| value.replace(false)) {
+                        invalidate.store(true, Ordering::Release);
+                    }
+                    if last_watchdog.elapsed() >= watchdog {
+                        last_watchdog = Instant::now();
+                        full.store(true, Ordering::Release);
+                        dirty = true;
+                    }
+                    if dirty
+                        && last_frame.elapsed() >= FRAME
+                        && !pending.swap(true, Ordering::AcqRel)
+                    {
+                        dirty = false;
+                        last_frame = Instant::now();
+                        let (job_app, job_state, job_pending, job_full, job_invalidate) = (
+                            app.clone(),
+                            state.clone(),
+                            pending.clone(),
+                            full.clone(),
+                            invalidate.clone(),
+                        );
+                        if app
+                            .run_on_main_thread(move || {
+                                if job_invalidate.swap(false, Ordering::AcqRel) {
+                                    if let Ok(mut host) = job_state.host.lock() {
+                                        *host = None;
+                                    }
+                                }
+                                tick_inner(
+                                    &job_app,
+                                    &job_state,
+                                    job_full.swap(false, Ordering::AcqRel),
+                                );
+                                job_pending.store(false, Ordering::Release);
+                            })
+                            .is_err()
+                        {
+                            break;
+                        }
+                    }
+                    let remaining = watchdog.saturating_sub(last_watchdog.elapsed());
+                    let wait = if pending.load(Ordering::Acquire) {
+                        FRAME
+                    } else if dirty {
+                        // Keep the original frame deadline when more events arrive;
+                        // repeatedly waiting another full frame would add avoidable lag.
+                        FRAME.saturating_sub(last_frame.elapsed()).min(remaining)
+                    } else {
+                        remaining
+                    };
+                    // This is the hook's actual message loop; no 16ms idle polling.
+                    unsafe {
+                        MsgWaitForMultipleObjectsEx(
+                            0,
+                            std::ptr::null(),
+                            wait.as_millis().clamp(1, 500) as u32,
+                            0x04ff,
+                            0x0004,
+                        );
+                    }
+                }
+            })
+            .map(|_| ())
+            .map_err(tauri::Error::Io)
     }
     /// Called only by the badge's explicit click command. The watcher always uses
     /// SWP_NOACTIVATE; a visible window alone does not imply native input focus.
@@ -645,8 +964,8 @@ mod native {
             .host
             .lock()
             .ok()
-            .and_then(|value| *value)
-            .filter(|host| host_still_valid(*host))
+            .and_then(|value| value.clone())
+            .filter(host_still_valid)
             .ok_or_else(|| rejected("host_identity_changed"))?;
         // Real Windows clicks activate the badge first. Synthetic driver events can
         // arrive while the verified host is still foreground; neither permits an
@@ -661,7 +980,8 @@ mod native {
         {
             return Err(rejected("panel_not_ready"));
         }
-        if unsafe { GetAncestor(GetForegroundWindow(), 2) } != foreground || !host_still_valid(host)
+        if unsafe { GetAncestor(GetForegroundWindow(), 2) } != foreground
+            || !host_still_valid(&host)
         {
             return Err(rejected("foreground_changed_before_activation"));
         }
@@ -700,8 +1020,8 @@ mod native {
             .host
             .lock()
             .ok()
-            .and_then(|value| *value)
-            .filter(|host| host_still_valid(*host));
+            .and_then(|value| value.clone())
+            .filter(host_still_valid);
         if let Some(host) = host {
             if unsafe { GetAncestor(GetForegroundWindow(), 2) } != foreground {
                 return;
@@ -716,7 +1036,7 @@ mod native {
     }
     fn geometry(host: Host) -> Option<(Rectangle, Rectangle, u32, Option<Rectangle>)> {
         unsafe {
-            if !host_still_valid(host) {
+            if !host_quick_valid(&host) {
                 return None;
             }
             let mut frame = Rect::default();
@@ -747,6 +1067,9 @@ mod native {
     }
 
     pub(super) fn tick(app: &tauri::AppHandle, state: &TitlebarController) {
+        tick_inner(app, state, true);
+    }
+    fn tick_inner(app: &tauri::AppHandle, state: &TitlebarController, full_validation: bool) {
         struct DpiGuard(isize);
         impl Drop for DpiGuard {
             fn drop(&mut self) {
@@ -763,24 +1086,34 @@ mod native {
         let foreground = unsafe { GetAncestor(GetForegroundWindow(), 2) };
         let own_panel = handle(app, PANEL_LABEL).is_some_and(|window| window == foreground);
         let own_badge = handle(app, BADGE_LABEL).is_some_and(|window| window == foreground);
-        let current = trusted_window(foreground);
-        if let Some(host) = current {
-            if let Ok(mut saved) = state.host.lock() {
-                *saved = Some(host);
-            }
-        }
         let last = state
             .host
             .lock()
             .ok()
-            .and_then(|value| *value)
-            .filter(|host| host_still_valid(*host));
+            .and_then(|value| value.clone())
+            .filter(|host| {
+                if full_validation {
+                    host_still_valid(host)
+                } else {
+                    host_quick_valid(host)
+                }
+            });
+        let current = if let Some(host) = last.as_ref().filter(|host| host.window == foreground) {
+            Some(host.clone())
+        } else if full_validation && !own_badge && !own_panel {
+            trusted_window(foreground)
+        } else {
+            None
+        };
+        if let Ok(mut saved) = state.host.lock() {
+            *saved = current.clone().or_else(|| last.clone());
+        }
+        let host_found = current.is_some() || last.is_some();
         let active = current.or_else(|| {
             (own_badge || (own_panel && state.popup.load(Ordering::SeqCst)))
                 .then_some(last)
                 .flatten()
         });
-        let host_found = last.is_some();
         let mut status = TitlebarStatus::initial(enabled);
         status.host_found = host_found;
         let reason = if !enabled {
@@ -830,6 +1163,22 @@ mod native {
     #[cfg(test)]
     mod tests {
         use super::*;
+        #[test]
+        fn location_events_only_follow_bound_top_level_window() {
+            assert_eq!(host_event(0x800b, 42, 0, 0, 42), HostEvent::Geometry);
+            assert_eq!(host_event(0x800b, 41, 0, 0, 42), HostEvent::Ignore);
+            assert_eq!(host_event(0x800b, 42, -8, 0, 42), HostEvent::Ignore);
+            assert_eq!(host_event(0x800b, 42, 0, 1, 42), HostEvent::Ignore);
+            assert_eq!(host_event(0x800b, 0, 0, 0, 0), HostEvent::Ignore);
+        }
+        #[test]
+        fn foreground_is_global_but_destroy_and_minimize_require_bound_host() {
+            assert_eq!(host_event(3, 123, 0, 0, 42), HostEvent::Refresh);
+            assert_eq!(host_event(0x8001, 42, 0, 0, 42), HostEvent::Destroyed);
+            assert_eq!(host_event(0x8001, 41, 0, 0, 42), HostEvent::Ignore);
+            assert_eq!(host_event(0x0016, 42, 0, 0, 42), HostEvent::Refresh);
+            assert_eq!(host_event(0x8003, 42, 0, 0, 42), HostEvent::Refresh);
+        }
         #[test]
         fn target_requires_package_identity_real_store_path_and_supported_executable() {
             let path="C:\\Program Files\\WindowsApps\\OpenAI.Codex_26.1103.4239.0_x64__2p2nqsd0c76g0\\app\\ChatGPT.exe";

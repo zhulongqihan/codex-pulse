@@ -16,6 +16,7 @@ import { SettingsPage, type SettingsSection } from "@/components/settings-page";
 import { PulseAccountDrawer } from "@/components/pulse-account-drawer";
 import { PulseGettingStarted } from "@/components/pulse-getting-started";
 import { PulseBrandMark } from "@/components/pulse-brand-mark";
+import { PulseCoachOverview } from "@/components/pulse-coach-overview";
 import { SessionUsageTable } from "@/components/session-usage-table";
 import { SessionDetailModal } from "@/components/session-detail-modal";
 import { ProjectSessionsModal } from "@/components/project-sessions-modal";
@@ -174,6 +175,11 @@ export default function App() {
     handleTrayCountdownUnitChange,
   } = useUsageDashboard();
 
+  const focusAccountDetails = () => requestAnimationFrame(() => {
+    const target = document.getElementById("pulse-account-details");
+    target?.scrollIntoView({ block: "start", behavior: "auto" });
+    target?.focus({ preventScroll: true });
+  });
   const paceDetails = useRef<() => void>(() => {});
   paceDetails.current = () => {
     setSelectedProjectForModal(null);
@@ -183,7 +189,7 @@ export default function App() {
     setAccountExpanded(true);
     savedScroll.current = 0;
     void handleViewChange("dashboard");
-    requestAnimationFrame(() => document.getElementById("pulse-account-details")?.scrollIntoView({ block: "start" }));
+    focusAccountDetails();
   };
   useEffect(() => {
     let disposed = false;
@@ -285,7 +291,7 @@ export default function App() {
     <div className="pulse-account-identity"><UserRound size={20} aria-hidden="true"/><div><strong>{codexLimits?.account ?? copy("unknown")}</strong><p>{codexLimits?.membershipLevel ?? "—"}{codexLimits?.workspaceName ? ` · ${codexLimits.workspaceName}` : ""}</p></div></div>
     <CodexSidebarLimits compact={false} limits={codexLimits} error={codexLimitsError} isLimitsRefreshing={isLimitsRefreshing} isWindowActivating={isWindowActivating} windowActivationStatus={windowActivationStatus} windowActivationError={windowActivationError} onRefreshLimits={() => void handleLimitsRefresh()} onActivateWindow={() => void handleActivateCodexWindow()}/>
     <p className="pulse-source-note">{copy("accountNote")}</p>
-    <button type="button" className="pulse-text-button" onClick={() => { setAccountDrawerOpen(false); navigate("dashboard"); requestAnimationFrame(() => document.getElementById("pulse-account-details")?.scrollIntoView({ block: "start" })); }}>{copy("details")} →</button>
+    <button type="button" className="pulse-text-button" onClick={() => paceDetails.current()}>{copy("details")} →</button>
   </>;
 
   return (
@@ -493,6 +499,7 @@ export default function App() {
             <Activity mode={view === "dashboard" ? "visible" : "hidden"}>
             <div className="space-y-5">
               {showQuickStart ? <PulseGettingStarted expanded={helpExpanded} onExpand={() => setHelpExpanded(value => !value)} localReady={!!overview?.updatedAt || diagnostics?.status === "ready"} accountReady={!!codexLimits} source={diagnostics?.codexHome} busy={desktopAction !== null} notice={desktopNotice} error={desktopError} onSource={() => openSettings("source")} onAccount={showAccount} onWidget={() => void runDesktopAction("widget")} onShortcuts={() => void runDesktopAction("shortcuts")} onDismiss={dismissQuickStart}/> : null}
+              {!showDashboard || !overview ? <PulseCoachOverview onDetails={() => paceDetails.current()}/> : null}
               {showDashboard && overview ? <DashboardHeroCard
                 overview={overview}
                   todayOverview={todayOverview}
@@ -507,11 +514,12 @@ export default function App() {
                 onExport={(format) => void handleExport(format)}
                 metrics={metrics}
                 codexLimits={codexLimits}
+                coach={<PulseCoachOverview onDetails={() => paceDetails.current()}/>}
                 onOpenDay={(date) => { setSelectedSessionDate(date); void handleViewChange("sessions"); }}
               /> : null}
 
-              <section id="pulse-account-details" className="pulse-account-details">
-                <h2>{copy("details")}</h2>
+              <section id="pulse-account-details" className="pulse-account-details" tabIndex={-1} aria-labelledby="pulse-account-details-heading">
+                <h2 id="pulse-account-details-heading">{copy("details")}</h2>
                 <CodexLimitsCard
                   limits={codexLimits}
                   isLimitsLoading={isLimitsLoading}

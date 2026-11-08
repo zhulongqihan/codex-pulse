@@ -214,6 +214,7 @@ describe("App", () => {
     await waitFor(() => expect(screen.queryByRole("tab", { name: "Appearance" })).not.toBeInTheDocument());
     expect(screen.getByTestId("dashboard-hero")).toBeVisible();
     expect(document.getElementById("pulse-account-details")).toBeInTheDocument();
+    await waitFor(() => expect(document.activeElement).toBe(document.getElementById("pulse-account-details")));
   });
   afterEach(() => {
     vi.useRealTimers();
@@ -2443,12 +2444,13 @@ describe("App", () => {
     expect(latestResetInvokeMock).toHaveBeenCalledTimes(1);
     expect(resetHistoryInvokeMock).toHaveBeenCalledWith({ days: 30 });
     expect(resetHistoryInvokeMock).toHaveBeenCalledTimes(1);
-    expect(invokeMock).toHaveBeenNthCalledWith(1, "fetch_codex_limits");
-    expect(invokeMock).toHaveBeenNthCalledWith(2, "fetch_overview", { range: "30d" });
-    expect(invokeMock).toHaveBeenNthCalledWith(3, "fetch_overview", { range: "1d" });
-    expect(invokeMock).toHaveBeenNthCalledWith(4, "scan_usage");
-    expect(invokeMock).toHaveBeenNthCalledWith(5, "check_for_updates");
-    expect(invokeMock).toHaveBeenNthCalledWith(6, "fetch_overview", { range: "30d" });
+    expect(invokeMock).not.toHaveBeenCalledWith("refresh_pulse_pace");
+    const bootstrapCalls = invokeMock.mock.calls.filter(([command]) => command !== "fetch_pulse_pace");
+    expect(bootstrapCalls.slice(0, 6)).toEqual([
+      ["fetch_codex_limits"], ["fetch_overview", { range: "30d" }],
+      ["fetch_overview", { range: "1d" }], ["scan_usage"],
+      ["check_for_updates"], ["fetch_overview", { range: "30d" }],
+    ]);
   });
 
   it("keeps the cached overview visible when the background scan fails", async () => {
