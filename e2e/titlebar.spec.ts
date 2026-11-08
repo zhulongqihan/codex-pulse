@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import { randomUUID } from 'node:crypto';
 
 type Status = { enabled: boolean; supported: boolean; hostFound: boolean; badgeVisible: boolean; popupOpen: boolean;
+  reason: string;
   hostRect: { x: number; y: number; width: number; height: number } | null;
   badgeRect: { x: number; y: number; width: number; height: number } | null; dpi: number | null };
 const evidence: Record<string, unknown> = {};
@@ -29,7 +30,17 @@ async function command(action: string, data: Record<string, number> = {}) {
   });
 }
 async function visible(value: boolean) {
-  await browser.waitUntil(async () => (await status()).badgeVisible === value);
+  try { await browser.waitUntil(async () => (await status()).badgeVisible === value); }
+  catch (error) {
+    const tracked = await status().catch(() => null);
+    const actual = nativeState();
+    record('visibility-timeout', { expectedVisible: value, status: tracked, nativeState: actual });
+    // Every value comes from the owned synthetic host; no account data or window text.
+    console.error('[Pulse native visibility timeout]', JSON.stringify({ expectedVisible: value, reason: tracked?.reason,
+      hostRect: tracked?.hostRect, badgeRect: tracked?.badgeRect, workArea: actual?.workArea,
+      foreground: actual?.foreground, minimized: actual?.minimized, nativeRect: actual && { x: actual.x, y: actual.y, width: actual.width, height: actual.height } }));
+    throw error;
+  }
   return status();
 }
 async function synchronizedGeometry() {
@@ -56,9 +67,15 @@ describe('Pulse attached titlebar in a real owned native host', () => {
     // The watcher's actual native show operation must keep its owned host in the foreground.
     await browser.waitUntil(() => nativeState()?.foreground === true);
     const noFocusTheft = nativeState();
-    await command('move', { x: 260, y: 160, width: 1200, height: 780 });
-    await browser.waitUntil(async () => (await status()).hostRect?.x === 260);
-    const moved = await visible(true);
+    const workArea = noFocusTheft.workArea;
+    expect(workArea.width).toBeGreaterThan(0); expect(workArea.height).toBeGreaterThan(0);
+    const width = Math.floor(Math.min(1200, workArea.width * 0.7));
+    const height = Math.floor(Math.min(780, workArea.height * 0.72));
+    const movement = { x: workArea.x + Math.floor((workArea.width - width) * 0.45),
+      y: workArea.y + Math.floor((workArea.height - height) * 0.6), width, height };
+    await command('move', movement);
+    await visible(true); const moved = await synchronizedGeometry();
+    expect(moved.hostRect).toEqual(movement);
     expect(moved.badgeRect!.x).not.toBe(initial.badgeRect!.x);
     await command('minimize'); const minimized = await visible(false);
     expect(minimized.popupOpen).toBe(false);
@@ -66,7 +83,7 @@ describe('Pulse attached titlebar in a real owned native host', () => {
     await command('maximize'); await visible(true); const maximized = await synchronizedGeometry();
     expect(maximized.hostRect!.width).toBeGreaterThan(restored.hostRect!.width);
     expect(maximized.badgeRect!.x).not.toBe(restored.badgeRect!.x);
-    expect(maximized.badgeRect!.y).toBeGreaterThanOrEqual(0);
+    expect(maximized.badgeRect!.y).toBeGreaterThanOrEqual(workArea.y);
     await command('focus-other'); const unrelated = await visible(false);
     expect(unrelated.popupOpen).toBe(false);
     await command('close-host'); await visible(false);
@@ -78,7 +95,7 @@ describe('Pulse attached titlebar in a real owned native host', () => {
     await invoke('set_pulse_preferences', { patch: { titlebarEnabled: false } }); const disabled = await visible(false);
     expect(disabled.enabled).toBe(false);
     await invoke('set_pulse_preferences', { patch: { titlebarEnabled: true } }); await visible(true);
-    record('movement-state-focus-and-preference', { initial, noFocusTheft, moved, minimized, restored, maximized, unrelated, closed, reopened, disabled });
+    record('movement-state-focus-and-preference', { initial, noFocusTheft, workArea, movement, moved, minimized, restored, maximized, unrelated, closed, reopened, disabled });
   });
 
   it('opens the actual no-composer popup from the badge and supports Escape and outside focus', async () => {

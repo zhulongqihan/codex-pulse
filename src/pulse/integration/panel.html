@@ -11,7 +11,7 @@
 </style></head><body><main data-style="clear">
 <header><div class="brand"><img src="__PULSE_ICON__" width="28" height="28" alt="">Codex Pulse</div><div class="styles" aria-label="外观"><button data-style-choice="clear" aria-pressed="true">清爽</button><button data-style-choice="meter" aria-pressed="false">刻度</button></div></header>
 <h1 data-i18n="heading">看见额度，也看见节奏</h1><p class="intro" data-i18n="intro">基于近期官方读数，查看使用节奏与触顶风险。</p>
-<section class="pace" aria-live="polite"><p class="pace-label" data-i18n="paceLabel">预计触顶区间</p><div class="pace-reading" id="pace-reading">正在采样</div><p class="pace-risk" id="pace-risk"></p><p class="pace-note" data-i18n="paceNote">需至少 15 分钟连续读数；估算会随使用变化，不代表可工作时长。</p></section>
+<section class="pace" aria-live="polite"><p class="pace-label" data-i18n="paceLabel">预计触顶区间</p><div class="pace-reading" id="pace-reading">正在采样</div><p class="pace-risk" id="pace-risk"></p><p class="pace-note" data-i18n="paceNote">需至少 15 分钟连续读数；估算仅针对此窗口，其他额度仍可能限制使用，不代表可工作时长。</p></section>
 <p class="official" data-i18n="official">官方额度 · 作为参考</p>
 <section class="quota unknown" id="session"><div class="quota-top"><h2>当前额度窗口</h2><div class="reading"><span class="percent">—</span><small class="unit"></small></div></div><div class="track" role="meter" aria-valuemin="0" aria-valuemax="100"><div class="fill"></div></div><div class="quota-meta"><span class="remaining">剩余</span><span class="reset">等待额度数据</span></div></section>
 <section class="quota unknown" id="weekly"><div class="quota-top"><h2>另一额度窗口</h2><div class="reading"><span class="percent">—</span><small class="unit"></small></div></div><div class="track" role="meter" aria-valuemin="0" aria-valuemax="100"><div class="fill"></div></div><div class="quota-meta"><span class="remaining">剩余</span><span class="reset">等待额度数据</span></div></section>
@@ -26,8 +26,10 @@
   };
   Object.assign(strings.zh,{heading:'看见额度，也看见节奏',intro:'基于近期官方读数，查看使用节奏与触顶风险。',paceLabel:'预计触顶区间',paceNote:'需至少 15 分钟连续读数；估算会随使用变化，不代表可工作时长。',official:'官方额度 · 作为参考',unavailablePace:'等待读数',sampling:'正在采样',stalePace:'读数待更新',expiredPace:'等待重置后读数',idle:'近期无明显消耗',slow:'近期变化不足',exhausted:'额度已用尽',before_reset:'可能早于重置触顶',near_reset:'可能接近重置时触顶',after_reset:'按近期节奏，预计重置先到',unknownRisk:'尚无可靠触顶估算',paceUpdated:'节奏更新'});
   Object.assign(strings.en,{heading:'See your quota. Know your pace.',intro:'Recent official readings reveal usage pace and the risk of reaching your limit.',paceLabel:'Estimated time to limit',paceNote:'Needs at least 15 minutes of continuous readings. An estimate, not guaranteed working time.',official:'Official quota · reference',unavailablePace:'Awaiting readings',sampling:'Sampling',stalePace:'Update needed',expiredPace:'Awaiting reset reading',idle:'No recent measurable use',slow:'Insufficient change',exhausted:'Quota exhausted',before_reset:'May reach the limit before reset',near_reset:'May reach the limit near reset',after_reset:'At this pace, reset is estimated to come first',unknownRisk:'No reliable estimate yet',paceUpdated:'Pace updated'});
+  strings.zh.paceNote='需至少 15 分钟连续读数；估算仅针对此窗口，其他额度仍可能限制使用，不代表可工作时长。';
+  strings.en.paceNote='Needs 15+ minutes of readings. Applies to this window; other limits may apply. Not guaranteed working time.';
   let locale = /^zh\b/i.test(navigator.language) ? 'zh' : 'en';
-  let connected=false, nextId=1, snapshot=null, loading=false;
+  let connected=false, nextId=1, snapshot=null, loading=false, readFailed=false;
   const pending=new Map(), $=id=>document.getElementById(id), t=key=>strings[locale][key];
   function status(key,error=false){$('status').textContent=t(key);$('status').dataset.error=String(error);}
   function translate(){document.documentElement.lang=locale==='zh'?'zh-CN':'en';document.querySelectorAll('[data-i18n]').forEach(el=>el.textContent=t(el.dataset.i18n));document.querySelectorAll('[data-style-choice]').forEach(el=>el.textContent=t(el.dataset.styleChoice));render(snapshot);}
@@ -39,11 +41,12 @@
   function renderPace(data){
     const pace=data?.pace?.schemaVersion===1?data.pace:null,window=pace?.windows?.find(item=>item.kind===pace.primaryKind);
     const fresh=pace?.updatedAt&&Date.now()-Date.parse(pace.updatedAt)<=360000&&Date.parse(pace.updatedAt)-Date.now()<=120000;
-    let state=pace?.status??'unavailable';if(!fresh&&state!=='unavailable'&&state!=='expired')state='stale';
+    let state=pace?.status??'unavailable';if((!fresh||readFailed)&&state!=='unavailable'&&state!=='expired')state='stale';
     const estimate=state==='forecast'&&window?.state==='forecast'&&valid(window.etaLowerMinutes)&&valid(window.etaUpperMinutes)&&window.etaUpperMinutes>=window.etaLowerMinutes;
     if(estimate){const hours=window.etaLowerMinutes>=60,lower=hours?Math.floor(window.etaLowerMinutes/60):Math.floor(window.etaLowerMinutes/5)*5,upper=hours?Math.ceil(window.etaUpperMinutes/60):Math.max(5,Math.ceil(window.etaUpperMinutes/5)*5);$('pace-reading').textContent=`≈${lower===upper?lower:`${lower}–${upper}`}${hours?'h':'m'}`;}
     else $('pace-reading').textContent=t(({unavailable:'unavailablePace',stale:'stalePace',expired:'expiredPace',forecast:'sampling'})[state]??(['sampling','idle','slow','exhausted'].includes(state)?state:'unavailablePace'));
-    $('pace-risk').textContent=estimate&&['before_reset','near_reset','after_reset'].includes(window.risk)?t(window.risk):t('unknownRisk');
+    const risk=estimate&&['before_reset','near_reset','after_reset'].includes(window.risk)?t(window.risk):t('unknownRisk');
+    $('pace-risk').textContent=window?`${windowName(window,window.kind)} · ${risk}`:risk;
   }
   function render(value){
     const data=value?.schemaVersion===1?value:null;
@@ -60,13 +63,13 @@
     $('updated').textContent=`${t('quotaTime')} ${time(data?.quotaUpdatedAt)} · ${t('todayTime')} ${time(data?.today?.updatedAt)}`;
     if(connected)status(!data||!data.capturedAt?'waiting':data.quotaStale||data.today?.stale?'stale':'ready');
   }
-  function result(value,ignoreUnrelated=false){if(value?.isError)throw new Error('tool');const data=value?.structuredContent;if(data?.schemaVersion!==1||!Array.isArray(data.quotas)||!data.today||typeof data.today!=='object'){if(ignoreUnrelated)return;throw new Error('snapshot');}snapshot=data;render(snapshot);}
-  async function refresh(){if(!connected||loading)return;loading=true;$('refresh').disabled=true;try{result(await send('tools/call',{name:'pulse_usage',arguments:{}}));}catch(error){status(error.message==='timeout'?'timeout':'failed',true);}finally{loading=false;$('refresh').disabled=!connected;}}
+  function result(value,ignoreUnrelated=false){if(value?.isError)throw new Error('tool');const data=value?.structuredContent;if(data?.schemaVersion!==1||!Array.isArray(data.quotas)||!data.today||typeof data.today!=='object'){if(ignoreUnrelated)return;throw new Error('snapshot');}readFailed=false;snapshot=data;render(snapshot);}
+  async function refresh(){if(!connected||loading)return;loading=true;$('refresh').disabled=true;try{result(await send('tools/call',{name:'pulse_usage',arguments:{}}));}catch(error){readFailed=true;renderPace(snapshot);status(error.message==='timeout'?'timeout':'failed',true);}finally{loading=false;$('refresh').disabled=!connected;}}
   async function open(target,button){button.disabled=true;try{const response=await send('tools/call',{name:'pulse_open',arguments:{target}});if(response?.isError)throw new Error('tool');status(target==='main'?'requested':'requestedWidget');}catch{status('failed',true);}finally{button.disabled=!connected;}}
   window.addEventListener('message',event=>{
     const message=event.data;if(event.source!==parent||!message||message.jsonrpc!=='2.0')return;
     if(!message.method&&Object.hasOwn(message,'id')&&(Object.hasOwn(message,'result')||Object.hasOwn(message,'error'))&&pending.has(message.id)){const request=pending.get(message.id);pending.delete(message.id);clearTimeout(request.timer);message.error?request.reject(new Error('rpc')):request.resolve(message.result);}
-    else if(message.method==='ui/notifications/tool-result'){try{result(message.params,true);}catch{status('failed',true);}}
+    else if(message.method==='ui/notifications/tool-result'){try{result(message.params,true);}catch{readFailed=true;renderPace(snapshot);status('failed',true);}}
     else if(message.method==='ui/notifications/host-context-changed')context(message.params);
     else if(message.method==='ping'&&Object.hasOwn(message,'id'))parent.postMessage({jsonrpc:'2.0',id:message.id,result:{}},'*');
   });
@@ -76,6 +79,6 @@
   translate();status('connecting');
   if(parent===window){status('unavailable',true);return;}
   send('ui/initialize',{protocolVersion:'2026-01-26',appInfo:{name:'Codex Pulse',version:'__PULSE_VERSION__'},appCapabilities:{availableDisplayModes:['inline','fullscreen']}}).then(response=>{connected=true;context(response?.hostContext);parent.postMessage({jsonrpc:'2.0',method:'ui/notifications/initialized'},'*');for(const id of ['refresh','open','widget'])$(id).disabled=false;refresh();}).catch(()=>status('timeout',true));
-  setInterval(()=>{if(!document.hidden)refresh();},60000);
+  setInterval(()=>{if(!document.hidden){renderPace(snapshot);refresh();}},60000);
 })();
 </script></body></html>

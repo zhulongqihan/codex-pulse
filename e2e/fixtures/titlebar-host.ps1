@@ -21,6 +21,7 @@ public static class PulseTitlebarFixture {
         public IntPtr instance, icon, cursor, background; public string menu, name;
     }
     [StructLayout(LayoutKind.Sequential)] struct Rect { public int left,top,right,bottom; }
+    [StructLayout(LayoutKind.Sequential)] struct MonitorInfo { public uint size; public Rect monitor,work; public uint flags; }
     delegate IntPtr WndProc(IntPtr window,uint message,IntPtr w,IntPtr l);
     [DllImport("user32.dll",CharSet=CharSet.Unicode)] static extern ushort RegisterClassW(ref WndClass value);
     [DllImport("user32.dll",CharSet=CharSet.Unicode)] static extern IntPtr CreateWindowExW(uint ex,string name,string title,uint style,int x,int y,int width,int height,IntPtr parent,IntPtr menu,IntPtr instance,IntPtr parameter);
@@ -33,6 +34,8 @@ public static class PulseTitlebarFixture {
     [DllImport("user32.dll")] static extern bool IsIconic(IntPtr window);
     [DllImport("user32.dll")] static extern bool DestroyWindow(IntPtr window);
     [DllImport("user32.dll")] static extern uint GetDpiForWindow(IntPtr window);
+    [DllImport("user32.dll")] static extern IntPtr MonitorFromWindow(IntPtr window,uint flags);
+    [DllImport("user32.dll",CharSet=CharSet.Unicode)] static extern bool GetMonitorInfoW(IntPtr monitor,ref MonitorInfo info);
     [DllImport("user32.dll")] static extern void PostQuitMessage(int exitCode);
     [DllImport("user32.dll")] static extern uint GetWindowThreadProcessId(IntPtr window,out uint process);
     [DllImport("user32.dll")] static extern bool AttachThreadInput(uint first,uint second,bool attach);
@@ -48,13 +51,23 @@ public static class PulseTitlebarFixture {
         if(message==0x10) { if(window==host) PostQuitMessage(0); else ShowWindow(window,0); return IntPtr.Zero; }
         return DefWindowProcW(window,message,w,l);
     }
+    static Rect WorkArea(IntPtr window) {
+        MonitorInfo info=new MonitorInfo();info.size=(uint)Marshal.SizeOf(typeof(MonitorInfo));
+        if(!GetMonitorInfoW(MonitorFromWindow(window,2),ref info)) throw new Exception("Cannot inspect the synthetic host monitor work area");
+        return info.work;
+    }
     static IntPtr Create(string name,string title,int x,int y) {
         WndClass value = new WndClass(); value.proc=procedure; value.name=name; value.background=new IntPtr(6);
         if(!registered.Contains(name)) {
             if(RegisterClassW(ref value)==0) throw new Exception("Cannot register the synthetic window class");
             registered.Add(name);
         }
-        IntPtr result=CreateWindowExW(0,name,title,0x00CF0000,x,y,1280,800,IntPtr.Zero,IntPtr.Zero,IntPtr.Zero,IntPtr.Zero);
+        Rect work=WorkArea(IntPtr.Zero);
+        int width=Math.Min(1280,(int)((work.right-work.left)*0.86));
+        int height=Math.Min(800,(int)((work.bottom-work.top)*0.82));
+        x=Math.Max(work.left+8,Math.Min(x,work.right-width-8));
+        y=Math.Max(work.top+8,Math.Min(y,work.bottom-height-8));
+        IntPtr result=CreateWindowExW(0,name,title,0x00CF0000,x,y,width,height,IntPtr.Zero,IntPtr.Zero,IntPtr.Zero,IntPtr.Zero);
         if(result==IntPtr.Zero) throw new Exception("Cannot create the synthetic window");
         return result;
     }
@@ -86,11 +99,13 @@ public static class PulseTitlebarFixture {
                 }
             }
             Rect rect; GetWindowRect(host,out rect);
+            Rect workArea=WorkArea(host);
             Dictionary<string,object> state=new Dictionary<string,object> {
                 {"processId",System.Diagnostics.Process.GetCurrentProcess().Id},{"window",host.ToInt64()},
                 {"otherWindow",other.ToInt64()},{"commandId",lastId},{"foreground",GetForegroundWindow()==host},
                 {"minimized",IsIconic(host)},{"dpi",GetDpiForWindow(host)},
-                {"x",rect.left},{"y",rect.top},{"width",rect.right-rect.left},{"height",rect.bottom-rect.top}
+                {"x",rect.left},{"y",rect.top},{"width",rect.right-rect.left},{"height",rect.bottom-rect.top},
+                {"workArea",new Dictionary<string,object>{{"x",workArea.left},{"y",workArea.top},{"width",workArea.right-workArea.left},{"height",workArea.bottom-workArea.top}}}
             };
             File.WriteAllText(Path.Combine(directory,"state.tmp"),serializer.Serialize(state));
             string path=Path.Combine(directory,"state.json");
