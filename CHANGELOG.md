@@ -4,6 +4,22 @@ User-facing changes are grouped by release, following [Keep a Changelog](https:/
 
 ## [Unreleased]
 
+## [0.6.1] - 2026-11-08
+
+### Fixed / 修复
+
+- Prioritize a fresh exhausted quota window over a forecast whose lower time bound is zero. The compact status now reports the exhausted window while retaining each window's own readings.
+- 当另一窗口的预测时间下界恰好为零时，优先显示已经用尽的额度窗口；各窗口原有读数继续保留。
+- Keep the public homepage version in sync with the application manifest.
+- 产品首页版本号改为读取软件清单，随版本更新同步。
+
+### Community / 社区
+
+- Opened Discussions and added clearer bilingual feedback and contribution links, including the public preview footer.
+- 开启讨论区并完善双语问题、建议与贡献入口，公开演示页脚也可直接进入反馈。
+
+[完整中英说明 / Full release notes](docs/releases/v0.6.1.md)
+
 ## [0.6.0] - 2026-11-08
 
 ### Added / 新增

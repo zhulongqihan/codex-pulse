@@ -4,6 +4,7 @@ import { useTranslation } from "react-i18next";
 import { PulseStyleSwitcher } from "./pulse-appearance-controls";
 import { PulseBrandMark } from "./pulse-brand-mark";
 import { usePulsePreferences } from "@/lib/pulse-appearance";
+import { version } from "../../../package.json";
 import "./pulse-browser-welcome.css";
 
 const repository = "https://github.com/zhulongqihan/codex-pulse";
@@ -37,7 +38,7 @@ const messages = {
       ["数据留在哪里？", "桌面版默认将自己的缓存和偏好保存在程序旁的 data 文件夹，只读本机 Codex 记录。公开网页仅运行合成演示，不读取本机文件或登录凭证。"],
     ],
     privacy: "独立开源项目，不隶属于 OpenAI。个人额度、本机 Token 和 API 参考成本分开呈现。",
-    footer: "本地记录，清楚呈现。", release: "版本记录", version: "0.6.0", skip: "跳到产品介绍",
+    footer: "本地记录，清楚呈现。", release: "版本记录", feedback: "反馈与建议", skip: "跳到产品介绍",
   },
   en: {
     title: "See the pace behind your quota.",
@@ -68,7 +69,7 @@ const messages = {
       ["Where does my data go?", "The desktop app keeps its own cache and preferences in an adjacent data folder by default, and reads local Codex records without changing them. This public site runs only synthetic demos and accesses no local files or sign-in credentials."],
     ],
     privacy: "Independent open-source project, not affiliated with OpenAI. Personal quota, local tokens, and API reference costs remain separate.",
-    footer: "Local records. A clearer view.", release: "Release notes", version: "0.6.0", skip: "Skip to product overview",
+    footer: "Local records. A clearer view.", release: "Release notes", feedback: "Feedback", skip: "Skip to product overview",
   },
 } as const;
 
@@ -89,7 +90,7 @@ export function PulseBrowserWelcome() {
   return <div className="pulse-site" lang={language === "zh" ? "zh-CN" : "en"}>
     <a className="pulse-site-skip" href="#product">{copy.skip}</a>
     <header className="pulse-site-header">
-      <a className="pulse-site-brand" href={location.pathname} aria-label="Codex Pulse"><PulseBrandMark size={36}/><strong>Codex Pulse</strong><span>{copy.version}</span></a>
+      <a className="pulse-site-brand" href={location.pathname} aria-label="Codex Pulse"><PulseBrandMark size={36}/><strong>Codex Pulse</strong><span>{version}</span></a>
       <nav aria-label={language === "zh" ? "网站导航" : "Site navigation"}>
         <a href={`${repository}/blob/main/${language === "zh" ? "README.md" : "README.en.md"}`}>{copy.docs}</a>
         <a href={repository}><Code2 size={17} aria-hidden="true"/>{copy.source}</a>
@@ -114,6 +115,6 @@ export function PulseBrowserWelcome() {
       <section className="pulse-site-install" aria-labelledby="site-install"><h2 id="site-install">{copy.install}</h2><ol>{copy.steps.map(([title, detail]) => <li key={title}><h3>{title}</h3><p>{detail}</p></li>)}</ol><a href={`${repository}/blob/main/docs/${language === "zh" ? "CODEX_INTEGRATION.md" : "CODEX_INTEGRATION.en.md"}`}>{copy.docs}<ExternalLink size={15} aria-hidden="true"/></a></section>
       <section className="pulse-site-faq" aria-labelledby="site-questions"><h2 id="site-questions">{copy.questions}</h2><div>{copy.faqs.map(([question, answer]) => <details key={question}><summary>{question}</summary><p>{answer}</p></details>)}</div></section>
     </main>
-    <footer className="pulse-site-footer"><span><PulseBrandMark size={22}/>{copy.footer}</span><div><a href={`${repository}/releases`}>{copy.release}</a><a href={`${repository}/blob/main/LICENSE`}>MIT</a><a href={repository}>GitHub</a></div></footer>
+    <footer className="pulse-site-footer"><span><PulseBrandMark size={22}/>{copy.footer}</span><div><a href={`${repository}/discussions`}>{copy.feedback}</a><a href={`${repository}/releases`}>{copy.release}</a><a href={`${repository}/blob/main/LICENSE`}>MIT</a><a href={repository}>GitHub</a></div></footer>
   </div>;
 }

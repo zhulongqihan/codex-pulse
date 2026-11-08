@@ -592,13 +592,20 @@ fn project(store: &Store, now: DateTime<Utc>) -> PaceSnapshot {
         })
         .collect();
     // This is a window-specific projection, never an assertion that unknown windows are safe.
+    // A confirmed, fresh exhausted window outranks an uncertain forecast whose
+    // conservative lower bound has merely reached zero.
     let primary = windows
         .iter()
-        .filter(|window| matches!(window.state.as_str(), "forecast" | "exhausted"))
-        .min_by(|left, right| {
-            left.eta_lower_minutes
-                .unwrap_or(f64::MAX)
-                .total_cmp(&right.eta_lower_minutes.unwrap_or(f64::MAX))
+        .find(|window| window.state == "exhausted")
+        .or_else(|| {
+            windows
+                .iter()
+                .filter(|window| window.state == "forecast")
+                .min_by(|left, right| {
+                    left.eta_lower_minutes
+                        .unwrap_or(f64::MAX)
+                        .total_cmp(&right.eta_lower_minutes.unwrap_or(f64::MAX))
+                })
         })
         .or_else(|| windows.iter().find(|window| window.state == "sampling"))
         .or_else(|| {
@@ -680,6 +687,122 @@ mod tests {
             sample(&mut data, t + step * 300, 66.0 + step as f64, t + 6 * 3600);
         }
         (data, t + 1800)
+    }
+    fn selection_series(kind: &str, at: i64, first: f64, step: f64) -> Series {
+        Series {
+            kind: kind.into(),
+            window_minutes: if kind == "session" { 300 } else { 10080 },
+            resets_at: at + 6 * 3600,
+            points: (0..=6)
+                .map(|index| Point {
+                    at: at - 1800 + index * 300,
+                    used: first + index as f64 * step,
+                })
+                .collect(),
+        }
+    }
+    #[test]
+    fn primary_exhausted_window_wins_zero_eta_ties_in_either_position() {
+        let at = start() + 1800;
+        for exhausted in ["session", "weekly"] {
+            let mut data = store();
+            data.updated_at = Some(at);
+            data.windows = ["session", "weekly"]
+                .into_iter()
+                .map(|kind| {
+                    if kind == exhausted {
+                        selection_series(kind, at, 94.0, 1.0)
+                    } else {
+                        selection_series(kind, at, 69.0, 5.0)
+                    }
+                })
+                .collect();
+            assert!(valid_store(&data));
+            // A fresh reading with 1% left can have an ETA lower bound of zero
+            // before the next scheduled query. This is uncertainty, not observed zero.
+            let result = project(&data, now(at + 59));
+            let forecast = result
+                .windows
+                .iter()
+                .find(|window| window.kind != exhausted)
+                .unwrap();
+            assert_eq!(forecast.state, "forecast");
+            assert_eq!(forecast.remaining_percent, Some(1.0));
+            assert_eq!(forecast.eta_lower_minutes, Some(0.0));
+            assert!(forecast.eta_upper_minutes.unwrap() > 0.0);
+            assert_eq!(result.status, "exhausted", "exhausted={exhausted}");
+            assert_eq!(result.primary_kind.as_deref(), Some(exhausted));
+        }
+    }
+    #[test]
+    fn primary_forecast_remains_earliest_for_either_window() {
+        let at = start() + 1800;
+        for fastest in ["session", "weekly"] {
+            let mut data = store();
+            data.updated_at = Some(at);
+            data.windows = ["session", "weekly"]
+                .into_iter()
+                .map(|kind| {
+                    if kind == fastest {
+                        selection_series(kind, at, 69.0, 5.0)
+                    } else {
+                        selection_series(kind, at, 66.0, 1.0)
+                    }
+                })
+                .collect();
+            let result = project(&data, now(at));
+            assert!(result
+                .windows
+                .iter()
+                .all(|window| window.state == "forecast"));
+            assert_eq!(result.status, "forecast");
+            assert_eq!(result.primary_kind.as_deref(), Some(fastest));
+        }
+    }
+    #[test]
+    fn primary_stale_expired_or_failed_zero_is_not_current_exhaustion() {
+        let at = start() + 1800;
+        for zero_kind in ["session", "weekly"] {
+            for unavailable in ["stale", "expired", "failed"] {
+                let mut data = store();
+                data.updated_at = Some(at);
+                data.windows = ["session", "weekly"]
+                    .into_iter()
+                    .map(|kind| {
+                        if kind != zero_kind {
+                            return selection_series(kind, at, 66.0, 1.0);
+                        }
+                        let mut zero = selection_series(kind, at, 94.0, 1.0);
+                        if unavailable == "stale" {
+                            zero.points
+                                .iter_mut()
+                                .for_each(|point| point.at -= MAX_AGE + 1);
+                        } else if unavailable == "expired" {
+                            zero.resets_at = at;
+                        }
+                        zero
+                    })
+                    .collect();
+                data.failed = unavailable == "failed";
+                let result = project(&data, now(at));
+                assert!(result
+                    .windows
+                    .iter()
+                    .all(|window| window.state != "exhausted"));
+                let zero = result
+                    .windows
+                    .iter()
+                    .find(|window| window.kind == zero_kind)
+                    .unwrap();
+                assert_eq!(zero.state, if data.failed { "stale" } else { unavailable });
+                if data.failed {
+                    assert_eq!(result.status, "stale");
+                } else {
+                    assert_eq!(result.status, "forecast");
+                    assert_ne!(result.primary_kind.as_deref(), Some(zero_kind));
+                }
+            }
+        }
     }
     #[test]
     fn continuous_official_observations_produce_a_quantization_bounded_window_specific_range() {
