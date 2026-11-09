@@ -166,6 +166,7 @@ export function useUsageDashboard() {
   const [exportError, setExportError] = useState<string | null>(null);
   const [lastRescanDurationMs, setLastRescanDurationMs] = useState<number | null>(null);
   const [launchAtLogin, setLaunchAtLogin] = useState(false);
+  const [launchAtLoginKnown, setLaunchAtLoginKnown] = useState(false);
   const [launchAtLoginError, setLaunchAtLoginError] = useState<string | null>(null);
   const [isLaunchAtLoginUpdating, setIsLaunchAtLoginUpdating] = useState(false);
 
@@ -296,6 +297,7 @@ export function useUsageDashboard() {
       .then((enabled) => {
         if (!isMounted) return;
         setLaunchAtLogin(enabled);
+        setLaunchAtLoginKnown(true);
         setLaunchAtLoginError(null);
       })
       .catch((err) => {
@@ -1173,6 +1175,7 @@ export function useUsageDashboard() {
       } else {
         await disableAutostart();
       }
+      setLaunchAtLoginKnown(true);
     } catch (autostartError) {
       setLaunchAtLogin(previous);
       setLaunchAtLoginError(errorMessage(autostartError, "Failed to update login item setting."));
@@ -1301,6 +1304,7 @@ export function useUsageDashboard() {
     updateInstallError,
     isUpdateDismissed,
     launchAtLogin,
+    launchAtLoginKnown,
     launchAtLoginError,
     isLaunchAtLoginUpdating,
     showLogsTab,

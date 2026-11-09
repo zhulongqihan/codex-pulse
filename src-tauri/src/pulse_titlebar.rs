@@ -616,11 +616,16 @@ mod native {
                 .rsplit_once('/')
                 .is_some_and(|(parent, _)| parent.ends_with("/windowsapps"))
     }
-    fn main_window_style(style: isize) -> bool {
+    fn main_window_style(style: isize, extended_style: isize) -> bool {
         // Electron utility windows share the executable and class. Require a resizable
         // top-level application frame with the same minimize/maximize controls as Codex.
-        const FRAME_AND_CONTROLS: isize = 0x00c70000;
+        // The custom Codex title bar removes WS_CAPTION when restored/maximized.
+        // Keep resize/min/max controls; never follow child, popup, tool,
+        // click-through, or non-activating surfaces from that same process.
+        const FRAME_AND_CONTROLS: isize = 0x00070000;
         style & FRAME_AND_CONTROLS == FRAME_AND_CONTROLS
+            && style & 0xc0000000 == 0
+            && extended_style & 0x080000a0 == 0
     }
     fn process_identity(process: u32) -> Option<(String, String, Arc<VerifiedProcess>)> {
         unsafe {
@@ -695,7 +700,10 @@ mod native {
                 || IsWindowVisible(window) == 0
                 || IsIconic(window) != 0
                 || GetAncestor(window, 2) != window
-                || !main_window_style(GetWindowLongPtrW(window, -16))
+                || !main_window_style(
+                    GetWindowLongPtrW(window, -16),
+                    GetWindowLongPtrW(window, -20),
+                )
             {
                 return None;
             }
@@ -734,7 +742,10 @@ mod native {
                 || IsWindowVisible(host.window) == 0
                 || IsIconic(host.window) != 0
                 || GetAncestor(host.window, 2) != host.window
-                || !main_window_style(GetWindowLongPtrW(host.window, -16))
+                || !main_window_style(
+                    GetWindowLongPtrW(host.window, -16),
+                    GetWindowLongPtrW(host.window, -20),
+                )
             {
                 return false;
             }
@@ -1164,6 +1175,19 @@ mod native {
     mod tests {
         use super::*;
         #[test]
+        fn restored_captionless_codex_keeps_its_main_window_identity() {
+            // Observed on the real Store client: minimizing temporarily restores
+            // WS_CAPTION; restoring its custom title bar removes it again.
+            assert!(main_window_style(0x15070000, 0x00240100));
+            assert!(main_window_style(0x14c70000, 0x00240100));
+            assert!(!main_window_style(0x15030000, 0x00240100));
+            assert!(!main_window_style(0x55070000, 0x00240100));
+            assert!(!main_window_style(0x95070000, 0x00240100));
+            assert!(!main_window_style(0x15070000, 0x00240180));
+            assert!(!main_window_style(0x15070000, 0x08240100));
+            assert!(!main_window_style(0x15070000, 0x00240120));
+        }
+        #[test]
         fn location_events_only_follow_bound_top_level_window() {
             assert_eq!(host_event(0x800b, 42, 0, 0, 42), HostEvent::Geometry);
             assert_eq!(host_event(0x800b, 41, 0, 0, 42), HostEvent::Ignore);
@@ -1199,10 +1223,10 @@ mod native {
                 &path.replace("WindowsApps", "Other"),
                 "OpenAI.Codex_2p2nqsd0c76g0"
             ));
-            assert!(main_window_style(0x14c70000));
-            assert!(main_window_style(0x00cf0000));
-            assert!(!main_window_style(0x80000000));
-            assert!(!main_window_style(0x00c00000));
+            assert!(main_window_style(0x14c70000, 0));
+            assert!(main_window_style(0x00cf0000, 0));
+            assert!(!main_window_style(0x80000000, 0));
+            assert!(!main_window_style(0x00c00000, 0));
         }
     }
 }

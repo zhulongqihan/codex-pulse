@@ -41,6 +41,8 @@ public static class PulseTitlebarFixture {
     [DllImport("user32.dll",CharSet=CharSet.Unicode)] static extern int GetWindowTextW(IntPtr window,StringBuilder text,int capacity);
     [DllImport("user32.dll")] static extern bool GetWindowRect(IntPtr window,out Rect rect);
     [DllImport("user32.dll")] static extern bool IsIconic(IntPtr window);
+    [DllImport("user32.dll")] static extern IntPtr GetWindowLongPtrW(IntPtr window,int index);
+    [DllImport("user32.dll")] static extern IntPtr SetWindowLongPtrW(IntPtr window,int index,IntPtr value);
     delegate bool EnumProc(IntPtr window,IntPtr parameter);
     [DllImport("user32.dll")] static extern bool EnumWindows(EnumProc procedure,IntPtr parameter);
     [DllImport("user32.dll")] static extern bool DestroyWindow(IntPtr window);
@@ -251,6 +253,10 @@ public static class PulseTitlebarFixture {
                     string action=Convert.ToString(value["action"]);
                     commandError="";
                     if(action=="move") SetWindowPos(host,IntPtr.Zero,Number(value,"x",120),Number(value,"y",100),Number(value,"width",1280),Number(value,"height",800),0x0010|0x0004);
+                    else if(action=="captionless") {
+                        SetWindowLongPtrW(host,-16,new IntPtr(GetWindowLongPtrW(host,-16).ToInt64()&~0x00c00000L));
+                        SetWindowPos(host,IntPtr.Zero,0,0,0,0,0x0037);
+                    }
                     else if(action=="measure-follow") MeasureFollow();
                     else if(action=="click-badge") commandError=ClickBadge(Number(value,"x",-1),Number(value,"y",-1),false);
                     else if(action=="toggle-badge") commandError=ClickBadge(Number(value,"x",-1),Number(value,"y",-1),true);
@@ -273,6 +279,7 @@ public static class PulseTitlebarFixture {
                 {"commandError",commandError},{"physicalBadgeClicks",physicalBadgeClicks},{"pendingPhysicalClick",pendingPhysicalClick},
                 {"pendingMotion",pendingMotion},
                 {"minimized",IsIconic(host)},{"dpi",GetDpiForWindow(host)},
+                {"style",GetWindowLongPtrW(host,-16).ToInt64()},{"extendedStyle",GetWindowLongPtrW(host,-20).ToInt64()},
                 {"x",rect.left},{"y",rect.top},{"width",rect.right-rect.left},{"height",rect.bottom-rect.top},
                 {"workArea",new Dictionary<string,object>{{"x",workArea.left},{"y",workArea.top},{"width",workArea.right-workArea.left},{"height",workArea.bottom-workArea.top}}}
             };

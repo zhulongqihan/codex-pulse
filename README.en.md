@@ -52,7 +52,11 @@ To add desktop and Start menu entries, use the app's shortcut action or run **Cr
 
 Enable the **Codex corner pace indicator** in settings, keep Pulse running, and switch to the Microsoft Store edition of Codex for Windows. This is an independent Windows companion surface that follows the client; it does not modify Codex installation files. Click the status to expand; press Esc or click outside to dismiss. See the [full guide](docs/CODEX_INTEGRATION.en.md).
 
+For automatic following after a restart, enable **Settings → General → Start Pulse at sign-in**. Pulse then runs in the tray after Windows sign-in. Opening Codex alone does not launch a Pulse instance you have quit. Settings distinguish checking, enabled, disabled and unconfirmed startup states.
+
 The existing sidebar entry remains available: choose **Settings → General → Codex desktop shortcut → Add to Codex**, then install and pin it. The MCP panel only reads local snapshots, with no independent sign-in or quota request. Its bottom composer belongs to the Codex host and cannot be reliably hidden by Pulse. The new corner card has no input box.
+
+Starting with 0.7.1, normal startup prepares or repairs local plugin files from embedded templates, and portable upgrades no longer overwrite the prepared plugin directory. An existing Codex window retaining a failed old plugin cache may need the plugin added again before retrying. Add it again after moving the application directory as well.
 
 Opening the app again restores the window for the same data folder. Closing the main window hides it to the tray. Choose **Quit** in the tray menu to exit completely. Check for updates in settings, or exit the app and replace program files with a newer release while keeping `data`.
 

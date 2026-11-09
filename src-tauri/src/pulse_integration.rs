@@ -2,7 +2,7 @@
 use serde::Serialize;
 use serde_json::Value;
 use std::{
-    ffi::OsStr,
+    ffi::{OsStr, OsString},
     fs::{self, OpenOptions},
     io::Write,
     path::{Path, PathBuf},
@@ -78,6 +78,9 @@ fn replace_file(path: &Path, contents: &[u8]) -> Result<(), String> {
     let parent = path.parent().ok_or("Missing Codex plugin directory")?;
     check_ancestors(parent)?;
     check_destination(path)?;
+    if fs::read(path).is_ok_and(|existing| existing == contents) {
+        return Ok(());
+    }
     let temporary = parent.join(format!(".pulse-{}.tmp", uuid::Uuid::new_v4()));
     let result = (|| {
         let mut file = OpenOptions::new()
@@ -175,10 +178,11 @@ fn prepare(executable: &Path, data: &Path) -> Result<PreparedCodexIntegration, S
     }
     let marketplace_path = marketplaces.join("marketplace.json");
     let outputs: [(&Path, &[u8]); 4] = [
-        (&marketplace_path, MARKETPLACE.as_bytes()),
-        (&pulse.join("plugin.json"), &plugin_bytes),
         (&pulse.join("mcp.json"), &mcp_bytes),
         (&assets.join("icon.png"), ICON),
+        (&marketplace_path, MARKETPLACE.as_bytes()),
+        // Publish the version last, after all files for that version are bound.
+        (&pulse.join("plugin.json"), &plugin_bytes),
     ];
     // Validate every existing output before replacing any existing file.
     for (path, _) in outputs {
@@ -200,6 +204,124 @@ fn prepare(executable: &Path, data: &Path) -> Result<PreparedCodexIntegration, S
         deep_link: deep_link.into(),
         opened: false,
     })
+}
+
+/// Refresh this installation's opt-in plugin files without changing host config,
+/// opening Codex, or creating/reading the selected data directory.
+pub fn prepare_registered_runtime(data: &Path) -> Result<PreparedCodexIntegration, String> {
+    let executable = std::env::current_exe().map_err(|_| "Cannot locate the Pulse application")?;
+    prepare_runtime(&executable, data)
+}
+
+fn prepare_runtime(executable: &Path, data: &Path) -> Result<PreparedCodexIntegration, String> {
+    let installation = executable.parent().ok_or("Missing application directory")?;
+    let manifest = installation.join("integrations/codex/plugins/codex-pulse/mcp.json");
+    let existing_data = if manifest.exists() {
+        check_ancestors(manifest.parent().ok_or("Missing Codex plugin directory")?)?;
+        check_destination(&manifest)?;
+        fs::read(&manifest)
+            .ok()
+            .and_then(|bytes| serde_json::from_slice::<Value>(&bytes).ok())
+            .and_then(|mcp| {
+                let server = mcp.pointer("/mcpServers/codex-pulse")?;
+                let command = server.get("command")?.as_str()?;
+                let executable_name = executable.file_name()?.to_str()?;
+                let bound = server.pointer("/env/PULSE_DATA_DIR")?.as_str()?;
+                let path = PathBuf::from(bound);
+                (command.eq_ignore_ascii_case(executable_name)
+                    && server.get("type")?.as_str()? == "stdio"
+                    && server.get("args")? == &serde_json::json!(["--mcp"])
+                    && path.is_absolute()
+                    && !bound.contains('\0')
+                    && !bound.contains("__PULSE_"))
+                .then_some(path)
+            })
+    } else {
+        None
+    };
+    // Starting a second profile does not constitute consent to rebind the
+    // installed plugin. Explicit CLI/settings preparation still calls prepare.
+    prepare(executable, existing_data.as_deref().unwrap_or(data))
+}
+
+fn preparation_request(
+    arguments: &[OsString],
+    executable: &Path,
+    inherited_data: Option<&OsStr>,
+) -> Result<Option<(PathBuf, bool)>, String> {
+    if !arguments
+        .iter()
+        .any(|argument| argument == "--prepare-codex-integration")
+    {
+        return Ok(None);
+    }
+    let mut explicit = None;
+    let mut json = false;
+    let mut index = 0;
+    while index < arguments.len() {
+        match arguments[index].to_str() {
+            Some("--prepare-codex-integration") => (),
+            Some("--json") => json = true,
+            Some("--data-directory") => {
+                index += 1;
+                if explicit.is_some() || index >= arguments.len() {
+                    return Err("Supply --data-directory once with an absolute path".into());
+                }
+                explicit = Some(PathBuf::from(&arguments[index]));
+            }
+            _ => return Err("Unsupported Codex integration preparation argument".into()),
+        }
+        index += 1;
+    }
+    let data = explicit
+        .or_else(|| {
+            inherited_data
+                .filter(|value| !value.is_empty())
+                .map(PathBuf::from)
+        })
+        .unwrap_or_else(|| executable.parent().unwrap_or(Path::new("")).join("data"));
+    if !data.is_absolute() {
+        return Err("Codex integration requires an absolute data directory".into());
+    }
+    Ok(Some((data, json)))
+}
+
+/// Dedicated installer/upgrade preparation. This branch runs before GUI/profile
+/// initialization; normal --mcp startup is handled earlier and never writes here.
+pub fn run_prepare_if_requested() -> bool {
+    let arguments: Vec<_> = std::env::args_os().skip(1).collect();
+    if !arguments
+        .iter()
+        .any(|argument| argument == "--prepare-codex-integration")
+    {
+        return false;
+    }
+    let result = (|| {
+        let executable =
+            std::env::current_exe().map_err(|_| "Cannot locate the Pulse application")?;
+        let inherited = std::env::var_os("PULSE_DATA_DIR");
+        let (data, json) = preparation_request(&arguments, &executable, inherited.as_deref())?
+            .ok_or("Missing Codex integration preparation request")?;
+        let prepared = prepare(&executable, &data)?;
+        if json {
+            println!(
+                "{}",
+                serde_json::to_string(&prepared)
+                    .map_err(|_| "Cannot encode prepared integration")?
+            );
+        } else {
+            println!(
+                "Codex Pulse plugin files are ready. Install link: {}",
+                prepared.deep_link
+            );
+        }
+        Ok::<(), String>(())
+    })();
+    if let Err(error) = result {
+        eprintln!("Codex Pulse integration preparation failed: {error}");
+        std::process::exit(1);
+    }
+    true
 }
 
 fn open_installation_link(deep_link: &str) -> Result<(), String> {
@@ -355,6 +477,176 @@ mod tests {
             .into_iter()
             .map(Result::unwrap)
             .any(|entry| entry.file_name().to_string_lossy().ends_with(".tmp")));
+    }
+
+    #[test]
+    fn repeated_startup_preparation_does_not_rewrite_bound_files() {
+        let fixture = Fixture::new();
+        prepare(&fixture.executable(), &fixture.data()).unwrap();
+        let files: Vec<_> = walkdir::WalkDir::new(fixture.pulse())
+            .into_iter()
+            .map(Result::unwrap)
+            .filter(|entry| entry.file_type().is_file())
+            .map(|entry| {
+                (
+                    entry.path().to_path_buf(),
+                    entry.metadata().unwrap().modified().unwrap(),
+                    fs::read(entry.path()).unwrap(),
+                )
+            })
+            .collect();
+        prepare(&fixture.executable(), &fixture.data()).unwrap();
+        for (path, modified, bytes) in files {
+            assert_eq!(fs::metadata(&path).unwrap().modified().unwrap(), modified);
+            assert_eq!(fs::read(path).unwrap(), bytes);
+        }
+    }
+
+    #[test]
+    fn normal_startup_preserves_an_existing_profile_but_explicit_preparation_can_rebind_it() {
+        let fixture = Fixture::new();
+        let profile_a = fixture.0.join("profile A");
+        let profile_b = fixture.0.join("profile B");
+        prepare(&fixture.executable(), &profile_a).unwrap();
+        let mcp_path = fixture.pulse().join("mcp.json");
+        let before = fs::read(&mcp_path).unwrap();
+        let modified = fs::metadata(&mcp_path).unwrap().modified().unwrap();
+        prepare_runtime(&fixture.executable(), &profile_b).unwrap();
+        assert_eq!(fs::read(&mcp_path).unwrap(), before);
+        assert_eq!(
+            fs::metadata(&mcp_path).unwrap().modified().unwrap(),
+            modified
+        );
+        assert_eq!(
+            json(&mcp_path)["mcpServers"]["codex-pulse"]["env"]["PULSE_DATA_DIR"],
+            profile_a.to_str().unwrap()
+        );
+        fs::write(&mcp_path, MCP).unwrap();
+        prepare_runtime(&fixture.executable(), &profile_b).unwrap();
+        assert_eq!(
+            json(&mcp_path)["mcpServers"]["codex-pulse"]["env"]["PULSE_DATA_DIR"],
+            profile_b.to_str().unwrap()
+        );
+        // CLI and the explicit settings action use prepare with the selected profile.
+        prepare(&fixture.executable(), &profile_a).unwrap();
+        let request = [
+            OsString::from("--prepare-codex-integration"),
+            OsString::from("--data-directory"),
+            profile_b.as_os_str().to_owned(),
+        ];
+        let (selected, _) = preparation_request(&request, &fixture.executable(), None)
+            .unwrap()
+            .unwrap();
+        prepare(&fixture.executable(), &selected).unwrap();
+        assert_eq!(
+            json(&mcp_path)["mcpServers"]["codex-pulse"]["env"]["PULSE_DATA_DIR"],
+            profile_b.to_str().unwrap()
+        );
+        assert!(!profile_a.exists());
+        assert!(!profile_b.exists());
+    }
+
+    #[test]
+    fn repairs_source_templates_overwritten_after_install_and_rebinds_a_moved_home() {
+        let fixture = Fixture::new();
+        prepare(&fixture.executable(), &fixture.data()).unwrap();
+        // Reproduce an extracted portable package overwriting prepared manifests.
+        fs::write(fixture.pulse().join("mcp.json"), MCP).unwrap();
+        fs::write(fixture.pulse().join("plugin.json"), PLUGIN).unwrap();
+        let moved_data = fixture.0.join("moved data home");
+        prepare(&fixture.executable(), &moved_data).unwrap();
+        let server = json(&fixture.pulse().join("mcp.json"));
+        assert_eq!(
+            server["mcpServers"]["codex-pulse"]["command"],
+            "CodexPulse.exe"
+        );
+        assert_eq!(
+            server["mcpServers"]["codex-pulse"]["env"]["PULSE_DATA_DIR"],
+            moved_data.to_str().unwrap()
+        );
+        assert!(!server.to_string().contains("__PULSE_"));
+        assert_eq!(
+            json(&fixture.pulse().join("plugin.json"))["version"],
+            env!("CARGO_PKG_VERSION")
+        );
+        assert!(
+            !moved_data.exists(),
+            "Preparation must not initialize data or a WebView profile"
+        );
+    }
+
+    #[test]
+    fn refreshes_a_copied_installations_executable_search_path_without_moving_data() {
+        let original = Fixture::new();
+        let moved = Fixture::new();
+        prepare(&original.executable(), &original.data()).unwrap();
+        prepare(&moved.executable(), &original.data()).unwrap();
+        // Simulate stale prepared manifests carried along with a moved app folder.
+        fs::copy(
+            original.pulse().join("mcp.json"),
+            moved.pulse().join("mcp.json"),
+        )
+        .unwrap();
+        prepare(&moved.executable(), &original.data()).unwrap();
+        let mcp = json(&moved.pulse().join("mcp.json"));
+        let server = &mcp["mcpServers"]["codex-pulse"];
+        assert_eq!(
+            std::env::split_paths(server["env"]["PATH"].as_str().unwrap()).next(),
+            Some(moved.0.clone())
+        );
+        assert_eq!(
+            server["env"]["PULSE_DATA_DIR"],
+            original.data().to_str().unwrap()
+        );
+        assert!(!original.data().exists());
+    }
+
+    #[test]
+    fn headless_request_uses_explicit_data_then_environment_then_portable_default() {
+        let fixture = Fixture::new();
+        let args = |values: &[&str]| values.iter().map(OsString::from).collect::<Vec<_>>();
+        let flag = args(&["--prepare-codex-integration", "--json"]);
+        let environment = fixture.0.join("environment data");
+        assert_eq!(
+            preparation_request(&flag, &fixture.executable(), Some(environment.as_os_str()))
+                .unwrap(),
+            Some((environment.clone(), true))
+        );
+        assert_eq!(
+            preparation_request(&flag, &fixture.executable(), None).unwrap(),
+            Some((fixture.0.join("data"), true))
+        );
+        let explicit = fixture.0.join("explicit data 中文");
+        let request = vec![
+            OsString::from("--prepare-codex-integration"),
+            OsString::from("--data-directory"),
+            explicit.as_os_str().to_owned(),
+        ];
+        assert_eq!(
+            preparation_request(
+                &request,
+                &fixture.executable(),
+                Some(environment.as_os_str())
+            )
+            .unwrap(),
+            Some((explicit, false))
+        );
+        assert_eq!(
+            preparation_request(&args(&["--hidden"]), &fixture.executable(), None).unwrap(),
+            None
+        );
+        for invalid in [
+            args(&["--prepare-codex-integration", "--data-directory"]),
+            args(&[
+                "--prepare-codex-integration",
+                "--data-directory",
+                "relative",
+            ]),
+            args(&["--prepare-codex-integration", "--unexpected"]),
+        ] {
+            assert!(preparation_request(&invalid, &fixture.executable(), None).is_err());
+        }
+        assert_eq!(fs::read_dir(&fixture.0).unwrap().count(), 0);
     }
 
     #[test]

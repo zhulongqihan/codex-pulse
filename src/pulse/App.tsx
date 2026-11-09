@@ -142,6 +142,7 @@ export default function App() {
     updateInstallError,
     isUpdateDismissed,
     launchAtLogin,
+    launchAtLoginKnown,
     launchAtLoginError,
     isLaunchAtLoginUpdating,
     showSessionCredits,
@@ -646,6 +647,7 @@ export default function App() {
               onUpgrade={() => void handleUpgrade()}
               onOpenUpdateRelease={() => void handleOpenUpdateRelease()}
               launchAtLogin={launchAtLogin}
+              launchAtLoginKnown={launchAtLoginKnown}
               launchAtLoginError={launchAtLoginError}
               isLaunchAtLoginUpdating={isLaunchAtLoginUpdating}
               onLaunchAtLoginChange={(enabled) => void handleLaunchAtLoginChange(enabled)}

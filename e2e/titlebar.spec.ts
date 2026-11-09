@@ -95,6 +95,12 @@ describe('Pulse attached titlebar in a real owned native host', () => {
     // The watcher's actual native show operation must keep its owned host in the foreground.
     await browser.waitUntil(() => nativeState()?.foreground === true);
     const noFocusTheft = nativeState();
+    await command('captionless');
+    await visible(true);
+    const captionless = await synchronizedGeometry();
+    expect(nativeState().style & 0x00c00000).toBe(0);
+    expect(nativeState().style & 0x00070000).toBe(0x00070000);
+    record('captionless-main-frame', { nativeState: nativeState(), status: captionless });
     const workArea = noFocusTheft.workArea;
     expect(workArea.width).toBeGreaterThan(0); expect(workArea.height).toBeGreaterThan(0);
     const width = Math.floor(Math.min(1200, workArea.width * 0.7));
@@ -140,7 +146,7 @@ describe('Pulse attached titlebar in a real owned native host', () => {
   });
 
   it('opens the actual no-composer popup from the badge and supports Escape and outside focus', async () => {
-    await command('restore'); await command('activate'); await visible(true);
+    await command('restore'); await command('captionless'); await command('activate'); await visible(true);
     // Initialize this WebView's embedded-driver bridge before native input. Return
     // the real foreground to the fixture afterwards; never switch to the popup.
     await browser.switchToWindow('pulse-badge');

@@ -45,6 +45,7 @@ type SettingsPageProps = {
   onUpgrade: () => void;
   onOpenUpdateRelease: () => void;
   launchAtLogin: boolean;
+  launchAtLoginKnown?: boolean;
   launchAtLoginError: string | null;
   isLaunchAtLoginUpdating: boolean;
   onLaunchAtLoginChange: (enabled: boolean) => void;
@@ -93,6 +94,7 @@ export function SettingsPage({
   onUpgrade,
   onOpenUpdateRelease,
   launchAtLogin,
+  launchAtLoginKnown = false,
   launchAtLoginError,
   isLaunchAtLoginUpdating,
   onLaunchAtLoginChange,
@@ -127,6 +129,13 @@ export function SettingsPage({
   }, [updateInfo?.releaseNotes, i18n.language, i18n.resolvedLanguage]);
   const hasSub = hasSubscription(codexLimits);
   const currentLanguage = getLanguage(i18n.resolvedLanguage ?? i18n.language);
+  const isLoginStartupChecking = !launchAtLoginKnown && !launchAtLoginError;
+  const loginStartupStatus = isLaunchAtLoginUpdating ? "updating" : launchAtLoginError ? "unconfirmed" : !launchAtLoginKnown ? "checking" : launchAtLogin ? "enabled" : "disabled";
+  const focusLoginStartup = () => {
+    const target = document.getElementById("toggle-launch-at-login");
+    target?.scrollIntoView({ block: "center", behavior: "auto" });
+    target?.focus({ preventScroll: true });
+  };
 
   const optionKeys: Array<"limit5h" | "limitWeekly" | "tokens" | "cost"> = hasSub
     ? ["limit5h", "limitWeekly", "tokens", "cost"]
@@ -191,7 +200,7 @@ export function SettingsPage({
 
   const generalContent = (
     <>
-      <PulsePaceSettings />
+      <PulsePaceSettings onManageStartup={focusLoginStartup} manageStartupDisabled={isDisabled || isLoginStartupChecking || isLaunchAtLoginUpdating}/>
       <PulseCodexIntegration />
       <Card>
         <CardHeader>
@@ -409,14 +418,15 @@ export function SettingsPage({
 
       <Card>
         <CardHeader>
-          <CardTitle>{t("settings.launch_at_login_title")}</CardTitle>
-          <CardDescription>{t("settings.launch_at_login_desc")}</CardDescription>
+          <CardTitle id="login-startup-title">{t("settings.launch_at_login_title")}</CardTitle>
+          <CardDescription id="login-startup-note">{t("settings.launch_at_login_desc")}</CardDescription>
         </CardHeader>
         <CardContent>
           <div className="flex flex-col gap-4 border-t border-border pt-5 sm:flex-row sm:items-center sm:justify-between">
             <div className="space-y-1">
+              <p id="login-startup-status" role="status" aria-live="polite" className="max-w-lg text-sm leading-6 text-muted-foreground" data-testid="login-startup-status">{t(`settings.launch_at_login_${loginStartupStatus}`)}</p>
               {launchAtLoginError ? (
-                <p className="max-w-lg text-sm leading-6 text-error dark:text-red-400">
+                <p role="alert" className="max-w-lg text-sm leading-6 text-error dark:text-red-400">
                   {launchAtLoginError}
                 </p>
               ) : null}
@@ -425,12 +435,14 @@ export function SettingsPage({
               type="button"
               id="toggle-launch-at-login"
               aria-label={t("settings.toggle_launch_at_login_aria")}
-              aria-pressed={launchAtLogin}
+              aria-describedby="login-startup-note login-startup-status"
+              aria-pressed={launchAtLoginKnown ? launchAtLogin : "mixed"}
+              aria-busy={isLoginStartupChecking || isLaunchAtLoginUpdating}
               onClick={() => onLaunchAtLoginChange(!launchAtLogin)}
-              disabled={isDisabled || isLaunchAtLoginUpdating}
+              disabled={isDisabled || isLaunchAtLoginUpdating || isLoginStartupChecking}
               className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 ${
                 launchAtLogin ? "bg-indigo-600" : "bg-neutral-700"
-              } ${isDisabled || isLaunchAtLoginUpdating ? "opacity-50 cursor-not-allowed" : ""}`}
+              } ${isDisabled || isLaunchAtLoginUpdating || isLoginStartupChecking ? "opacity-50 cursor-not-allowed" : ""}`}
             >
               <span
                 aria-hidden="true"

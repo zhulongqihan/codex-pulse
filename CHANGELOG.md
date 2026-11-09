@@ -4,6 +4,19 @@ User-facing changes are grouped by release, following [Keep a Changelog](https:/
 
 ## [Unreleased]
 
+## [0.7.1] - 2026-11-09
+
+### Fixed / 修复
+
+- Recognize verified captionless Codex main windows after restore/maximize, while retaining package and overlay checks.
+- 恢复或最大化后可识别经验证的无系统标题栏 Codex 主窗，保留包身份与浮层过滤。
+- Prepare local plugin files from embedded templates, retain valid profile bindings and keep portable upgrades from overwriting prepared files with placeholders.
+- 从内嵌模板准备插件、保留有效 profile 绑定，避免便携升级用占位模板覆盖已准备文件。
+- Distinguish sign-in startup from corner following, expose checking/enabled/disabled/error states, and link to the existing startup switch.
+- 明确区分登录启动与右上角跟随，显示检查中／已开／未开／错误状态，并定位已有启动开关。
+
+[完整中英说明 / Full release notes](docs/releases/v0.7.1.md)
+
 ## [0.7.0] - 2026-11-09
 
 ### Added / 新增

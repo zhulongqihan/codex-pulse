@@ -11,6 +11,8 @@ Codex Pulse offers two entrypoints: a Windows corner companion and a local MCP s
 3. Click the status to open a card without an input box. See remaining quota, time until personal reset, consumption compared with time progress, and a daily/hourly reference allocation. New reset notices include their source.
 4. Press Esc, click outside, or use the close button to dismiss the card. Details opens the full Pulse workspace.
 
+Enable **Settings → General → Start Pulse at sign-in** to keep automatic following after a restart. The corner switch controls the companion display; it does not launch Pulse on its own. Sign-in startup keeps Pulse running in the tray. Captionless normal Codex windows are supported; minimization and switching to another app still hide the companion.
+
 The companion does not modify Codex installation files. It follows the client when moved or resized, and hides when another application is active, Codex is minimized, no supported client is found, or the window is too small. Settings explain why it is hidden. Corner following currently supports only the Microsoft Store edition of Codex for Windows, not Codex Web, macOS, or a regular CLI.
 
 ### What the pace means
@@ -38,7 +40,7 @@ The local MCP plugin works with a Codex desktop client supporting MCP Apps; see 
 3. Review the plugin details opened in Codex and choose **Install**. Complete any additional confirmation shown by the client.
 4. Open **Codex Pulse** from the Codex sidebar. A supported client also exposes a chat panel entry. If the client offers pinning, pin the entry to the sidebar.
 
-The add action creates a local plugin under `integrations/codex` in the Pulse application folder and opens the client plugin details. Codex performs the installation. No Node.js, API key, or additional background web service is required. The Settings action uses templates embedded in the executable, so it can prepare the plugin after an executable-only Pulse update as well.
+Starting with 0.7.1, normal startup and the Add action idempotently prepare `integrations/codex` from embedded templates. The portable archive no longer carries placeholder templates that could overwrite prepared files. Add also opens the client plugin details, where Codex performs installation. No Node.js, API key, or extra background web service is needed. Normal startup retains a valid existing data binding; explicitly adding again can change it.
 
 The panel shows today's tokens, estimated cost, and the remaining quota and reset time for each available quota window. Window durations are labeled using the data obtained by Pulse. It includes refresh, open Pulse dashboard, and open desktop widget buttons. Unavailable data is shown as missing or stale.
 

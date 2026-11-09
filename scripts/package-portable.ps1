@@ -22,14 +22,15 @@ Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'Start-Codex-Pulse.cmd') -Destin
 Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'Create-Codex-Pulse-Shortcuts.cmd') -Destination $staging -Force
 Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'Create-Codex-Pulse-Shortcuts.ps1') -Destination $staging -Force
 Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'install-codex-plugin.ps1') -Destination $staging -Force
-Copy-Item -LiteralPath (Join-Path $pulseRoot 'integrations') -Destination $staging -Recurse -Force
+# Templates are embedded in the executable. Do not ship them over an installed,
+# prepared marketplace; normal startup and the helper bind the actual location.
 Copy-Item -LiteralPath (Join-Path $pulseRoot 'LICENSE') -Destination $staging -Force
 Copy-Item -LiteralPath (Join-Path $pulseRoot 'THIRD_PARTY_LICENSES.txt') -Destination $staging -Force
 Copy-Item -LiteralPath (Join-Path $pulseRoot 'THIRD_PARTY_NOTICES.md') -Destination $staging -Force
 Copy-Item -LiteralPath (Join-Path $pulseRoot 'vendor/codex-usage-desktop/LICENSE') -Destination (Join-Path $staging 'LICENSE-Codex-Usage-Desktop.txt') -Force
 Copy-Item -LiteralPath (Join-Path $pulseRoot 'docs/PORTABLE.md') -Destination (Join-Path $staging 'README.txt') -Force
 $archive = Join-Path $release "CodexPulse-$version-windows-x64.zip"
-Compress-Archive -LiteralPath (Join-Path $staging 'CodexPulse.exe'),(Join-Path $staging 'Start-Codex-Pulse.cmd'),(Join-Path $staging 'Create-Codex-Pulse-Shortcuts.cmd'),(Join-Path $staging 'Create-Codex-Pulse-Shortcuts.ps1'),(Join-Path $staging 'install-codex-plugin.ps1'),(Join-Path $staging 'integrations'),(Join-Path $staging 'LICENSE'),(Join-Path $staging 'LICENSE-Codex-Usage-Desktop.txt'),(Join-Path $staging 'THIRD_PARTY_LICENSES.txt'),(Join-Path $staging 'THIRD_PARTY_NOTICES.md'),(Join-Path $staging 'README.txt') -DestinationPath $archive -Force
+Compress-Archive -LiteralPath (Join-Path $staging 'CodexPulse.exe'),(Join-Path $staging 'Start-Codex-Pulse.cmd'),(Join-Path $staging 'Create-Codex-Pulse-Shortcuts.cmd'),(Join-Path $staging 'Create-Codex-Pulse-Shortcuts.ps1'),(Join-Path $staging 'install-codex-plugin.ps1'),(Join-Path $staging 'LICENSE'),(Join-Path $staging 'LICENSE-Codex-Usage-Desktop.txt'),(Join-Path $staging 'THIRD_PARTY_LICENSES.txt'),(Join-Path $staging 'THIRD_PARTY_NOTICES.md'),(Join-Path $staging 'README.txt') -DestinationPath $archive -Force
 $updateBinary = Join-Path $release "CodexPulse-$version-windows-x64.exe"
 Copy-Item -LiteralPath $binary -Destination $updateBinary -Force
 foreach ($file in @($archive, $updateBinary)) {

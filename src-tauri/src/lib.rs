@@ -905,6 +905,9 @@ pub fn run() {
     if pulse_mcp::run_if_requested() {
         return;
     }
+    if pulse_integration::run_prepare_if_requested() {
+        return;
+    }
     let paths =
         pulse_desktop::prepare_paths().expect("Cannot prepare portable Codex Pulse data directory");
     let log_directory = paths.logs.clone();
@@ -994,6 +997,10 @@ pub fn run() {
                 Some(vec!["--hidden"]),
             ))?;
 
+            if let Err(error) = pulse_integration::prepare_registered_runtime(&paths.data) {
+                log::warn!("Cannot prepare the local Codex shortcut: {error}");
+            }
+
             let app_data_dir = paths.data.clone();
             pulse_pace::configure(&app_data_dir);
             pulse_coach::configure(&app_data_dir);
@@ -1019,6 +1026,8 @@ pub fn run() {
             let background_refresh_schedule = Arc::new(BackgroundRefreshSchedule::new());
             app.manage(background_refresh_schedule.clone());
 
+            let background_launch = std::env::args()
+                .any(|arg| arg == "--hidden" || arg == "--quit" || arg == "--show-widget");
             tauri::WebviewWindowBuilder::new(
                 app,
                 "main",
@@ -1028,10 +1037,8 @@ pub fn run() {
             .data_directory(paths.profile.clone())
             .inner_size(1440.0, 960.0)
             .min_inner_size(760.0, 540.0)
-            .visible(
-                !std::env::args()
-                    .any(|arg| arg == "--hidden" || arg == "--quit" || arg == "--show-widget"),
-            )
+            .visible(!background_launch)
+            .focused(!background_launch)
             .build()?;
             pulse_desktop::setup_widget(app, &paths, &preferences)?;
             pulse_titlebar::setup(app, &paths, preferences.titlebar_enabled)?;

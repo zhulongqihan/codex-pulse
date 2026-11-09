@@ -5,8 +5,9 @@ Codex Pulse for Windows x64
 
 将完整压缩包解压到可写目录，双击 Start-Codex-Pulse.cmd 或 CodexPulse.exe。
 需要桌面和开始菜单入口，可在程序内创建，或双击 Create-Codex-Pulse-Shortcuts.cmd；移动文件夹后重新创建。
-需要 Codex 客户端入口，在设置→常规中选择“添加到 Codex”，然后在客户端插件页安装并固定。需支持本地 MCP Apps 的桌面客户端；移动目录后重新添加。
+需要 Codex 客户端入口，在设置→通用中选择“添加到 Codex”，然后在客户端插件页安装并固定。需支持本地 MCP Apps 的桌面客户端；移动目录后重新添加。
 需要右上角无输入框节奏卡片，在设置中开启“Codex 右上角节奏提示”，保持 Pulse 运行并切到 Windows 商店版 Codex。切换其他程序时自动隐藏。
+需要重启电脑后自动运行，在设置→通用开启“登录时启动 Pulse”；只打开 Codex 不会启动已退出的 Pulse。0.7.1 起插件文件由程序内嵌准备，升级包不覆盖已有插件目录。
 节奏区间须积累至少 15 分钟的同账号、同窗口有效官方观测；采样默认约 60 秒只读查询，错误时冷却，不发模型请求。区间不保证工作时长；本机 Token 占比不等于个人额度占比。
 原有 MCP 侧栏页的输入框由 Codex 宿主管理，无法可靠隐藏；新右上角卡片没有输入框。
 需要 Windows 10/11 x64 和 Microsoft Edge WebView2 Evergreen Runtime。
@@ -26,6 +27,7 @@ Extract the complete archive into a writable folder. Run Start-Codex-Pulse.cmd o
 Create desktop and Start menu entries from the app, or run Create-Codex-Pulse-Shortcuts.cmd. Recreate them after moving the folder.
 For an entry inside Codex, choose Add to Codex in General settings, then install and pin it in the client. Requires a desktop client with local MCP Apps support; add it again after moving Pulse.
 For the corner card without an input box, enable the Codex corner pace indicator in settings, keep Pulse running, and switch to the Microsoft Store edition of Codex for Windows. It hides when another app is active.
+Enable Start Pulse at sign-in in General settings for automatic operation after a restart. Opening Codex alone does not launch a quit Pulse instance. From 0.7.1, plugin files are prepared from embedded templates; upgrades do not overwrite the prepared plugin folder.
 Pace ranges require at least 15 minutes of valid official observations for the same account and window. Sampling reads quota about every 60 seconds by default, with error cooldowns and no model requests. Ranges do not guarantee working time; local token shares are not shares of personal quota.
 The original MCP sidebar composer belongs to the Codex host and cannot be reliably hidden. The new corner card has no input box.
 Requires Windows 10/11 x64 and Microsoft Edge WebView2 Evergreen Runtime.

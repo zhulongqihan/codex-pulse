@@ -3399,7 +3399,7 @@ describe("App", () => {
     // Verify Display Settings card is rendered with "Show Logs Tab" toggle switch
     expect(screen.getByText("Language Settings")).toBeInTheDocument();
     expect(screen.getByText("Display Settings")).toBeInTheDocument();
-    expect(screen.getByText("Launch at Login")).toBeInTheDocument();
+    expect(screen.getByText("Start Pulse at sign-in")).toBeInTheDocument();
     const toggleSwitch = screen.getByRole("button", { name: "Toggle Logs Tab" });
     expect(toggleSwitch).toBeInTheDocument();
 

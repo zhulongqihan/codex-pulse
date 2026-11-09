@@ -19,7 +19,7 @@ const statusMessages: Record<Language, Record<DisplayReason, string>> = {
   de: { loading: "Anzeigestatus wird geprüft…", browser: "Die synthetische Demo verbindet sich nicht mit dem lokalen Codex-Client.", unavailable: "Anzeigestatus nicht verfügbar. Einstellungen erneut öffnen.", unsupported: "Dieses System unterstützt den Titelleistenbegleiter noch nicht.", disabled: "Der Titelleistenbegleiter ist ausgeschaltet.", no_codex_window: "Die Microsoft-Store-Version von Codex für Windows öffnen.", host_inactive: "Zum Codex-Fenster wechseln, um den Begleiter zu sehen.", window_too_small: "Das Codex-Fenster für den Begleiter vergrößern.", window_unavailable: "Begleiterfenster nicht verfügbar. Pulse neu starten.", ready: "Der Begleiter wird oben rechts in Codex angezeigt." },
 };
 
-export function PulsePaceSettings() {
+export function PulsePaceSettings({ onManageStartup, manageStartupDisabled = false }: { onManageStartup?: () => void; manageStartupDisabled?: boolean } = {}) {
   const { i18n } = useTranslation();
   const language = i18n.resolvedLanguage ?? i18n.language;
   const copy = (key: Parameters<typeof paceCopy>[1]) => paceCopy(language, key);
@@ -52,6 +52,7 @@ export function PulsePaceSettings() {
   return <Card><CardHeader><CardTitle className="flex items-center gap-2"><PulseBrandMark size={22}/>{copy("settingTitle")}</CardTitle><CardDescription>{copy("settingDescription")}</CardDescription></CardHeader><CardContent>
     <div className="flex items-center justify-between gap-5 border-t border-border pt-5"><div className="space-y-1"><p className="text-sm font-medium" id="pace-setting-label">{copy("settingLabel")}</p><p className="text-xs leading-relaxed text-muted-foreground" id="pace-setting-note">{copy("settingNote")}</p></div><button type="button" role="switch" aria-checked={preferences.titlebarEnabled} aria-labelledby="pace-setting-label" aria-describedby="pace-setting-note" onClick={() => void updatePulsePreferences({ titlebarEnabled: !preferences.titlebarEnabled })} className={`relative h-6 w-11 shrink-0 rounded-full border transition-colors focus-visible:ring-2 focus-visible:ring-ring ${preferences.titlebarEnabled ? "border-primary bg-primary" : "border-border bg-muted"}`} data-testid="titlebar-enabled"><span className={`absolute left-0.5 top-0.5 h-[18px] w-[18px] rounded-full bg-white shadow-sm transition-transform ${preferences.titlebarEnabled ? "translate-x-5" : "translate-x-0"}`} aria-hidden="true"/></button></div>
     <p role="status" className="mt-3 text-xs leading-relaxed text-muted-foreground" data-testid="titlebar-display-status">{statusMessages[getLanguage(language)][statusReason]}</p>
+    {onManageStartup ? <button type="button" disabled={manageStartupDisabled} onClick={onManageStartup} className="mt-3 text-xs font-medium text-primary underline underline-offset-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 disabled:cursor-wait disabled:opacity-50">{copy("manageStartup")}</button> : null}
     {error ? <p role="alert" className="mt-3 text-sm text-error">{copy("saveFailed")}</p> : null}
   </CardContent></Card>;
 }

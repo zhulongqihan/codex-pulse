@@ -15,6 +15,9 @@ const nativeCandidates = [
   process.env.CARGO_TARGET_DIR && join(process.env.CARGO_TARGET_DIR, 'release/codex-pulse.exe'),
 ].filter(Boolean);
 const native = nativeCandidates.find(file => existsSync(file));
+const nativeVersion = native && windows ? spawnSync(powershell, ['-NoProfile','-NonInteractive','-Command', `[Diagnostics.FileVersionInfo]::GetVersionInfo([Text.Encoding]::UTF8.GetString([Convert]::FromBase64String('${Buffer.from(native).toString('base64')}'))).ProductVersion`], { encoding:'utf8',windowsHide:true,timeout:15000 }).stdout?.trim() : '';
+const versionParts = (nativeVersion || '').split('.').map(Number);
+const supportsEmbedded = /^\d+\.\d+\.\d+$/.test(nativeVersion || '') && (versionParts[0] > 0 || versionParts[1] > 7 || versionParts[1] === 7 && versionParts[2] >= 1);
 const cli = windows ? spawnSync(powershell, ['-NoProfile','-NonInteractive','-Command','(Get-Command codex -ErrorAction SilentlyContinue | Select-Object -First 1).Source'], { encoding:'utf8', windowsHide:true }).stdout?.trim() : '';
 
 function json(path) { return JSON.parse(readFileSync(path, 'utf8').replace(/^\uFEFF/, '')); }
@@ -100,7 +103,11 @@ test('manual preparation binds the selected Pulse data folder without creating i
   assert.equal(existsSync(environment), false);
   const defaultResult = success(run(args, { env:{...process.env,PULSE_DATA_DIR:''} }));
   assert.equal(manifest(defaultResult).env.PULSE_DATA_DIR, join(app, 'data'));
-  const before = readFileSync(join(defaultResult.pluginRoot, 'mcp.json'));
+  const trailing = join(directory,"data with spaces and 'quote") + '\\';
+  const trailingResult = success(run([...args,'-DataDirectory',trailing]));
+  assert.equal(manifest(trailingResult).env.PULSE_DATA_DIR,trailing,'Windows native invocation must preserve a quoted trailing backslash');
+  assert.equal(existsSync(trailing),false);
+  const before = readFileSync(join(trailingResult.pluginRoot, 'mcp.json'));
   for (const invalid of ['relative-data', 'F:drive-relative-data']) {
     assert.notEqual(run([...args,'-DataDirectory',invalid]).status, 0);
     assert.deepEqual(readFileSync(join(defaultResult.pluginRoot, 'mcp.json')), before);
@@ -139,6 +146,57 @@ test('the shipped helper works beside the executable and its templates without a
   assert.equal(result.opened,false);
   assert.equal(json(join(result.pluginRoot,'mcp.json')).mcpServers['codex-pulse'].command,basename(executable));
   assert.equal(json(join(result.pluginRoot,'mcp.json')).mcpServers['codex-pulse'].env.PATH,app + (process.env.PATH ? ';' + process.env.PATH : ''));
+});
+
+test('preparation repairs copied source placeholders and refreshes version/data binding without changing user data', { skip:!windows || !native }, t => {
+  const { directory, app } = fixture(t);
+  const args = ['-AppDirectory',app,'-PrepareOnly','-Json'];
+  const first = success(run(args));
+  const marker = join(first.pluginRoot,'keep-user-file.txt');
+  writeFileSync(marker,'unknown files stay');
+  const selected = join(directory,'selected data'); mkdirSync(selected);
+  writeFileSync(join(selected,'preserve.txt'),'user data remains byte-exact');
+  copyFileSync(join(templates,'plugins/codex-pulse/mcp.json'),join(first.pluginRoot,'mcp.json'));
+  copyFileSync(join(templates,'plugins/codex-pulse/plugin.json'),join(first.pluginRoot,'plugin.json'));
+  const result = success(run([...args,'-DataDirectory',selected]));
+  assert.equal(json(join(result.pluginRoot,'plugin.json')).version,result.version);
+  const mcp = json(join(result.pluginRoot,'mcp.json'));
+  assert(!JSON.stringify(mcp).includes('__PULSE_'));
+  assert.equal(mcp.mcpServers['codex-pulse'].env.PULSE_DATA_DIR,selected);
+  assert.equal(readFileSync(marker,'utf8'),'unknown files stay');
+  assert.equal(readFileSync(join(selected,'preserve.txt'),'utf8'),'user data remains byte-exact');
+});
+
+test('new binaries prepare from embedded templates when no external integration templates exist', { skip:!windows || !native || !supportsEmbedded }, t => {
+  const { app } = fixture(t);
+  const shippedHelper = join(app,'install-codex-plugin.ps1');
+  copyFileSync(helper,shippedHelper);
+  assert.equal(existsSync(join(app,'integrations')),false);
+  const result = success(spawnSync(powershell,['-NoProfile','-NonInteractive','-ExecutionPolicy','Bypass','-File',shippedHelper,'-PrepareOnly','-Json'],{cwd:app,encoding:'utf8',windowsHide:true,timeout:30000}));
+  assert.equal(result.preparation,'embedded');
+  assert.equal(json(join(result.pluginRoot,'plugin.json')).version,result.version);
+  assert(!readFileSync(join(result.pluginRoot,'mcp.json'),'utf8').includes('__PULSE_'));
+  assert.equal(existsSync(join(app,'data')),false,'Headless preparation must not initialize data or a WebView profile');
+});
+
+test('an explicit new-binary headless failure never falls back to legacy templates', { skip:!windows }, t => {
+  const { app,executable } = fixture(t);
+  if(existsSync(executable)) rmSync(executable);
+  const compiler = join(process.env.WINDIR || 'C:/Windows','Microsoft.NET/Framework/v4.0.30319/csc.exe');
+  assert(existsSync(compiler),'Windows .NET compiler is required for the isolated failure fixture');
+  const code = join(app,'HeadlessFailure.cs');
+  writeFileSync(code,`using System;using System.IO;using System.Reflection;
+[assembly:AssemblyVersion("0.7.1.0")][assembly:AssemblyFileVersion("0.7.1.0")][assembly:AssemblyInformationalVersion("0.7.1")]
+class HeadlessFailure { static int Main(string[] args) { File.WriteAllLines(Path.Combine(AppDomain.CurrentDomain.BaseDirectory,"headless-arguments.txt"),args);return 19;} }`);
+  const compiled = spawnSync(compiler,['/nologo','/target:exe',`/out:${executable}`,code],{encoding:'utf8',windowsHide:true,timeout:30000});
+  assert.equal(compiled.status,0,compiled.stderr||compiled.stdout);
+  const result = run(['-AppDirectory',app,'-PrepareOnly','-Json']);
+  assert.notEqual(result.status,0);
+  assert.match(result.stderr,/No legacy template fallback/);
+  const args = readFileSync(join(app,'headless-arguments.txt'),'utf8');
+  assert.match(args,/--prepare-codex-integration/);assert.match(args,/--data-directory/);
+  assert.equal(existsSync(join(app,'integrations')),false,'A failed native prepare must not silently use source templates');
+  assert.equal(existsSync(join(app,'data')),false);
 });
 
 test('missing executable, relative directory, and semicolon directory fail before creating integration files', { skip:!windows }, t => {
