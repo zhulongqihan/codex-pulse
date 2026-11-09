@@ -1,6 +1,6 @@
 import { createTauriCapabilities } from '@wdio/tauri-service';
 import { browser } from '@wdio/globals';
-import { mkdirSync, writeFileSync } from 'node:fs';
+import { mkdirSync, renameSync, unlinkSync, writeFileSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import { resolve, join } from 'node:path';
@@ -42,8 +42,33 @@ export const config: WebdriverIO.Config = {
     await browser.execute(() => localStorage.setItem('language', 'zh'));
     await browser.refresh();
   },
-  onComplete() {
+  async onComplete() {
     // Only this owned fixture reads this directory; no global process termination.
-    writeFileSync(join(process.env.PULSE_TITLEBAR_CONTROL_DIR!, 'command.json'), JSON.stringify({ id: randomUUID(), action: 'stop' }));
+    const directory = process.env.PULSE_TITLEBAR_CONTROL_DIR;
+    if (!directory) throw new Error('The owned titlebar fixture directory is missing');
+    const id = randomUUID();
+    const temporary = join(directory, `command-stop-${id}.tmp`);
+    const command = join(directory, 'command.json');
+    const deadline = Date.now() + 3000;
+    let created = false;
+    try {
+      writeFileSync(temporary, JSON.stringify({ id, action: 'stop' }), { flag: 'wx' });
+      created = true;
+      for (;;) {
+        try { renameSync(temporary, command); return; }
+        catch (error) {
+          const code = error && typeof error === 'object' && 'code' in error ? error.code : undefined;
+          if (process.platform !== 'win32' || typeof code !== 'string' || !['EBUSY', 'EPERM', 'EACCES'].includes(code) || Date.now() >= deadline) throw error;
+          await new Promise(resolve => setTimeout(resolve, Math.min(25, Math.max(1, deadline - Date.now()))));
+        }
+      }
+    } finally {
+      if (created) {
+        try { unlinkSync(temporary); }
+        catch (error) {
+          if (!(error && typeof error === 'object' && 'code' in error && error.code === 'ENOENT')) throw error;
+        }
+      }
+    }
   },
 };
