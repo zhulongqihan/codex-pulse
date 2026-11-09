@@ -59,6 +59,25 @@ jobs:
         run: pnpm exec tauri build --debug --no-bundle --features e2e --config src-tauri/tauri.e2e.conf.json
       - name: Verify native windows using synthetic sources
         run: pnpm exec wdio run ./wdio.pulse.conf.ts
+      - name: Show synthetic native diagnostics on failure
+        if: failure()
+        run: |
+          $nativeOutput = Join-Path $env:GITHUB_WORKSPACE '.local/native-parity'
+          if (Test-Path -LiteralPath $nativeOutput) {
+            Get-ChildItem -LiteralPath $nativeOutput -File -Filter '*.log' -Recurse | ForEach-Object {
+              Write-Output "::group::Native log: $($_.Name)"
+              Get-Content -LiteralPath $_.FullName -Tail 250
+              Write-Output '::endgroup::'
+            }
+            foreach ($name in @('native-titlebar-evidence.json', 'native-parity-evidence.json')) {
+              $evidence = Join-Path $nativeOutput $name
+              if (Test-Path -LiteralPath $evidence) {
+                Write-Output "::group::Synthetic native evidence: $name"
+                Get-Content -LiteralPath $evidence -Raw
+                Write-Output '::endgroup::'
+              }
+            }
+          }
       - name: Verify the shipped Codex installer against the built executable
         run: |
           $env:CODEX_PULSE_TEST_EXE = Join-Path $env:CARGO_TARGET_DIR 'debug/codex-pulse.exe'
