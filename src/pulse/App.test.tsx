@@ -202,18 +202,23 @@ function mockLoadedDashboard() {
 }
 
 describe("App", () => {
-  it("opens account details from the native pace card while leaving settings", async () => {
+  it.each(["sessions", "settings"])("opens account details after the native pace card leaves %s", async source => {
     mockLoadedDashboard();
+    setPageActive(true);
     render(<App />);
     await screen.findByTestId("dashboard-hero");
-    await userEvent.click(screen.getByRole("button", { name: "Settings" }));
-    expect(screen.getByRole("tab", { name: "Appearance" })).toBeVisible();
+    await userEvent.click(screen.getByTestId(`${source}-nav-tab`));
+    if (source === "settings") expect(screen.getByRole("tab", { name: "Appearance" })).toBeVisible();
+    vi.spyOn(document, "hasFocus").mockReturnValue(false);
     await act(async () => {
       for (const callback of eventListeners.get("pulse-show-pace-details") ?? []) callback({ payload: null });
     });
     await waitFor(() => expect(screen.queryByRole("tab", { name: "Appearance" })).not.toBeInTheDocument());
     expect(screen.getByTestId("dashboard-hero")).toBeVisible();
     expect(document.getElementById("pulse-account-details")).toBeInTheDocument();
+    expect(document.activeElement).not.toBe(document.getElementById("pulse-account-details"));
+    setPageActive(true);
+    fireEvent.focus(window);
     await waitFor(() => expect(document.activeElement).toBe(document.getElementById("pulse-account-details")));
   });
   afterEach(() => {

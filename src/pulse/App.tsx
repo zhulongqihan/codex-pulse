@@ -175,11 +175,24 @@ export default function App() {
     handleTrayCountdownUnitChange,
   } = useUsageDashboard();
 
-  const focusAccountDetails = () => requestAnimationFrame(() => {
-    const target = document.getElementById("pulse-account-details");
-    target?.scrollIntoView({ block: "start", behavior: "auto" });
-    target?.focus({ preventScroll: true });
-  });
+  const [paceDetailsRequested, setPaceDetailsRequested] = useState(false);
+  useEffect(() => {
+    if (!paceDetailsRequested || view !== "dashboard") return;
+    let frame = 0;
+    const focusDetails = () => {
+      cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(() => {
+        const target = document.getElementById("pulse-account-details");
+        if (!target || !document.hasFocus()) return;
+        target.scrollIntoView({ block: "start", behavior: "auto" });
+        target.focus({ preventScroll: true });
+        if (document.activeElement === target) setPaceDetailsRequested(false);
+      });
+    };
+    window.addEventListener("focus", focusDetails);
+    focusDetails();
+    return () => { cancelAnimationFrame(frame); window.removeEventListener("focus", focusDetails); };
+  }, [paceDetailsRequested, view]);
   const paceDetails = useRef<() => void>(() => {});
   paceDetails.current = () => {
     setSelectedProjectForModal(null);
@@ -188,8 +201,8 @@ export default function App() {
     setAccountDrawerOpen(false);
     setAccountExpanded(true);
     savedScroll.current = 0;
+    setPaceDetailsRequested(true);
     void handleViewChange("dashboard");
-    focusAccountDetails();
   };
   useEffect(() => {
     let disposed = false;
