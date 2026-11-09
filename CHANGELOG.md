@@ -17,6 +17,10 @@ User-facing changes are grouped by release, following [Keep a Changelog](https:/
 
 ### Fixed / 修复
 
+- Give recent depletion risk priority over long-task advice, retain the full-cycle comparison baseline, and replace a clamped zero-to-zero projection with a clear conditional warning.
+- 近期可能提前用尽时优先提醒风险，保留整轮比较基线，并把零到零的预测改为明确条件提示。
+- Keep the compact widget at its intended client size under Windows high DPI; keep public demo scenes, gallery identity and screenshots consistent.
+- 高 DPI 下折叠浮窗保持设计尺寸，公开演示场景、图库图标和截图同步。
 - Adapt weekly quota observations to slow, integer-percentage changes instead of requiring a measurable change in every fifteen-minute slice. Flat, stale and interrupted observations still do not produce a time estimate.
 - 周额度采样适配较慢的整数百分比变化，不再机械要求每个十五分钟片段都能分辨消耗；持续不变、陈旧和中断的观测仍不生成预测。
 - Keep conservative time bounds near exhaustion when the service does not specify how integer quota percentages are rounded.

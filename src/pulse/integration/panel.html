@@ -28,6 +28,8 @@
   };
   Object.assign(strings.zh,{heading:'额度与时间，一起看',intro:'查看本轮余量、距重置时间与明确的配速参考。',coachTitle:'本轮配速',coachRemaining:'额度还剩',coachLast:'最近额度读数',coachResetIn:'距重置',paceNote:'时间进度按官方窗口时长与给定重置时刻推算，仅对应当前窗口，其他限制仍可能生效。参考分配是当前余量均摊，并非每日新增额度。',official:'各窗口最近读数',coachRoomy:'从容用 · 可优先安排计划中的长任务',coachBalanced:'配速均衡 · 按计划推进，继续留意余量',coachFast:'用量偏快 · 注意后续用量，给后半程留些余量',coachUnavailable:'额度信息不足 · 需要可靠读数与重置时间',coachStale:'读数待刷新 · 保留最近读数，暂不给出配速建议',coachFailed:'刷新失败 · 可重试只读刷新，暂不给出配速建议',coachExhausted:'当前窗口额度已用尽',coachExpired:'已到给定重置时间 · 等待新读数，不自动补为满额',coachUsed:'额度已用',coachElapsed:'周期时间已过',coachDay:'日均参考分配',coachHour:'每小时参考分配',coachApprox:'约',coachPerDay:'个百分点／天',coachPerHour:'个百分点／小时',coachDays:'天',coachHours:'小时',coachMinutes:'分钟'});
   Object.assign(strings.en,{heading:'Quota and time, together',intro:'See the remaining quota, time until reset, and a clear pace reference.',coachTitle:'Cycle pace',coachRemaining:'Quota remaining',coachLast:'Last quota reading',coachResetIn:'Until reset',paceNote:'Time progress is inferred from the official window duration and given reset time. Applies to this window; other limits may apply. The reference spreads the current remainder, not a daily refill.',official:'Latest readings by window',coachRoomy:'Roomy pace · Consider longer tasks already in your plan',coachBalanced:'On pace · Follow your plan and watch the remaining quota',coachFast:'Pace is high · Watch upcoming usage and keep some quota for later',coachUnavailable:'Quota data unavailable · A reliable reading and reset time are needed',coachStale:'Refresh needed · Last reading shown without a pace recommendation',coachFailed:'Could not refresh · Retry the read-only refresh; no current recommendation',coachExhausted:'Window quota exhausted',coachExpired:'Reset time reached · Await a new reading; no refill assumed',coachUsed:'Quota used',coachElapsed:'Window time elapsed',coachDay:'Daily reference allocation',coachHour:'Hourly reference allocation',coachApprox:'About',coachPerDay:'percentage points / day',coachPerHour:'percentage points / hour',coachDays:'d',coachHours:'h',coachMinutes:'m'});
+  strings.zh.coachRecentFast='近期消耗加快 · 持续此节奏可能在重置前用尽';
+  strings.en.coachRecentFast='Recent usage is high · Continuing this pace may exhaust quota before reset';
   let locale = /^zh\b/i.test(navigator.language) ? 'zh' : 'en';
   let connected=false, nextId=1, snapshot=null, loading=false, readFailed=false;
   const pending=new Map(), $=id=>document.getElementById(id), t=key=>strings[locale][key];
@@ -54,12 +56,14 @@
     let state=readFailed||pace?.refreshFailed===true?'failed':expiredOnly?'expired':!fresh?(known?'stale':'unavailable'):!chosen?(windows.some(window=>window.state==='stale')?'stale':'unavailable'):chosen.remaining===0?'exhausted':windows.some(window=>window.state==='stale'&&valid(window.remainingPercent))?'stale':'ready';
     const remaining=state==='expired'?null:chosen?.remaining??(known?known.remainingPercent:null),reset=chosen?.reset??at(window?.resetsAt);
     const tone=state==='ready'?100-chosen.remaining-(100-chosen.timeLeft)>5?'fast':100-chosen.remaining-(100-chosen.timeLeft)<-5?'roomy':'balanced':null;
-    const card=document.querySelector('.pace');card.dataset.state=state;card.dataset.tone=tone??'';
+    const recent=chosen?.window;
+    const recentRisk=state==='ready'&&tone!=='fast'&&recent?.state==='forecast'&&valid(recent.sampleCount)&&recent.sampleCount>=4&&valid(recent.sampleSpanMinutes)&&recent.sampleSpanMinutes>=15&&valid(recent.rateLowerPerHour)&&recent.rateLowerPerHour>0&&valid(recent.rateUpperPerHour)&&recent.rateUpperPerHour>=recent.rateLowerPerHour&&freshAt(recent.trend?.at(-1)?.at,now)&&chosen.remaining-recent.rateLowerPerHour*chosen.minutes/60<1;
+    const card=document.querySelector('.pace');card.dataset.state=state;card.dataset.tone=recentRisk?'fast':tone??'';
     $('coach-window').textContent=window?`${t('coachTitle')} · ${windowName(window,window.kind)}`:t('coachTitle');
     $('coach-quota-label').textContent=['stale','failed'].includes(state)?t('coachLast'):t('coachRemaining');
     $('pace-reading').textContent=remaining==null?'—':`${new Intl.NumberFormat(locale,{maximumFractionDigits:2}).format(remaining)}%`;
     $('coach-time').textContent=Number.isFinite(reset)&&reset>now?countdown((reset-now)/60000):'—';
-    $('pace-risk').textContent=t(tone?({roomy:'coachRoomy',balanced:'coachBalanced',fast:'coachFast'})[tone]:({unavailable:'coachUnavailable',stale:'coachStale',failed:'coachFailed',exhausted:'coachExhausted',expired:'coachExpired'})[state]);
+    $('pace-risk').textContent=recentRisk?t('coachRecentFast'):t(tone?({roomy:'coachRoomy',balanced:'coachBalanced',fast:'coachFast'})[tone]:({unavailable:'coachUnavailable',stale:'coachStale',failed:'coachFailed',exhausted:'coachExhausted',expired:'coachExpired'})[state]);
     $('coach-comparison').hidden=state!=='ready';$('coach-reference').hidden=state!=='ready';
     if(state==='ready'){
       const n=value=>new Intl.NumberFormat(locale,{maximumFractionDigits:0}).format(value),unit=chosen.window.windowMinutes>=1440?'day':'hour',points=chosen.remaining/(chosen.minutes/(unit==='day'?1440:60));

@@ -20,6 +20,11 @@ function cycle(remaining = 80): PaceSnapshot {
 }
 const notice = (): PaceResetNotice => ({ id: "synthetic-notice", summary: "Synthetic maintenance under review", sourceUrl: "https://example.org/notice", sourceLabel: "Example third-party feed", startAt: iso(60), endAt: iso(120), publishedAt: iso(-10), updatedAt: iso(-1), isUnread: true, verification: "third_party", scope: "global" });
 function withNotice(data = cycle()) { data.coachExtras = { dailyObservations: [], resetNotice: notice() }; return data; }
+function recentDepletion(remaining = 77): PaceSnapshot {
+  const data = cycle(remaining);
+  Object.assign(data.windows[1], { state: "forecast", resetsAt: iso(10080 * 0.71), sampleCount: 7, sampleSpanMinutes: 30, rateLowerPerHour: 2, rateUpperPerHour: 3, trend: [{ at: iso(0), remainingPercent: remaining }] });
+  return data;
+}
 
 describe("shared cycle pace card", () => {
   it.each(["en", "zh", "zh-Hant", "ja", "ko", "de"])("renders both approved states with the same time and full comparison in %s", async language => {
@@ -46,6 +51,52 @@ describe("shared cycle pace card", () => {
     expect(screen.getByText(quotaCoachCopy("en", "roomyLabel"))).toBeVisible();
     expect(screen.queryByText("343,000,000")).not.toBeInTheDocument();
     expect(screen.queryByText(paceCopy("en", "sessionMissing"))).not.toBeInTheDocument();
+  });
+
+  it.each(["en", "zh", "zh-Hant", "ja", "ko", "de"])("keeps the cycle baseline but warns about fresh recent depletion in %s", async language => {
+    await i18n.changeLanguage(language);
+    const data = recentDepletion();
+    const { rerender } = render(<><PulsePaceCard data={data} {...actions()}/><PulsePaceBadgeView data={data} onToggle={vi.fn()}/></>);
+    expect(screen.getByTestId("coach-remaining")).toHaveTextContent("77%");
+    expect(screen.getByTestId("coach-comparison")).toHaveTextContent(quotaCoachCopy(language, "comparison", { used: 23, elapsed: 29 }));
+    expect(screen.getByTestId("pace-popover")).toHaveClass("tone-roomy", "has-recent-depletion");
+    expect(screen.getByTestId("pace-popover")).not.toHaveClass("tone-fast");
+    expect(screen.getByText(quotaCoachCopy(language, "recentRiskAdvice"))).toBeVisible();
+    expect(screen.getByText(quotaCoachCopy(language, "projectedDepletion"))).toBeVisible();
+    expect(screen.queryByText(quotaCoachCopy(language, "roomyAdvice"))).not.toBeInTheDocument();
+    expect(screen.getByTestId("pace-popover")).not.toHaveTextContent("0–0%");
+    expect(screen.getByTestId("pace-badge")).toHaveTextContent(quotaCoachCopy(language, "recentRisk"));
+    rerender(<PulsePaceCard data={data} variant="compact" {...actions()}/>);
+    expect(screen.getByTestId("pace-popover")).toHaveClass("has-recent-depletion");
+    expect(screen.getByText(quotaCoachCopy(language, "recentRisk"))).toBeVisible();
+  });
+
+  it("also warns for a balanced cycle, then restores ordinary guidance when the forecast is unavailable", () => {
+    const data = recentDepletion(71);
+    const { rerender } = render(<PulsePaceCard data={data} {...actions()}/>);
+    expect(screen.getByTestId("pace-popover")).toHaveClass("tone-balanced", "has-recent-depletion");
+    expect(screen.getByText(quotaCoachCopy("en", "recentRiskAdvice"))).toBeVisible();
+    data.windows[1].state = "idle";
+    rerender(<PulsePaceCard data={data} {...actions()}/>);
+    expect(screen.getByTestId("pace-popover")).not.toHaveClass("has-recent-depletion");
+    expect(screen.getByText(quotaCoachCopy("en", "balancedAdvice"))).toBeVisible();
+    expect(screen.queryByText(quotaCoachCopy("en", "projectedDepletion"))).not.toBeInTheDocument();
+  });
+
+  it("keeps stale/failure and an unread notice ahead of the recent-pace label", () => {
+    const data = withNotice(recentDepletion());
+    const { rerender } = render(<><PulsePaceCard data={data} {...actions()}/><PulsePaceBadgeView data={data} onToggle={vi.fn()}/></>);
+    expect(screen.getByTestId("pace-badge")).toHaveTextContent("Reset notice");
+    expect(screen.getByText(quotaCoachCopy("en", "recentRiskAdvice"))).toBeVisible();
+    data.updatedAt = iso(-7);
+    rerender(<><PulsePaceCard data={data} {...actions()}/><PulsePaceBadgeView data={data} onToggle={vi.fn()}/></>);
+    expect(screen.getByRole("status")).toHaveTextContent(quotaCoachCopy("en", "stale"));
+    expect(screen.queryByText(quotaCoachCopy("en", "recentRiskAdvice"))).not.toBeInTheDocument();
+    expect(screen.getByTestId("pace-popover")).not.toHaveClass("has-recent-depletion");
+    data.updatedAt = iso(0);
+    rerender(<PulsePaceCard data={data} failed {...actions()}/>);
+    expect(screen.getByRole("status")).toHaveTextContent(quotaCoachCopy("en", "failed"));
+    expect(screen.queryByText(quotaCoachCopy("en", "recentRiskAdvice"))).not.toBeInTheDocument();
   });
 
   it.each(["failed", "stale", "exhausted", "expired", "unavailable"] as const)("keeps %s ahead of reassuring pace guidance", status => {

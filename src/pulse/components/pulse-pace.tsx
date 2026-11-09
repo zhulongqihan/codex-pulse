@@ -13,6 +13,7 @@ type Copy = (key: QuotaCoachCopyKey, values?: Record<string, string | number>) =
 const demo = () => new URLSearchParams(location.search).get("demo") === "1";
 const readingTime = (value: string | null | undefined, language: string) => value && Number.isFinite(Date.parse(value)) ? new Date(value).toLocaleTimeString(language, { hour: "2-digit", minute: "2-digit", hour12: false }) : "—";
 const number = (value: number | null, language: string, digits = 0) => value == null ? "—" : formatCoachNumber(value, language, digits);
+const recentDepletionRisk = (coach: QuotaPaceCoach) => coach.status === "ready" && (coach.tone === "roomy" || coach.tone === "balanced") && coach.remainingAtReset != null && coach.remainingAtReset.upperPercent < 1;
 
 export function PulsePaceBadgeView({ data, failed = false, onToggle }: { data: PaceSnapshot | null; failed?: boolean; onToggle: () => void }) {
   const { i18n } = useTranslation();
@@ -20,11 +21,12 @@ export function PulsePaceBadgeView({ data, failed = false, onToggle }: { data: P
   const coach = quotaCoachFromSnapshot(data, Date.now(), failed);
   const copy: Copy = (key, values) => quotaCoachCopy(language, key, values);
   const notice = coach.resetNotice?.isUnread ? coach.resetNotice : null;
-  const fullLabel = notice && coach.status === "ready" ? copy("notice") : copy(coach.status === "ready" ? coach.tone! : coach.status);
+  const recentRisk = recentDepletionRisk(coach);
+  const fullLabel = notice && coach.status === "ready" ? copy("notice") : copy(coach.status === "ready" ? recentRisk ? "recentRisk" : coach.tone! : coach.status);
   const label = coach.status === "ready" ? fullLabel : quotaCoachBadgeCopy(language, coach.status);
   const synthetic = demo() ? `${paceCopy(language, "demo")} · ` : "";
   const meaning = `${synthetic}${fullLabel}${notice && coach.status !== "ready" ? ` · ${copy("notice")}` : ""} · ${formatCoachWindow(coach.window, language)} · ${copy("scope")}`;
-  return <button type="button" className={`pulse-pace-badge coach-${coach.status} tone-${coach.tone ?? "neutral"}${notice ? " has-reset-notice" : ""}`} aria-label={meaning} title={notice ? `${meaning} · ${copy("noticeClass")} · ${copy("source", { source: notice.sourceLabel })}` : meaning} onClick={onToggle} data-testid="pace-badge">
+  return <button type="button" className={`pulse-pace-badge coach-${coach.status} tone-${coach.tone ?? "neutral"}${recentRisk ? " has-recent-depletion" : ""}${notice ? " has-reset-notice" : ""}`} aria-label={meaning} title={notice ? `${meaning} · ${copy("noticeClass")} · ${copy("source", { source: notice.sourceLabel })}` : meaning} onClick={onToggle} data-testid="pace-badge">
     {notice ? <Bell size={16} aria-hidden="true"/> : <PulseBrandMark size={20}/>}<span>{label}</span>
   </button>;
 }
@@ -85,18 +87,19 @@ export function PulsePaceCard({ data, failed = false, refreshing = false, onRefr
   const notice = coach.resetNotice;
   const reference = coach.reference;
   const remainingRange = coach.remainingAtReset;
-  return <section className={`pulse-pace-card quota-coach-card variant-${variant} coach-${status} tone-${tone ?? "neutral"}`} aria-label={copy("title")} data-testid="pace-popover">
+  const recentRisk = recentDepletionRisk(coach);
+  return <section className={`pulse-pace-card quota-coach-card variant-${variant} coach-${status} tone-${tone ?? "neutral"}${recentRisk ? " has-recent-depletion" : ""}`} aria-label={copy("title")} data-testid="pace-popover">
     {variant === "popover" || variant === "workspace" ? <header className="pulse-pace-header"><div><PulseBrandMark size={25}/><h2>{copy("title")}</h2><span className="coach-window-tag" title={`${formatCoachWindow(coach.window, language)} · ${copy("scope")}`}>{formatCoachWindow(coach.window, language)}</span>{synthetic ? <span className="pulse-pace-demo-label">{paceCopy(language, "demo")}</span> : null}</div>{variant === "popover" && onClose ? <button ref={closeButton} type="button" onClick={onClose} aria-label={paceCopy(language, "close")} title={paceCopy(language, "close")}><X size={17}/></button> : null}</header> : null}
     <div className="pulse-pace-scroll coach-body">
       {notice && !compact ? <NoticeBanner notice={notice} language={language} copy={copy} onRead={onMarkNoticeRead} pending={noticePending} failed={noticeFailed}/> : null}
       <div className="coach-core">
         <CoachReadings coach={coach} language={language} copy={copy}/>
-        {status === "ready" && tone ? <div className="coach-judgment"><span className="coach-tone-label">{copy(compact ? tone : `${tone}Label`)}</span>{compact ? <><span className="coach-compact-window">{formatCoachWindow(coach.window, language)}</span>{notice?.isUnread ? <span className="coach-compact-notice"><Bell size={12} aria-hidden="true"/>{copy("notice")}</span> : null}</> : <><p className="coach-advice">{copy(`${tone}Advice`)}</p><p className="coach-comparison" data-testid="coach-comparison" title={copy("timeBasis")}>{copy("comparison", { used: number(coach.usedPercent, language), elapsed: number(coach.elapsedPercent, language) })}</p></>}</div> : <div className="coach-state" role="status"><strong>{copy(errorStatus)}</strong>{!compact ? <p>{copy(`${errorStatus}Detail`)}</p> : null}</div>}
+        {status === "ready" && tone ? <div className="coach-judgment"><span className="coach-tone-label">{copy(recentRisk ? compact ? "recentRisk" : "recentRiskLabel" : compact ? tone : `${tone}Label`)}</span>{compact ? <><span className="coach-compact-window">{formatCoachWindow(coach.window, language)}</span>{notice?.isUnread ? <span className="coach-compact-notice"><Bell size={12} aria-hidden="true"/>{copy("notice")}</span> : null}</> : <><p className="coach-advice">{copy(recentRisk ? "recentRiskAdvice" : `${tone}Advice`)}</p><p className="coach-comparison" data-testid="coach-comparison" title={copy("timeBasis")}>{copy("comparison", { used: number(coach.usedPercent, language), elapsed: number(coach.elapsedPercent, language) })}</p></>}</div> : <div className="coach-state" role="status"><strong>{copy(errorStatus)}</strong>{!compact ? <p>{copy(`${errorStatus}Detail`)}</p> : null}</div>}
       </div>
       {!compact ? <>
         {reference && status === "ready" ? <section className="coach-reference" aria-label={copy(reference.unit === "day" ? "dayReference" : "hourReference")}><h3>{copy(reference.unit === "day" ? "dayReference" : "hourReference")}</h3><strong data-testid="coach-reference">{copy(reference.unit === "day" ? "perDay" : "perHour", { points: number(reference.percentPoints, language, reference.percentPoints < 1 ? 1 : 0) })}</strong><p>{copy("referenceNote")}</p></section> : null}
-        {coach.nearResetWithSurplus ? <p className="coach-surplus-note">{copy("nearReset")}</p> : null}
-        {remainingRange ? <section className="coach-projection"><p>{copy("projected", { lower: number(Math.floor(remainingRange.lowerPercent), language), upper: number(Math.ceil(remainingRange.upperPercent), language) })}</p><p>{copy("projectionNote")}</p></section> : null}
+        {coach.nearResetWithSurplus && !recentRisk ? <p className="coach-surplus-note">{copy("nearReset")}</p> : null}
+        {remainingRange ? <section className="coach-projection"><p>{remainingRange.upperPercent < 1 ? copy("projectedDepletion") : copy("projected", { lower: number(Math.floor(remainingRange.lowerPercent), language), upper: number(Math.ceil(remainingRange.upperPercent), language) })}</p><p>{copy("projectionNote")}</p></section> : null}
         {coach.dailyObservations.length ? <details className="coach-daily"><summary>{copy("observations")}</summary><p>{copy("dailyNote")}</p><ul>{coach.dailyObservations.map(row => <li key={row.date}><time dateTime={row.date}>{new Intl.DateTimeFormat(language, { month: "numeric", day: "numeric", timeZone: "UTC" }).format(Date.parse(`${row.date}T00:00:00Z`))}</time><strong>{row.consumedPercentPoints == null ? copy("unobserved") : `${number(row.consumedPercentPoints, language, 2)} pp`}</strong><span>{row.partial ? `${copy("partial")} · ` : ""}{copy("coverage", { minutes: number(row.coveredMinutes, language, 1) })}</span></li>)}</ul></details> : null}
         <p className="coach-scope">{copy("resetAt", { time: formatCoachReset(coach.resetAt, language) })} · {copy("scope")}</p>
       </> : null}

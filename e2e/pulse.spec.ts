@@ -371,6 +371,72 @@ describe('Pulse native parity', () => {
   });
 
   it('shares preferences and engine across widget and tray, with actual native visibility', async () => {
+    const widgetSizes: Record<string, unknown> = {};
+    async function verifyWidgetClient(name: string, height: 156 | 480) {
+      const nativeClient = async () => {
+        const [scaleFactor, physicalClient] = await Promise.all([
+          invoke<number>('plugin:window|scale_factor', { label: 'widget' }),
+          invoke<{ width: number; height: number }>('plugin:window|inner_size', { label: 'widget' }),
+        ]);
+        return { scaleFactor, physicalClient, logicalClient: { width: physicalClient.width / scaleFactor, height: physicalClient.height / scaleFactor } };
+      };
+      try {
+        await browser.waitUntil(async () => {
+          const size = await nativeClient();
+          return size.scaleFactor > 0 && Math.abs(size.physicalClient.width - Math.round(350 * size.scaleFactor)) <= 1
+            && Math.abs(size.physicalClient.height - Math.round(height * size.scaleFactor)) <= 1;
+        });
+      } catch (error) {
+        const [outerSize, preferences, dom] = await Promise.all([
+          invoke('plugin:window|outer_size', { label: 'widget' }),
+          invoke('get_pulse_preferences'),
+          browser.execute(() => ({ viewport: { width: innerWidth, height: innerHeight }, devicePixelRatio,
+            elements: ['.pulse-widget', '.pulse-widget-header', '.pulse-widget-coach-content', '.quota-coach-card', '.coach-core', '.pulse-pace-footer'].map(selector => {
+              const element = document.querySelector<HTMLElement>(selector); const bounds = element?.getBoundingClientRect();
+              return { selector, className: element?.className, bounds: bounds?.toJSON(), clientHeight: element?.clientHeight,
+                scrollHeight: element?.scrollHeight, overflowY: element ? getComputedStyle(element).overflowY : null };
+            }) })),
+        ]);
+        widgetSizes[name] = { expectedLogicalClient: { width: 350, height }, actual: await nativeClient(), outerSize, preferences, dom };
+        evidence('widget-native-client-sizes', widgetSizes);
+        throw error;
+      }
+      const size = await nativeClient();
+      const content = await browser.execute(() => {
+        const main = document.querySelector<HTMLElement>('.pulse-widget')!;
+        const scroll = document.querySelector<HTMLElement>('.pulse-widget-coach-content')!;
+        const footer = document.querySelector<HTMLElement>('.pulse-pace-footer');
+        const hit = (element: Element) => {
+          const box = element.getBoundingClientRect();
+          const target = document.elementFromPoint(box.x + box.width / 2, box.y + box.height / 2);
+          return box.width > 0 && box.height > 0 && box.left >= 0 && box.top >= 0
+            && box.right <= innerWidth + 1 && box.bottom <= innerHeight + 1
+            && (target === element || (target !== null && element.contains(target)));
+        };
+        const mainBounds = main.getBoundingClientRect();
+        const readings = [...document.querySelectorAll('.coach-key-readings > div')];
+        const actions = [...document.querySelectorAll('.pulse-widget-header > button')];
+        return { viewport: { width: innerWidth, height: innerHeight }, devicePixelRatio,
+          documentFits: document.documentElement.scrollWidth <= innerWidth + 1,
+          mainFits: mainBounds.left >= -1 && mainBounds.top >= -1 && mainBounds.right <= innerWidth + 1 && mainBounds.bottom <= innerHeight + 1,
+          contentFitsWidth: scroll.scrollWidth <= scroll.clientWidth + 1,
+          readings: readings.length, readingsHit: readings.length === 2 && readings.every(hit),
+          headerActions: actions.length, headerActionsHit: actions.length >= 4 && actions.every(hit),
+          footerExists: footer !== null, footerHit: footer !== null && hit(footer),
+          footerActionsHit: footer !== null && [...footer.querySelectorAll('button')].every(hit) };
+      });
+      widgetSizes[name] = { expectedLogicalClient: { width: 350, height }, ...size, content };
+      evidence('widget-native-client-sizes', widgetSizes);
+      expect(Math.abs(size.logicalClient.width - 350)).toBeLessThanOrEqual(1 / size.scaleFactor);
+      expect(Math.abs(size.logicalClient.height - height)).toBeLessThanOrEqual(1 / size.scaleFactor);
+      expect(Math.abs(content.viewport.width - 350)).toBeLessThanOrEqual(1);
+      expect(Math.abs(content.viewport.height - height)).toBeLessThanOrEqual(1);
+      expect(content.documentFits).toBe(true); expect(content.mainFits).toBe(true);
+      expect(content.contentFitsWidth).toBe(true); expect(content.readingsHit).toBe(true);
+      expect(content.headerActionsHit).toBe(true);
+      expect(content.footerExists).toBe(height === 480);
+      if (height === 480) { expect(content.footerHit).toBe(true); expect(content.footerActionsHit).toBe(true); }
+    }
     await $('[data-testid="help"]').click();
     await $('[data-testid="getting-started"]').waitForDisplayed();
     await $('[data-testid="create-shortcuts"]').waitForDisplayed();
@@ -386,9 +452,13 @@ describe('Pulse native parity', () => {
       await invoke('set_pulse_preferences', { patch: { skinId: skin } });
       await browser.switchToWindow('widget');
       await $('#root').waitForDisplayed();
+      await invoke('widget_action', { action: 'collapse' });
+      await $('.pulse-widget:not(.is-expanded)').waitForDisplayed();
+      await verifyWidgetClient(`${skin}-collapsed`, 156);
       await shot(`${skin}-widget`);
       await invoke('widget_action', { action: 'expand' });
       await $('.pulse-widget.is-expanded').waitForDisplayed();
+      await verifyWidgetClient(`${skin}-expanded`, 480);
       await shot(`${skin}-widget-expanded`);
       await invoke('widget_action', { action: 'collapse' });
       await browser.switchToWindow('main');

@@ -80,7 +80,7 @@ export function PulseBrowserWelcome() {
   const { skinId } = usePulsePreferences();
   const [scenario, setScenario] = useState<"roomy" | "fast" | "notice" | "stale">("roomy");
   const [previewRevision, setPreviewRevision] = useState(0);
-  const demo = new URL(location.href); demo.search = "?demo=1&coachScenario=roomy"; demo.hash = "";
+  const demo = new URL(location.href); demo.search = "?demo=1"; demo.searchParams.set("coachScenario", scenario); demo.hash = "";
   const preview = new URL(demo); preview.searchParams.set("coachScenario", scenario); preview.hash = "pulse-pace";
   const setLanguage = (value: "zh" | "en") => {
     try { localStorage.setItem("language", value); } catch { /* Language remains usable without storage. */ }

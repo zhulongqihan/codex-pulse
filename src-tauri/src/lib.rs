@@ -890,6 +890,12 @@ fn setup_app_menu(app: &mut tauri::App) -> tauri::Result<()> {
         }
     }
 
+    // A hidden menu on Windows borderless companions adds a menu-height offset to resizing.
+    #[cfg(target_os = "windows")]
+    if let Some(main) = app.get_webview_window("main") {
+        main.set_menu(menu)?;
+    }
+    #[cfg(not(target_os = "windows"))]
     app.set_menu(menu)?;
     Ok(())
 }
