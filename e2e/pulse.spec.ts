@@ -501,9 +501,14 @@ describe('Pulse native parity', () => {
     const windows = await invoke<string[]>('plugin:wdio|list_windows');
     expect(windows).toContain('main'); expect(windows).toContain('widget'); expect(windows).toContain('tray');
     for (const skin of ['clear', 'meter']) {
-      await invoke('set_pulse_preferences', { patch: { skinId: skin } });
+      await invoke('set_pulse_preferences', { patch: { skinId: skin, widgetAlwaysOnTop: true } });
       await browser.switchToWindow('widget');
+      // Each webview initializes its own locale. Set the fixture language before checking translated actions.
+      await browser.execute(() => localStorage.setItem('language', 'zh'));
+      await browser.refresh();
       await $('#root').waitForDisplayed();
+      await browser.waitUntil(async () => await $('[data-testid="widget-pin"]').getAttribute('aria-label') === '取消置顶');
+      evidence(`${skin}-widget-locale`, await browser.execute(() => ({ language: document.documentElement.lang, storedLanguage: localStorage.getItem('language') })));
       await invoke('widget_action', { action: 'collapse' });
       await $('.pulse-widget:not(.is-expanded)').waitForDisplayed();
       await verifyWidgetClient(`${skin}-collapsed`, 180);
@@ -517,6 +522,7 @@ describe('Pulse native parity', () => {
       await browser.waitUntil(async () => (await invoke<any>('get_pulse_preferences')).widgetAlwaysOnTop === false);
       await browser.waitUntil(async () => await pin.getAttribute('aria-label') === '置顶');
       expect(await pin.getAttribute('aria-pressed')).toBe('false');
+      await pin.waitForEnabled();
       await pin.click();
       await browser.waitUntil(async () => (await invoke<any>('get_pulse_preferences')).widgetAlwaysOnTop === true);
       await browser.waitUntil(async () => await pin.getAttribute('aria-label') === '取消置顶');
