@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { buildQuotaPaceCoach, quotaCoachFromSnapshot } from "./quota-pace-coach";
-import { formatCoachCountdown, quotaCoachCopy } from "./quota-pace-coach-copy";
+import { formatCoachCountdown, formatCoachNumber, quotaCoachCopy, quotaCoachFeedback } from "./quota-pace-coach-copy";
 import type { PaceCoachExtras, PaceResetNotice, PaceWindow } from "./pulse-pace";
 
 const now = Date.parse("2026-11-09T08:00:00Z");
@@ -12,6 +12,12 @@ const build = (windows: PaceWindow[], extra: Partial<Parameters<typeof buildQuot
 const notice = (): PaceResetNotice => ({ id: "synthetic-notice", summary: "Synthetic schedule under review", sourceUrl: "https://example.org/notice", sourceLabel: "Example third-party feed", startAt: iso(60), endAt: iso(120), publishedAt: iso(-20), updatedAt: iso(-1), isUnread: true, verification: "third_party", scope: "global" });
 
 describe("quota pace coach", () => {
+  it.each(["zh", "zh-Hant", "en", "ja", "ko", "de"])("never rounds nonzero measured quota to zero and localizes percentage points in %s", language => {
+    expect(formatCoachNumber(.001, language, 1)).toBe(`<${new Intl.NumberFormat(language, { maximumFractionDigits: 1 }).format(.1)}`);
+    expect(formatCoachNumber(0, language, 1)).toBe("0");
+    expect(quotaCoachFeedback(language, "points", { points: "0" })).not.toContain("{");
+    if (language === "zh") expect(quotaCoachFeedback(language, "points", { points: "0.01" })).toBe("0.01个百分点");
+  });
   it("explains the approved two states using quota versus nominal time, without needing consumption slopes", () => {
     const roomy = build([window(80)]), fast = build([window(20)]);
     expect(roomy.status).toBe("ready"); expect(roomy.tone).toBe("roomy"); expect(fast.tone).toBe("fast");

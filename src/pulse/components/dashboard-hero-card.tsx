@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { Download, FileSpreadsheet, FileText, ArrowUpRight, ArrowRight } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { RangeSwitcher } from "@/components/range-switcher";
@@ -8,7 +8,7 @@ import type { CodexLimitsResponse, ExportFormat, OverviewResponse, RangeKey } fr
 import { formatCompactNumber, formatCurrencyShort, formatNumber, formatPercent } from "@/lib/formatters";
 import type { MetricCardData } from "@/lib/usage-dashboard";
 import { UsageTrendsCard } from "@/components/usage-trends-card";
-import { projectLabel } from "@/lib/project-reference";
+import { distinctProjectLabels } from "@/lib/project-reference";
 import { usePulseCopy } from "@/lib/pulse-copy";
 import { useHomeCopy } from "@/lib/home-copy";
 import { currentDateInTimezone } from "@/lib/trend-buckets";
@@ -23,9 +23,10 @@ type DashboardHeroCardProps = {
   metrics: MetricCardData[]; codexLimits: CodexLimitsResponse | null;
   onOpenDay?: (date: string) => void; onOpenToday?: () => void;
   coach?: ReactNode;
+  coachFirst?: boolean;
 };
 
-export function DashboardHeroCard({overview, range, isBusy, isExporting, exportError, todayOverview = null, todayUnavailable = false, todayStale = false, onRangeChange, onExport, metrics, codexLimits, onOpenDay, onOpenToday, coach}: DashboardHeroCardProps) {
+export function DashboardHeroCard({overview, range, isBusy, isExporting, exportError, todayOverview = null, todayUnavailable = false, todayStale = false, onRangeChange, onExport, metrics, codexLimits, onOpenDay, onOpenToday, coach, coachFirst = false}: DashboardHeroCardProps) {
   const {t,i18n} = useTranslation();
   const copy = usePulseCopy();
   const home = useHomeCopy();
@@ -51,8 +52,9 @@ export function DashboardHeroCard({overview, range, isBusy, isExporting, exportE
     catch { updatedTime=todayUpdated.toLocaleTimeString(undefined,{hour:"2-digit",minute:"2-digit"}); }
   }
   const totals = overview.totals;
+  const projectLabels = useMemo(() => distinctProjectLabels(overview.projects ?? []), [overview.projects]);
   const items = activeTab === "models" ? (overview.models ?? []).map(item => ({label:item.model, tokens:item.totalTokens, cost:item.costUSD}))
-    : activeTab === "projects" ? (overview.projects ?? []).map(item => ({label:projectLabel(item), detail:item.project, tokens:item.totalTokens, cost:item.costUSD}))
+    : activeTab === "projects" ? (overview.projects ?? []).map(item => ({label:projectLabels.get(item.project)!, detail:item.project, tokens:item.totalTokens, cost:item.costUSD}))
     : overview.daily.map(item => ({label:item.date, tokens:item.totalTokens, cost:item.costUSD}));
   const ranked = [...items].sort((a,b) => metric === "tokens" ? b.tokens - a.tokens : a.cost == null ? b.cost == null ? 0 : 1 : b.cost == null ? -1 : b.cost-a.cost);
   const visible = showAll ? ranked : ranked.slice(0,5);
@@ -62,13 +64,14 @@ export function DashboardHeroCard({overview, range, isBusy, isExporting, exportE
   const expiresAt = codexLimits?.subscriptionExpiresAt ? dayjs(codexLimits.subscriptionExpiresAt) : null;
   const daysLeft = expiresAt?.isValid() ? Math.max(0,Math.ceil(expiresAt.diff(dayjs(),"day",true))) : null;
   return <section data-testid="dashboard-hero" className="pulse-overview pulse-home-overview">
+    {coachFirst ? coach : null}
     <section data-testid="today-summary" className="pulse-today-summary" aria-labelledby="pulse-today-title" aria-busy={!todayOverview && isBusy}>
       <div className="pulse-today-heading"><div><h1 id="pulse-today-title">{home("today")}</h1><time dateTime={todayDate}>{todayDate}</time></div><p>{home("todaySource")}</p></div>
       <dl className="pulse-today-values"><div><dt>{home("todayTokens")}</dt><dd data-testid="today-tokens" title={todayKnown ? formatNumber(todayRow!.totalTokens) : undefined}>{todayKnown ? formatCompactNumber(todayRow!.totalTokens) : "—"}</dd></div><div><dt>{home("todayEstimate")}</dt><dd data-testid="today-estimate">{todayKnown && todayRow!.costUSD != null ? formatCurrencyShort(todayRow!.costUSD) : "—"}</dd><small>{copy("notBill")}</small></div></dl>
       <div className="pulse-today-actions">{onOpenToday ? <button type="button" className="pulse-text-button" onClick={onOpenToday} disabled={!todayKnown}>{home("todaySessions")}<ArrowRight size={14}/></button> : null}<p className={todayStale ? "pulse-today-stale" : undefined}>{!todayKnown ? home("todayUnavailable") : todayStale ? home("stale") : updatedTime ? `${home("updated")} ${updatedTime}` : home("noUpdated")}</p></div>
       {todayKnown ? <details className="pulse-today-breakdown"><summary>{home("todayBreakdown")}</summary><dl><div><dt>{copy("input")}</dt><dd>{formatNumber(todayRow!.inputTokens)}</dd></div><div><dt>{copy("cached")}</dt><dd>{formatNumber(todayRow!.cachedInputTokens)}</dd></div><div><dt>{copy("output")}</dt><dd>{formatNumber(todayRow!.outputTokens)}</dd></div><div><dt>{copy("cache")}</dt><dd>{todayRow!.inputTokens>0 ? formatPercent(todayRow!.cachedInputTokens/todayRow!.inputTokens) : "—"}</dd></div></dl></details> : null}
     </section>
-    {coach}
+    {!coachFirst ? coach : null}
     <section data-testid="range-summary" className="pulse-period-summary" aria-label={home("period")}>
       <div className="pulse-range-toolbar"><div><h2>{home("period")}</h2><RangeSwitcher value={range} onChange={onRangeChange}/></div>
         <DropdownMenu><DropdownMenuTrigger asChild><Button variant="secondary" size="sm" disabled={isBusy}><Download size={15}/>{isExporting === null ? t("hero.export") : t("hero.exporting")}</Button></DropdownMenuTrigger><DropdownMenuContent align="end"><DropdownMenuItem onSelect={() => onExport("xlsx")}><FileSpreadsheet size={16}/>{t("hero.export_excel")}</DropdownMenuItem><DropdownMenuItem onSelect={() => onExport("markdown")}><FileText size={16}/>{t("hero.export_markdown")}</DropdownMenuItem></DropdownMenuContent></DropdownMenu>
@@ -78,7 +81,7 @@ export function DashboardHeroCard({overview, range, isBusy, isExporting, exportE
       <details className="pulse-period-details"><summary>{home("periodDetails")}</summary><dl className="pulse-period-breakdown"><div><dt>{copy("input")}</dt><dd>{formatNumber(totals.inputTokens)}</dd></div><div><dt>{copy("cached")}</dt><dd>{formatNumber(totals.cachedInputTokens)}</dd></div><div><dt>{copy("output")}</dt><dd>{formatNumber(totals.outputTokens)}</dd></div>{metrics.filter(item=>item.kind!=="tokens").map(item=><div key={item.kind} title={item.detail}><dt>{item.label}</dt><dd>{item.value}</dd></div>)}</dl></details>
     </section>
     <div className="pulse-overview-analysis">
-      <UsageTrendsCard daily={overview.daily} metrics={[]} cacheHitRate={totals.cacheHitRate} onOpenDay={onOpenDay} todayDate={todayDate}/>
+      <UsageTrendsCard daily={overview.daily} retainedFrom={overview.retainedFrom} metrics={[]} cacheHitRate={totals.cacheHitRate} onOpenDay={onOpenDay} todayDate={todayDate}/>
       <section className="pulse-distribution" aria-labelledby="pulse-distribution-title">
         <div className="pulse-section-heading"><h2 id="pulse-distribution-title">{copy("distribution")}</h2><div className="pulse-segments" role="group" aria-label={copy("distribution")}>{(["projects","models","dates"] as const).map(tab => <button key={tab} type="button" aria-pressed={activeTab===tab} onClick={() => {setActiveTab(tab);setShowAll(false);}}>{tab === "projects" ? t("common.project") : tab === "models" ? t("common.model") : copy("dates")}</button>)}</div><div className="pulse-segments" role="group" aria-label={copy("usage")}><button type="button" aria-pressed={metric==="tokens"} onClick={() => setMetric("tokens")}>{copy("tokens")}</button><button type="button" aria-pressed={metric==="cost"} onClick={() => setMetric("cost")}>{copy("estimate")}</button></div></div>
         <div className="pulse-rank-list">{visible.map((item,index) => {

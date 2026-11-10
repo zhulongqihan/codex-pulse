@@ -14,6 +14,26 @@ const daily: OverviewResponse["daily"] = [
 ];
 beforeEach(async()=>{await i18n.changeLanguage("en");await updatePulsePreferences(defaultPulsePreferences);});
 describe("Pulse full-range trends",()=>{
+  it("keeps unknown quota samples distinct from zero and follows the selected table metric",async()=>{
+    const user=userEvent.setup();render(<UsageTrendsCard daily={daily} metrics={[]} cacheHitRate={.2}/>);
+    await user.click(screen.getByRole("group",{name:"Trend view"}).querySelectorAll("button")[2]);
+    await user.click(screen.getByRole("button",{name:"Show data table"}));
+    const table=within(screen.getByRole("table"));
+    expect(table.getByRole("columnheader",{name:"5h usage"})).toBeInTheDocument();
+    expect(table.queryByRole("columnheader",{name:"API estimate"})).not.toBeInTheDocument();
+    const row=table.getAllByRole("row")[2];expect(row).toHaveTextContent("No samples");expect(within(row).getByText("0%")).toBeInTheDocument();
+    expect(table.getByText("150%")).toBeInTheDocument();
+    await user.click(within(screen.getByRole("group",{name:"Trend view"})).getByRole("button",{name:"API estimate"}));
+    expect(table.getAllByRole("columnheader")).toHaveLength(2);
+  });
+  it("does not turn dates before the explicit retention boundary into zero usage",async()=>{
+    const user=userEvent.setup();const zero=daily.map(row=>({...row,inputTokens:0,cachedInputTokens:0,outputTokens:0,totalTokens:0,costUSD:0}));
+    render(<UsageTrendsCard daily={zero} retainedFrom="2026-10-26" metrics={[]} cacheHitRate={0}/>);
+    expect(screen.getByRole("button",{name:"2026-10-25 · Tokens No retained record"})).toBeInTheDocument();
+    expect(screen.getByRole("button",{name:"2026-10-26 · Tokens 0"})).toBeInTheDocument();
+    await user.click(screen.getByRole("button",{name:"Show data table"}));
+    const rows=within(screen.getByRole("table")).getAllByRole("row");expect(rows[1]).toHaveTextContent("No retained record");expect(within(rows[2]).getAllByText("0")).toHaveLength(4);
+  });
   it("uses an opaque tooltip and never counts cached input twice",()=>{
     const {container}=render(<UsageTrendTooltip active payload={[{payload:{date:"2026-10-25",inputTokens:100,cachedInputTokens:20,outputTokens:30,costUSD:null}}]} t={i18n.t}/>);
     expect(container.firstElementChild).toHaveClass("bg-surface");

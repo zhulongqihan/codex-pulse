@@ -56,7 +56,7 @@ describe("DailyUsageTable", () => {
     expect(within(withQuota.querySelector('[data-quota="weekly"]') as HTMLElement).getByText("<1%")).toBeInTheDocument();
     const withoutQuota = document.querySelector("[data-daily-row='2026-04-02']") as HTMLElement;
     expect(withoutQuota.querySelectorAll("[data-quota]")).toHaveLength(2);
-    expect(within(withoutQuota).getAllByText("--")).toHaveLength(2);
+    expect(within(withoutQuota).getAllByText("No samples")).toHaveLength(2);
   });
 
   it("defaults to newest date and sorts every metric descending with newest-date tie breaking", async () => {

@@ -152,6 +152,11 @@ impl PollGate {
 }
 static POLL_GATE: LazyLock<Mutex<PollGate>> =
     LazyLock::new(|| Mutex::new(PollGate::new(Instant::now())));
+pub(crate) fn invalidate_scope() {
+    let mut gate = POLL_GATE.lock().unwrap_or_else(|error| error.into_inner());
+    gate.failed = false;
+    gate.failures = 0;
+}
 struct PollOutcome {
     failed: bool,
     wait_seconds: u64,
@@ -168,7 +173,14 @@ fn guarded_observation() -> PollOutcome {
     }
     let result = crate::codex_limits::fetch_codex_limits();
     let mut gate = POLL_GATE.lock().unwrap_or_else(|error| error.into_inner());
-    gate.finish(Instant::now(), result.as_ref().err().map(String::as_str));
+    gate.finish(
+        Instant::now(),
+        result
+            .as_ref()
+            .err()
+            .map(String::as_str)
+            .filter(|error| *error != "identityChanged"),
+    );
     PollOutcome {
         failed: gate.failed,
         wait_seconds: gate.wait_seconds(Instant::now()),

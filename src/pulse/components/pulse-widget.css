@@ -3,8 +3,12 @@
 .pulse-widget-coach .pulse-widget-header>strong{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:12px}
 .pulse-widget-coach .pulse-widget-header>button{display:grid;place-items:center;min-height:26px;min-width:22px;border-radius:4px}
 .pulse-widget-coach .pulse-widget-header>button:hover{background:rgb(var(--muted))}
-.pulse-widget-coach-content{flex:1;min-height:0;overflow:auto;overscroll-behavior:contain}
-.pulse-widget-coach .pulse-error{flex-shrink:0;font-size:11px}
-.pulse-widget-coach .pulse-widget-header>.pulse-widget-notice{display:flex;flex:1;min-width:0;gap:4px;justify-content:flex-start;padding:2px 5px;background:rgb(180 110 20 / .12);color:rgb(135 78 8);font-size:11px;font-weight:600}
+.pulse-widget-coach .pulse-widget-grip{flex:0 0 15px}
+.pulse-widget-coach-content{display:flex;flex:1;min-height:0;overflow:hidden;overscroll-behavior:contain}
+.pulse-widget-coach-content>.quota-coach-card{height:100%;min-height:0}
+.pulse-widget-coach-content .quota-coach-card .coach-body{flex:1;min-height:0;overflow:auto;overscroll-behavior:contain}
+.pulse-widget-coach-content .pulse-pace-footer{flex-shrink:0}
+.pulse-widget-coach .pulse-error{flex-shrink:0;font-size:12px}
+.pulse-widget-coach .pulse-widget-header>.pulse-widget-notice{display:flex;flex:1;min-width:0;gap:4px;justify-content:flex-start;padding:2px 5px;background:rgb(180 110 20 / .12);color:rgb(135 78 8);font-size:12px;font-weight:600}
 .pulse-widget-notice span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 html[data-theme=dark] .pulse-widget-coach .pulse-widget-header>.pulse-widget-notice{color:rgb(250 199 109)}

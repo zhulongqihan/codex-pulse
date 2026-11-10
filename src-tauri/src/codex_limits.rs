@@ -34,6 +34,9 @@ const CODEX_RESET_CREDITS_URL: &str =
 const CHATGPT_ACCOUNT_CHECK_URL: &str =
     "https://chatgpt.com/backend-api/accounts/check/v4-2023-04-27";
 const RESET_CREDITS_CACHE_TTL: Duration = Duration::from_secs(5 * 60);
+// Coalesce nearly simultaneous legacy-dashboard and pace reads without inventing
+// a newer source timestamp. Longer freshness/cooldown decisions stay with callers.
+const LIMITS_SUCCESS_REUSE: Duration = Duration::from_secs(5);
 const WINDOW_ACTIVATION_COOLDOWN: Duration = Duration::from_secs(5 * 60);
 const WINDOW_ACTIVATION_TIMEOUT: Duration = Duration::from_secs(3 * 60);
 const WINDOW_ACTIVATION_MODEL: &str = "gpt-5.6-luna";
@@ -126,6 +129,53 @@ struct ResetCreditsCache {
 static RESET_CREDITS_CACHE: OnceLock<ResetCreditsCache> = OnceLock::new();
 static WINDOW_ACTIVATION_LOCK: Mutex<()> = Mutex::new(());
 static LIMITS_FETCH_IN_FLIGHT: Mutex<Option<Arc<LimitsFetchFlight>>> = Mutex::new(None);
+static LIMITS_SUCCESS: Mutex<Option<LimitsSuccess>> = Mutex::new(None);
+static LIMITS_PUBLISHER: OnceLock<tauri::AppHandle> = OnceLock::new();
+
+struct LimitsSuccess {
+    identity: String,
+    completed_at: Instant,
+    limits: CodexLimitsResponse,
+}
+
+impl LimitsSuccess {
+    fn read(&self, identity: &str, now: Instant) -> Option<CodexLimitsResponse> {
+        (self.identity == identity
+            && now.saturating_duration_since(self.completed_at) < LIMITS_SUCCESS_REUSE)
+            .then(|| self.limits.clone())
+    }
+}
+
+/// Configured only by the desktop setup. The read-only MCP branch never installs
+/// a publisher or invokes the authenticated quota reader.
+pub fn configure_publisher(app: tauri::AppHandle) {
+    let _ = LIMITS_PUBLISHER.set(app);
+}
+
+fn publish_success(limits: &CodexLimitsResponse) {
+    if let Some(app) = LIMITS_PUBLISHER.get() {
+        use tauri::Emitter;
+        let _ = app.emit("codex-limits-updated", limits);
+        let _ = app.emit("pulse-pace-updated", ());
+    }
+}
+
+pub(crate) fn invalidate_scope(revision: u64) {
+    if let Ok(mut cached) = LIMITS_SUCCESS.lock() {
+        *cached = None;
+    }
+    crate::pulse_pace_view::invalidate_scope();
+    crate::pulse_pace::invalidate_observations();
+    if let Some(app) = LIMITS_PUBLISHER.get() {
+        use tauri::Emitter;
+        crate::pulse_desktop::invalidate_account_snapshot(app, revision);
+        let _ = app.emit(
+            "codex-identity-updated",
+            serde_json::json!({"revision":revision}),
+        );
+        let _ = app.emit("pulse-pace-updated", ());
+    }
+}
 
 #[derive(Default)]
 struct LimitsFetchFlight {
@@ -167,6 +217,10 @@ struct SubscriptionInfo {
 }
 
 pub fn fetch_codex_limits() -> Result<CodexLimitsResponse, String> {
+    fetch_codex_limits_with_reuse(true)
+}
+
+fn fetch_codex_limits_with_reuse(allow_reuse: bool) -> Result<CodexLimitsResponse, String> {
     if env::var("PULSE_OFFLINE").as_deref() == Ok("1") {
         crate::pulse_pace::unavailable("offline");
         return Err("Account queries are disabled for this offline launch".into());
@@ -183,47 +237,65 @@ pub fn fetch_codex_limits() -> Result<CodexLimitsResponse, String> {
         crate::pulse_pace::unavailable("api_key");
         return Err("chatgptLoginRequired".into());
     }
-    let pace_identity = crate::pulse_pace::begin_account(&auth, &environment);
+    let (pace_identity, scope_revision) = crate::pulse_pace::begin_account(&auth, &environment);
     // A flight can be shared only by the same credentials and selected source.
     use sha2::{Digest, Sha256};
     let identity = format!(
         "{:x}",
         Sha256::digest(
             format!(
-                "{:?}|{:?}|{}",
-                environment.home, auth.account_id, auth.access_token
+                "{:?}|{:?}|{:?}|{}",
+                environment, auth.account_id, auth.user_id, auth.access_token
             )
             .as_bytes()
         )
     );
-    let result = fetch_codex_limits_single_flight(&identity, || {
-        log::info!("Starting fetch_codex_limits...");
-        let limits = fetch_codex_limits_with(
-            || fetch_oauth_limits(&auth),
-            || fetch_account_snapshot(&auth),
-        )?;
-        #[cfg(debug_assertions)]
-        let limits = if window_activation_debug_enabled() {
-            let mut debug_limits = limits;
-            set_debug_session_window(&mut debug_limits, 0.0, Utc::now().timestamp());
-            debug_limits
-        } else {
-            limits
-        };
-        #[cfg(debug_assertions)]
-        let limits = {
-            let mut limits = limits;
-            if let Ok(value) = env::var(CREDITS_DEBUG_ENV) {
-                apply_debug_credits(&mut limits, &value);
-            }
-            limits
-        };
+    let cached = allow_reuse
+        .then(|| {
+            LIMITS_SUCCESS.lock().ok().and_then(|cached| {
+                cached
+                    .as_ref()
+                    .and_then(|cached| cached.read(&identity, Instant::now()))
+            })
+        })
+        .flatten();
+    let reused = cached.is_some();
+    let mut result = if let Some(limits) = cached {
         Ok(limits)
-    });
+    } else {
+        fetch_codex_limits_single_flight(&identity, || {
+            log::info!("Starting fetch_codex_limits...");
+            let limits = fetch_codex_limits_with(
+                || fetch_oauth_limits(&auth),
+                || fetch_account_snapshot(&auth),
+            )?;
+            #[cfg(debug_assertions)]
+            let limits = if window_activation_debug_enabled() {
+                let mut debug_limits = limits;
+                set_debug_session_window(&mut debug_limits, 0.0, Utc::now().timestamp());
+                debug_limits
+            } else {
+                limits
+            };
+            #[cfg(debug_assertions)]
+            let limits = {
+                let mut limits = limits;
+                if let Ok(value) = env::var(CREDITS_DEBUG_ENV) {
+                    apply_debug_credits(&mut limits, &value);
+                }
+                limits
+            };
+            Ok(limits)
+        })
+    };
     if selected_codex_environment() != environment || load_codex_auth().ok().as_ref() != Some(&auth)
     {
-        crate::pulse_pace::failed(pace_identity.as_deref());
+        // A retired credential flight is not a failure of the current account.
+        // In particular, token rotation can retain the same stable pace identity.
         return Err("identityChanged".into());
+    }
+    if let Ok(limits) = &mut result {
+        limits.identity_revision = Some(scope_revision);
     }
     #[cfg(debug_assertions)]
     let synthetic_quota = window_activation_debug_enabled();
@@ -232,13 +304,39 @@ pub fn fetch_codex_limits() -> Result<CodexLimitsResponse, String> {
     if synthetic_quota {
         crate::pulse_pace::unavailable("synthetic");
     } else {
-        match &result {
+        if crate::quota_scope::with_current(scope_revision, || match &result {
             Ok(limits) => {
-                crate::pulse_pace::observe(pace_identity.as_deref(), limits);
-                crate::pulse_coach::observe(pace_identity.as_deref(), limits);
+                if !reused {
+                    crate::pulse_pace::observe(pace_identity.as_deref(), limits);
+                    crate::pulse_coach::observe(pace_identity.as_deref(), limits);
+                    if let Ok(mut cached) = LIMITS_SUCCESS.lock() {
+                        *cached = Some(LimitsSuccess {
+                            identity,
+                            completed_at: Instant::now(),
+                            limits: limits.clone(),
+                        });
+                    }
+                    publish_success(limits);
+                } else {
+                    publish_success(limits);
+                }
             }
-            Err(_) => crate::pulse_pace::failed(pace_identity.as_deref()),
-        }
+            Err(_) => {
+                if let Ok(mut cached) = LIMITS_SUCCESS.lock() {
+                    if cached
+                        .as_ref()
+                        .is_some_and(|cached| cached.identity == identity)
+                    {
+                        *cached = None;
+                    }
+                }
+                crate::pulse_pace::failed(pace_identity.as_deref());
+                if let Some(app) = LIMITS_PUBLISHER.get() {
+                    use tauri::Emitter;
+                    let _ = app.emit("codex-limits-failed", serde_json::json!({"revision":scope_revision,"error":result.as_ref().err()}));
+                }
+            }
+        }).is_none() { return Err("identityChanged".into()); }
     }
     result
 }
@@ -351,7 +449,7 @@ pub fn activate_codex_window(marker_path: &Path) -> Result<CodexWindowActivation
     activate_codex_window_with(
         marker_path,
         Utc::now().timestamp(),
-        fetch_codex_limits,
+        || fetch_codex_limits_with_reuse(false),
         || run_codex_window_activation(working_directory),
     )
 }
@@ -793,6 +891,7 @@ fn make_response(limits: LimitsSnapshot, account: AccountSnapshot) -> CodexLimit
     let (session, weekly) = normalize_windows(limits.primary, limits.secondary);
 
     CodexLimitsResponse {
+        identity_revision: None,
         session: session.map(make_window),
         weekly: weekly.map(make_window),
         credits: limits.credits,
@@ -1466,6 +1565,51 @@ fn is_executable(path: &PathBuf) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn shared_success_retains_read_time_and_never_reuses_another_identity_or_old_result() {
+        let at = Instant::now();
+        let original = limits_with_session(20.0, "2099-11-10T05:00:00Z");
+        let cached = LimitsSuccess {
+            identity: "synthetic-user-a/workspace-a/source-a".into(),
+            completed_at: at,
+            limits: original.clone(),
+        };
+        let reused = cached
+            .read(
+                "synthetic-user-a/workspace-a/source-a",
+                at + Duration::from_secs(4),
+            )
+            .unwrap();
+        assert_eq!(reused, original);
+        assert_eq!(reused.updated_at, original.updated_at);
+        for identity in [
+            "synthetic-user-b/workspace-a/source-a",
+            "synthetic-user-a/workspace-b/source-a",
+            "synthetic-user-a/workspace-a/source-b",
+        ] {
+            assert!(cached.read(identity, at).is_none());
+        }
+        assert!(cached
+            .read(
+                "synthetic-user-a/workspace-a/source-a",
+                at + LIMITS_SUCCESS_REUSE
+            )
+            .is_none());
+        let unknown = LimitsSuccess {
+            limits: CodexLimitsResponse {
+                session: None,
+                weekly: None,
+                ..original
+            },
+            ..cached
+        };
+        assert!(unknown
+            .read(&unknown.identity, at)
+            .unwrap()
+            .session
+            .is_none());
+    }
     use std::cell::Cell;
     use std::sync::mpsc;
 
@@ -1531,6 +1675,7 @@ mod tests {
 
     fn limits_with_session(used_percent: f64, resets_at: &str) -> CodexLimitsResponse {
         CodexLimitsResponse {
+            identity_revision: None,
             session: Some(CodexLimitWindow {
                 used_percent,
                 remaining_percent: 100.0 - used_percent,

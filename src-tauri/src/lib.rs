@@ -21,6 +21,8 @@ mod pulse_coach;
 mod pulse_shortcuts;
 mod pulse_titlebar;
 mod pulse_update;
+mod pulse_update_result;
+mod quota_scope;
 mod scanner;
 mod session_credits;
 mod session_file;
@@ -607,6 +609,39 @@ async fn download_and_install_update(
 }
 
 #[tauri::command]
+async fn fetch_update_recovery_result(
+    paths: tauri::State<'_, pulse_desktop::PulsePaths>,
+) -> Result<Option<pulse_update_result::UpdateRecoveryResult>, String> {
+    let data = paths.data.clone();
+    let executable = std::env::current_exe().map_err(|error| error.to_string())?;
+    tauri::async_runtime::spawn_blocking(move || pulse_update_result::fetch(&data, &executable))
+        .await.map_err(|error| error.to_string())?
+}
+
+#[tauri::command]
+async fn dismiss_update_recovery_result(
+    paths: tauri::State<'_, pulse_desktop::PulsePaths>, id: String,
+) -> Result<(), String> {
+    let data = paths.data.clone();
+    let executable = std::env::current_exe().map_err(|error| error.to_string())?;
+    tauri::async_runtime::spawn_blocking(move || pulse_update_result::dismiss(&data, &executable, &id))
+        .await.map_err(|error| error.to_string())?
+}
+
+#[tauri::command]
+fn open_update_records(paths: tauri::State<'_, pulse_desktop::PulsePaths>) -> Result<(), String> {
+    let directory = paths.data.join("updates");
+    std::fs::create_dir_all(&directory).map_err(|error| error.to_string())?;
+    #[cfg(target_os = "windows")]
+    std::process::Command::new("explorer.exe").arg(&directory).spawn().map_err(|error| error.to_string())?;
+    #[cfg(target_os = "macos")]
+    std::process::Command::new("open").arg(&directory).spawn().map_err(|error| error.to_string())?;
+    #[cfg(target_os = "linux")]
+    std::process::Command::new("xdg-open").arg(&directory).spawn().map_err(|error| error.to_string())?;
+    Ok(())
+}
+
+#[tauri::command]
 async fn restart_app(app: tauri::AppHandle) -> Result<(), String> {
     pulse_desktop::save_widget_position(&app);
     let data = app.state::<pulse_desktop::PulsePaths>().data.clone();
@@ -1004,6 +1039,7 @@ pub fn run() {
             let app_data_dir = paths.data.clone();
             pulse_pace::configure(&app_data_dir);
             pulse_coach::configure(&app_data_dir);
+            codex_limits::configure_publisher(app.handle().clone());
             let store = pulse_desktop::PreferenceStore::load(&app_data_dir);
             let preferences = store.value.lock().unwrap().clone();
             app.manage(paths.clone());
@@ -1165,6 +1201,9 @@ pub fn run() {
             export_usage,
             check_for_updates,
             download_and_install_update,
+            fetch_update_recovery_result,
+            dismiss_update_recovery_result,
+            open_update_records,
             restart_app,
             open_url,
             reveal_in_file_manager,
@@ -1221,6 +1260,7 @@ mod tests {
 
     fn limits_response() -> CodexLimitsResponse {
         CodexLimitsResponse {
+            identity_revision: None,
             session: None,
             weekly: None,
             credits: None,

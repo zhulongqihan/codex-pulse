@@ -49,32 +49,36 @@ pub fn reconcile_current_identity() -> bool {
     let Some(directory) = DIRECTORY.get() else {
         return false;
     };
-    let (identity, reason) = if std::env::var("PULSE_OFFLINE").as_deref() == Ok("1") {
-        (None, "offline")
+    let (identity, reason, scope_identity) = if std::env::var("PULSE_OFFLINE").as_deref() == Ok("1")
+    {
+        (None, "offline", None)
     } else {
         match crate::codex_auth::load_codex_auth() {
-            Ok(auth) if !auth.is_chatgpt => (None, "api_key"),
-            Ok(auth) => (
-                stable_identity(
-                    &auth,
-                    &crate::codex_environment::selected_codex_environment(),
-                ),
-                "identity_unavailable",
-            ),
-            Err(_) => (None, "login_required"),
+            Ok(auth) if !auth.is_chatgpt => (None, "api_key", None),
+            Ok(auth) => {
+                let environment = crate::codex_environment::selected_codex_environment();
+                (
+                    stable_identity(&auth, &environment),
+                    "identity_unavailable",
+                    transient_scope_identity(&auth, &environment),
+                )
+            }
+            Err(_) => (None, "login_required", None),
         }
     };
-    let Ok(_guard) = IO_LOCK.lock() else {
-        return false;
-    };
-    let mut store = read_store(directory);
-    if !reconcile_store(&mut store, identity, reason) {
-        return false;
-    }
-    if write_store(directory, &store).is_err() {
-        log::warn!("Could not invalidate local quota observations");
-    }
-    true
+    crate::quota_scope::reconcile_with(scope_identity, |_| {
+        let Ok(_guard) = IO_LOCK.lock() else {
+            return false;
+        };
+        let mut store = read_store(directory);
+        if !reconcile_store(&mut store, identity, reason) {
+            return false;
+        }
+        if write_store(directory, &store).is_err() {
+            log::warn!("Could not invalidate local quota observations");
+        }
+        true
+    })
 }
 
 fn reconcile_store(store: &mut Store, identity: Option<String>, unavailable_reason: &str) -> bool {
@@ -224,6 +228,26 @@ fn stable_identity(auth: &CodexAuth, environment: &CodexEnvironment) -> Option<S
     Some(format!("{:x}", digest.finalize()))
 }
 
+fn transient_scope_identity(auth: &CodexAuth, environment: &CodexEnvironment) -> Option<String> {
+    if !auth.is_chatgpt {
+        return None;
+    }
+    stable_identity(auth, environment).or_else(|| {
+        // Unknown claims still invalidate the desktop on a credential/source
+        // change. This fallback hash is memory-only and never enables forecasts.
+        Some(format!(
+            "{:x}",
+            Sha256::digest(
+                format!(
+                    "unresolved|{environment:?}|{:?}|{:?}|{}",
+                    auth.account_id, auth.user_id, auth.access_token
+                )
+                .as_bytes()
+            )
+        ))
+    })
+}
+
 fn read_store(directory: &Path) -> Store {
     let result = (|| -> Option<Store> {
         let file = fs::File::open(directory.join(FILE_NAME)).ok()?;
@@ -342,33 +366,50 @@ fn with_store(change: impl FnOnce(&mut Store)) {
 }
 
 /// Called before the authenticated request, so a changed account cannot reuse old projections.
-pub(crate) fn begin_account(auth: &CodexAuth, environment: &CodexEnvironment) -> Option<String> {
+pub(crate) fn begin_account(
+    auth: &CodexAuth,
+    environment: &CodexEnvironment,
+) -> (Option<String>, u64) {
     let identity = stable_identity(auth, environment);
-    with_store(|store| {
-        if store.identity_hash != identity || identity.is_none() {
-            *store = Store {
-                identity_hash: identity.clone(),
-                reason: Some(
-                    if identity.is_some() {
-                        "sampling"
-                    } else {
-                        "identity_unavailable"
-                    }
-                    .into(),
-                ),
-                ..Default::default()
-            };
-        }
-    });
-    identity
+    let revision = crate::quota_scope::reconcile_with(
+        transient_scope_identity(auth, environment),
+        |revision| {
+            with_store(|store| {
+                if store.identity_hash != identity || identity.is_none() {
+                    *store = Store {
+                        identity_hash: identity.clone(),
+                        reason: Some(
+                            if identity.is_some() {
+                                "sampling"
+                            } else {
+                                "identity_unavailable"
+                            }
+                            .into(),
+                        ),
+                        ..Default::default()
+                    };
+                }
+            });
+            revision
+        },
+    );
+    (identity, revision)
 }
 
 pub(crate) fn unavailable(reason: &str) {
+    crate::quota_scope::reconcile_with(None, |_| {
+        with_store(|store| {
+            *store = Store {
+                reason: Some(reason.into()),
+                ..Default::default()
+            }
+        });
+    });
+}
+
+pub(crate) fn invalidate_observations() {
     with_store(|store| {
-        *store = Store {
-            reason: Some(reason.into()),
-            ..Default::default()
-        }
+        *store = Store::default();
     });
 }
 
@@ -724,6 +765,7 @@ mod tests {
     }
     fn limits(at: i64, used: f64, reset: i64) -> CodexLimitsResponse {
         CodexLimitsResponse {
+            identity_revision: None,
             session: Some(CodexLimitWindow {
                 used_percent: used,
                 remaining_percent: 100.0 - used,

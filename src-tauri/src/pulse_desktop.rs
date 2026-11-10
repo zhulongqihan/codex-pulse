@@ -26,14 +26,50 @@ pub fn get_widget_snapshot(
 pub fn update_widget_snapshot(
     app: tauri::AppHandle,
     state: tauri::State<'_, WidgetSnapshot>,
-    data: serde_json::Value,
+    mut data: serde_json::Value,
 ) -> Result<(), String> {
-    *state.0.lock().map_err(|_| "Widget state unavailable")? = Some(data.clone());
-    if let Some(paths) = app.try_state::<PulsePaths>() {
-        crate::pulse_mcp::publish_widget_snapshot(&data, &paths.data);
+    crate::quota_scope::with_live(|revision| {
+        if revision > 0 && data["quotaIdentityRevision"].as_u64() != Some(revision) {
+            clear_account_snapshot(&mut data, revision);
+        }
+        *state.0.lock().map_err(|_| "Widget state unavailable")? = Some(data.clone());
+        if let Some(paths) = app.try_state::<PulsePaths>() {
+            crate::pulse_mcp::publish_widget_snapshot(&data, &paths.data);
+        }
+        app.emit_to("widget", "widget-snapshot-updated", data)
+            .map_err(|error| error.to_string())
+    })
+}
+
+fn clear_account_snapshot(data: &mut serde_json::Value, revision: u64) {
+    if !data.is_object() {
+        *data = serde_json::json!({});
     }
-    app.emit_to("widget", "widget-snapshot-updated", data)
-        .map_err(|error| error.to_string())
+    for key in ["account", "membership", "workspace"] {
+        data[key] = serde_json::Value::Null;
+    }
+    data["quotas"] = serde_json::json!([]);
+    data["quotaIdentityRevision"] = serde_json::json!(revision);
+    data["stale"] = serde_json::json!(true);
+    if data["integration"].is_object() {
+        data["integration"]["quotas"] = serde_json::json!([]);
+        data["integration"]["quotaUpdatedAt"] = serde_json::Value::Null;
+        data["integration"]["quotaStale"] = serde_json::json!(true);
+    }
+}
+
+pub(crate) fn invalidate_account_snapshot(app: &tauri::AppHandle, revision: u64) {
+    if let Some(widget) = app.try_state::<WidgetSnapshot>() {
+        if let Ok(mut stored) = widget.0.lock() {
+            if let Some(data) = stored.as_mut() {
+                clear_account_snapshot(data, revision);
+                if let Some(paths) = app.try_state::<PulsePaths>() {
+                    crate::pulse_mcp::publish_widget_snapshot(data, &paths.data);
+                }
+                let _ = app.emit_to("widget", "widget-snapshot-updated", data.clone());
+            }
+        }
+    }
 }
 
 #[derive(Clone, Debug, Serialize)]
@@ -426,7 +462,7 @@ pub fn setup_widget(
     let height = if preferences.widget_expanded {
         480.0
     } else {
-        156.0
+        180.0
     };
     tauri::WebviewWindowBuilder::new(
         app,
@@ -486,7 +522,7 @@ fn apply_widget(app: &tauri::AppHandle, preferences: &PulsePreferences) -> Resul
                 if preferences.widget_expanded {
                     480.0
                 } else {
-                    156.0
+                    180.0
                 },
             ))
             .map_err(|error| error.to_string())?;
@@ -538,6 +574,27 @@ pub fn keep_widget_visible(app: &tauri::AppHandle) -> tauri::Result<()> {
     Ok(())
 }
 
+/// The two companion command entry points share the same navigation contract.
+/// Generic showMain preserves the current view; explicit targets navigate only
+/// after showing and focusing the main window succeeds.
+pub(crate) fn show_main_action(
+    action: &str,
+    show: impl FnOnce() -> Result<(), String>,
+    emit: impl FnOnce(&str) -> Result<(), String>,
+) -> Result<(), String> {
+    let event = match action {
+        "showMain" => None,
+        "account" => Some("pulse-show-account"),
+        "details" => Some("pulse-show-pace-details"),
+        _ => return Err("Unknown main window action".into()),
+    };
+    show()?;
+    if let Some(event) = event {
+        emit(event)?;
+    }
+    Ok(())
+}
+
 #[tauri::command]
 pub fn widget_action(app: tauri::AppHandle, action: String) -> Result<(), String> {
     if ["hide", "expand", "collapse", "quit"].contains(&action.as_str()) {
@@ -550,13 +607,19 @@ pub fn widget_action(app: tauri::AppHandle, action: String) -> Result<(), String
         "collapse" => serde_json::json!({"widgetExpanded":false}),
         "pin" => serde_json::json!({"widgetAlwaysOnTop":true}),
         "unpin" => serde_json::json!({"widgetAlwaysOnTop":false}),
-        "showMain" => {
-            if let Some(window) = app.get_webview_window("main") {
-                window.show().map_err(|e| e.to_string())?;
-                window.unminimize().map_err(|e| e.to_string())?;
-                window.set_focus().map_err(|e| e.to_string())?;
-            }
-            return Ok(());
+        "showMain" | "account" => {
+            return show_main_action(
+                &action,
+                || {
+                    if let Some(window) = app.get_webview_window("main") {
+                        window.show().map_err(|e| e.to_string())?;
+                        window.unminimize().map_err(|e| e.to_string())?;
+                        window.set_focus().map_err(|e| e.to_string())?;
+                    }
+                    Ok(())
+                },
+                |event| app.emit(event, ()).map_err(|e| e.to_string()),
+            );
         }
         "quit" => {
             app.exit(0);
@@ -604,6 +667,49 @@ pub fn open_pulse_data_dir(state: tauri::State<'_, PulsePaths>) -> Result<(), St
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn companion_account_action_focuses_before_navigation_and_preserves_generic_show_main() {
+        use std::cell::RefCell;
+        for (action, expected) in [
+            ("account", Some("pulse-show-account")),
+            ("details", Some("pulse-show-pace-details")),
+            ("showMain", None),
+        ] {
+            let calls = RefCell::new(Vec::new());
+            show_main_action(
+                action,
+                || {
+                    calls.borrow_mut().push("show-unminimize-focus".to_string());
+                    Ok(())
+                },
+                |event| {
+                    calls.borrow_mut().push(event.into());
+                    Ok(())
+                },
+            )
+            .unwrap();
+            let mut expected_calls = vec!["show-unminimize-focus".to_string()];
+            if let Some(event) = expected {
+                expected_calls.push(event.into());
+            }
+            assert_eq!(*calls.borrow(), expected_calls);
+        }
+        assert_eq!(
+            show_main_action(
+                "account",
+                || Err("focus failed".into()),
+                |_| panic!("No navigation after focus failure")
+            ),
+            Err("focus failed".into())
+        );
+        assert!(show_main_action(
+            "unsupported",
+            || panic!("Unknown action cannot show a window"),
+            |_| Ok(())
+        )
+        .is_err());
+    }
 
     // The v0.5.0 on-disk schema: unknown fields reject the entire document.
     #[derive(Debug, Serialize, Deserialize)]

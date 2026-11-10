@@ -113,7 +113,9 @@ export function quotaCoachBadgeCopy(language: string, state: QuotaCoachBadgeStat
   return badgeMessages[getLanguage(language)][state];
 }
 export function formatCoachNumber(value: number, language: string, digits = 0): string {
-  return new Intl.NumberFormat(language, { maximumFractionDigits: digits }).format(value);
+  const formatter = new Intl.NumberFormat(language, { maximumFractionDigits: digits });
+  // A recorded positive amount must never be presented as an observed zero.
+  return value > 0 && value < .5 * 10 ** -digits ? `<${formatter.format(10 ** -digits)}` : formatter.format(value);
 }
 export function formatCoachCountdown(minutes: number | null, language: string): string {
   if (minutes == null || !Number.isFinite(minutes)) return quotaCoachCopy(language, "unknown");
@@ -129,4 +131,23 @@ export function formatCoachWindow(window: PaceWindow | null, language: string): 
 }
 export function formatCoachReset(resetAt: number | null, language: string): string {
   return resetAt == null || !Number.isFinite(resetAt) ? quotaCoachCopy(language, "unknown") : new Intl.DateTimeFormat(language, { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit", hour12: false }).format(resetAt);
+}
+
+const feedback = {
+  en: { basis: "Observation basis this cycle", noDaily: "No daily observations match this window yet; missing history is not reconstructed.", last: "Last reading", unknownWindows: "Some quota windows were not returned; other limits may still apply.", points: "{points} pp", dailySource: "Changes in account quota readings; separate from local Tokens.", noticeCompact: "Third-party notice · unconfirmed", cooldownShort: "Retry in {seconds}s", ageNow: "Read just now", age: "Read {minutes} min ago", cooldown: "Recent reading retained · retry in {seconds}s", recover: "Check account and connection", login: "Sign in with the official Codex app, then refresh the reading.", apiKey: "The selected API-key environment does not provide subscription quota windows.", offline: "Offline mode: an online quota reading is unavailable.", identity: "Account identity is unavailable. Check the selected account and environment.", noObservations: "No account reading yet. Try the read-only refresh.", invalidTime: "The reading time is invalid. Refresh for a new reading." },
+  zh: { basis: "本轮观测依据", noDaily: "暂无匹配当前窗口的每日观测；覆盖不足时不推算历史。", last: "上次读数", unknownWindows: "部分额度窗口未返回，其他限制仍可能生效。", points: "{points}个百分点", dailySource: "账号额度读数的变化，与本机 Token 分开统计。", noticeCompact: "第三方预告 · 待确认", cooldownShort: "{seconds}秒后可重试", ageNow: "刚刚读取", age: "{minutes}分钟前读数", cooldown: "保留最近读数，{seconds}秒后可重试", recover: "检查账号与连接", login: "请在官方 Codex 登录后，刷新额度读数。", apiKey: "当前选择的 API Key 环境不提供订阅额度窗口。", offline: "当前为离线模式，无法获取在线额度读数。", identity: "暂时无法确认账号身份，请检查所选账号与环境。", noObservations: "尚无账号额度读数，可尝试只读刷新。", invalidTime: "读数时间无效，请刷新获取新读数。" },
+  "zh-Hant": { basis: "本輪觀測依據", noDaily: "暫無符合目前視窗的每日觀測；覆蓋不足時不推算歷史。", last: "上次讀數", unknownWindows: "部分額度視窗未回傳，其他限制仍可能生效。", points: "{points}個百分點", dailySource: "帳號額度讀數的變化，與本機 Token 分開統計。", noticeCompact: "第三方預告 · 待確認", cooldownShort: "{seconds}秒後可重試", ageNow: "剛剛讀取", age: "{minutes}分鐘前讀數", cooldown: "保留最近讀數，{seconds}秒後可重試", recover: "檢查帳號與連線", login: "請在官方 Codex 登入後，更新額度讀數。", apiKey: "目前選取的 API Key 環境不提供訂閱額度視窗。", offline: "目前為離線模式，無法取得線上額度讀數。", identity: "暫時無法確認帳號身分，請檢查所選帳號與環境。", noObservations: "尚無帳號額度讀數，可嘗試唯讀更新。", invalidTime: "讀數時間無效，請更新取得新讀數。" },
+  ja: { basis: "この期間の観測根拠", noDaily: "この期間の日別観測はまだありません。欠けた履歴は推測しません。", last: "前回の値", unknownWindows: "一部の上限期間は未取得です。他の制限が適用される場合があります。", points: "{points}ポイント", dailySource: "アカウント上限の変化です。ローカルTokenとは別集計です。", noticeCompact: "第三者の予告 · 未確認", cooldownShort: "{seconds}秒後に再試行", ageNow: "たった今の観測", age: "{minutes}分前の観測", cooldown: "前回の値を保持 · {seconds}秒後に再試行", recover: "アカウントと接続を確認", login: "公式Codexでログインしてから更新してください。", apiKey: "選択中のAPIキー環境には契約上限の期間情報がありません。", offline: "オフラインのためオンラインの値を取得できません。", identity: "アカウントを確認できません。選択したアカウントと環境を確認してください。", noObservations: "まだ観測がありません。読み取り専用の更新をお試しください。", invalidTime: "観測時刻が無効です。更新してください。" },
+  ko: { basis: "이번 기간 관측 근거", noDaily: "현재 기간과 일치하는 일별 관측이 없습니다. 누락된 기록을 추정하지 않습니다.", last: "이전 관측", unknownWindows: "일부 한도 기간이 반환되지 않았습니다. 다른 제한도 적용될 수 있습니다.", points: "{points}퍼센트포인트", dailySource: "계정 한도 관측의 변화이며 로컬 Token과 별도로 집계합니다.", noticeCompact: "제3자 예고 · 미확인", cooldownShort: "{seconds}초 후 재시도", ageNow: "방금 관측", age: "{minutes}분 전 관측", cooldown: "최근 관측 유지 · {seconds}초 후 재시도", recover: "계정 및 연결 확인", login: "공식 Codex에서 로그인한 뒤 관측을 갱신하세요.", apiKey: "선택한 API 키 환경은 구독 한도 기간을 제공하지 않습니다.", offline: "오프라인 모드에서는 온라인 관측을 가져올 수 없습니다.", identity: "계정 신원을 확인할 수 없습니다. 계정과 환경을 확인하세요.", noObservations: "계정 관측이 없습니다. 읽기 전용 갱신을 시도하세요.", invalidTime: "관측 시각이 잘못되었습니다. 갱신하세요." },
+  de: { basis: "Messgrundlage dieses Zyklus", noDaily: "Noch keine passenden Tagesmessungen. Fehlende Historie wird nicht rekonstruiert.", last: "Letzte Messung", unknownWindows: "Einige Kontingentfenster fehlen; weitere Limits können gelten.", points: "{points} Prozentpunkte", dailySource: "Änderungen der Kontingentmessungen, getrennt von lokalen Tokens.", noticeCompact: "Dritthinweis · unbestätigt", cooldownShort: "In {seconds}s erneut", ageNow: "Gerade gelesen", age: "Messung vor {minutes} Min.", cooldown: "Letzter Wert bleibt · in {seconds}s erneut versuchen", recover: "Konto und Verbindung prüfen", login: "In der offiziellen Codex-App anmelden und danach aktualisieren.", apiKey: "Die gewählte API-Key-Umgebung liefert keine Abo-Kontingentfenster.", offline: "Im Offline-Modus sind keine Online-Messungen verfügbar.", identity: "Kontozuordnung fehlt. Gewähltes Konto und Umgebung prüfen.", noObservations: "Noch keine Kontomessung. Lesende Aktualisierung versuchen.", invalidTime: "Ungültige Messzeit. Neue Messung abrufen." },
+} satisfies Record<Language, Record<string, string>>;
+export type QuotaCoachFeedbackKey = keyof typeof feedback.en;
+export function quotaCoachFeedback(language: string, key: QuotaCoachFeedbackKey, values?: Record<string, string | number>): string {
+  let result = feedback[getLanguage(language)][key];
+  if (values) for (const [name, value] of Object.entries(values)) result = result.replaceAll(`{${name}}`, String(value));
+  return result;
+}
+export function quotaCoachReason(language: string, reason: string | null | undefined): string | null {
+  const keys: Record<string, QuotaCoachFeedbackKey> = { login_required: "login", api_key: "apiKey", offline: "offline", identity_unavailable: "identity", no_observations: "noObservations", invalid_observation_time: "invalidTime" };
+  return reason && keys[reason] ? quotaCoachFeedback(language, keys[reason]) : null;
 }

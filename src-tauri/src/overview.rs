@@ -15,6 +15,13 @@ use chrono::{Datelike, NaiveDate, Utc};
 use rusqlite::Connection;
 use std::collections::BTreeMap;
 
+fn query_retained_from(db: &Connection) -> Result<Option<String>, String> {
+    db.query_row("SELECT MIN(date) FROM daily_usage_rollups", [], |row| {
+        row.get(0)
+    })
+    .map_err(|error| error.to_string())
+}
+
 fn range_days(range: &str) -> Option<i64> {
     if range.ends_with('d') {
         range[..range.len() - 1]
@@ -233,6 +240,7 @@ pub fn get_overview(
         start_date,
         end_date,
         updated_at: query_latest_update_at(db)?,
+        retained_from: query_retained_from(db)?,
         daily,
         totals: OverviewTotals {
             input_tokens,
@@ -481,11 +489,7 @@ fn get_monthly_usage_for_end_month(
     let start_date = format!("{start_month}-01");
     let today = date_key_in_timezone(Utc::now(), timezone);
     let end_date = month_end_date_key(end_month)?.min(today);
-    let retained_from: Option<String> = db
-        .query_row("SELECT MIN(date) FROM daily_usage_rollups", [], |row| {
-            row.get(0)
-        })
-        .map_err(|error| error.to_string())?;
+    let retained_from = query_retained_from(db)?;
     let rows = query_daily_rows(db, &start_date, &end_date)?;
     let mut monthly_by_key = list_month_keys(&start_month, end_month)?
         .into_iter()
@@ -591,6 +595,40 @@ fn project_display_name(project: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn overview_retained_start_uses_stored_zero_rows_outside_the_selected_range() {
+        let path = temp_db_path("overview-retained-start");
+        let mut db = open_database(&path).unwrap();
+        let read = |db: &Connection| {
+            get_overview(
+                db,
+                "custom:2026-07-01_2026-07-03",
+                Some("UTC".into()),
+                &PricingSource::embedded(),
+            )
+            .unwrap()
+        };
+        assert_eq!(read(&db).retained_from, None);
+        upsert_daily_rows(
+            &mut db,
+            &[
+                daily_row("2026-06-20", 0, 0, 0, 0, 0.0),
+                daily_row("2026-07-02", 10, 0, 2, 12, 0.0),
+            ],
+        )
+        .unwrap();
+        let response = read(&db);
+        assert_eq!(response.retained_from.as_deref(), Some("2026-06-20"));
+        assert_eq!(response.start_date, "2026-07-01");
+        assert_eq!(response.daily[0].total_tokens, 0);
+        assert_eq!(
+            serde_json::to_value(response).unwrap()["retainedFrom"],
+            "2026-06-20"
+        );
+        drop(db);
+        let _ = std::fs::remove_file(path);
+    }
     use crate::{
         db::{open_database, upsert_daily_rows},
         types::{DailyUsageRow, PricingStatus},

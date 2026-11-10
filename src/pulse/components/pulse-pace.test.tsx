@@ -1,10 +1,10 @@
 // @vitest-environment jsdom
-import { fireEvent, render, screen, within } from "@testing-library/react";
+import { act, fireEvent, render, screen, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import i18n from "../i18n";
 import { paceCopy } from "@/lib/pulse-pace-copy";
 import { syntheticPaceSnapshot, type PaceResetNotice, type PaceSnapshot } from "@/lib/pulse-pace";
-import { formatCoachCountdown, quotaCoachBadgeCopy, quotaCoachCopy } from "@/lib/quota-pace-coach-copy";
+import { formatCoachCountdown, quotaCoachBadgeCopy, quotaCoachCopy, quotaCoachFeedback } from "@/lib/quota-pace-coach-copy";
 import { PulsePaceBadgeView, PulsePaceCard } from "./pulse-pace";
 
 const now = Date.parse("2026-11-09T08:00:00Z");
@@ -27,6 +27,67 @@ function recentDepletion(remaining = 77): PaceSnapshot {
 }
 
 describe("shared cycle pace card", () => {
+  it("prioritizes the empty compact state and account recovery, retaining genuine stale and zero readings", () => {
+    const empty = { ...cycle(), windows: [], updatedAt: null, reason: "offline" };
+    const onRecover = vi.fn();
+    const { rerender } = render(<PulsePaceCard data={empty} variant="compact" onRecover={onRecover} {...actions()}/>);
+    expect(screen.queryByTestId("coach-remaining")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("coach-countdown")).not.toBeInTheDocument();
+    expect(screen.getByRole("status")).toHaveTextContent("Offline mode");
+    fireEvent.click(screen.getByRole("button", { name: "Check account and connection" }));
+    expect(onRecover).toHaveBeenCalledOnce();
+    const stale = cycle(); stale.updatedAt = iso(-10);
+    rerender(<PulsePaceCard data={stale} variant="compact" {...actions()}/>);
+    expect(screen.getByTestId("coach-remaining")).toHaveTextContent("80%");
+    expect(screen.getByText("Last reading")).toBeVisible();
+    rerender(<PulsePaceCard data={cycle(0)} variant="compact" {...actions()}/>);
+    expect(screen.getByTestId("coach-remaining")).toHaveTextContent("0%");
+  });
+  it("keeps compact cooldown and reading age together without a separate footer paragraph", () => {
+    const data = { ...cycle(), generatedAt: iso(0), refreshAfterSeconds: 25 };
+    render(<PulsePaceCard data={data} variant="compact" {...actions()}/>);
+    const wait = screen.getByTestId("coach-refresh-wait");
+    expect(wait.tagName).toBe("SPAN");
+    expect(wait.parentElement).toHaveTextContent("Read just now");
+    expect(wait).toHaveTextContent("Retry in 25s");
+    expect(wait).toHaveAttribute("title", expect.stringContaining("retry in 25s"));
+    expect(screen.getByRole("button", { name: "Refresh account readings" })).toBeDisabled();
+  });
+  it("labels retained compact readings, their age and a direct refresh without hiding the failure", () => {
+    const data = cycle(); data.updatedAt = iso(-10);
+    const handlers = actions(); render(<PulsePaceCard data={data} variant="compact" {...handlers}/>);
+    expect(screen.getByText("Last reading")).toBeVisible();
+    expect(screen.getByText("Read 10 min ago")).toBeVisible();
+    expect(screen.getByRole("status")).toHaveTextContent(quotaCoachCopy("en", "stale"));
+    fireEvent.click(screen.getByRole("button", { name: "Refresh account readings" }));
+    expect(handlers.onRefresh).toHaveBeenCalledOnce();
+  });
+  it("explains the returned refresh gate and reenables refresh when its actual delay passes", () => {
+    vi.useFakeTimers();
+    try {
+      vi.setSystemTime(now); vi.spyOn(Date, "now").mockImplementation(() => new Date().getTime());
+      const data = { ...cycle(), generatedAt: iso(0), refreshAfterSeconds: 2 };
+      render(<PulsePaceCard data={data} {...actions()}/>);
+      expect(screen.getByRole("button", { name: "Refresh account readings" })).toBeDisabled();
+      expect(screen.getByTestId("coach-refresh-wait")).toHaveTextContent("retry in 2s");
+      act(() => { vi.advanceTimersByTime(3000); });
+      expect(screen.getByRole("button", { name: "Refresh account readings" })).toBeEnabled();
+      expect(screen.queryByTestId("coach-refresh-wait")).not.toBeInTheDocument();
+    } finally { vi.useRealTimers(); }
+  });
+  it("routes a known login reason to account recovery and expands an honest empty observation basis", () => {
+    const data = cycle(); data.reason = "login_required"; data.windows = []; data.updatedAt = null;
+    const onRecover = vi.fn(); render(<PulsePaceCard data={data} onRecover={onRecover} observationsExpanded {...actions()}/>);
+    expect(screen.getByRole("status")).toHaveTextContent("Sign in with the official Codex");
+    fireEvent.click(screen.getByRole("button", { name: "Check account and connection" })); expect(onRecover).toHaveBeenCalledOnce();
+    expect(screen.getByText(quotaCoachFeedback("en", "noDaily"))).toBeVisible();
+  });
+  it("shows unknown-window limits and a single qualified notice in compact view", () => {
+    render(<PulsePaceCard data={withNotice()} variant="compact" {...actions()}/>);
+    expect(screen.getByText(quotaCoachFeedback("en", "unknownWindows"))).toBeVisible();
+    expect(screen.getAllByText("Third-party notice · unconfirmed")).toHaveLength(1);
+    expect(screen.getByText(quotaCoachCopy("en", "roomyAdvice"))).toBeVisible();
+  });
   it.each(["en", "zh", "zh-Hant", "ja", "ko", "de"])("renders both approved states with the same time and full comparison in %s", async language => {
     await i18n.changeLanguage(language);
     const { rerender } = render(<PulsePaceCard data={cycle(80)} {...actions()}/>);
@@ -183,9 +244,9 @@ describe("shared cycle pace card", () => {
   it("preserves unknown versus recorded zero and hides another window's daily history", () => {
     const data = cycle(); data.coachExtras = { observedWindow: { kind: "weekly", windowMinutes: 10080, resetsAt: data.windows[1].resetsAt! }, resetNotice: null, dailyObservations: [{ date: "2026-11-08", consumedPercentPoints: null, coveredMinutes: 0, partial: true }, { date: "2026-11-09", consumedPercentPoints: 0, coveredMinutes: 30, partial: true }] };
     const { rerender } = render(<PulsePaceCard data={data} {...actions()}/>);
-    fireEvent.click(screen.getByText("Daily observations this cycle"));
+    fireEvent.click(screen.getByText("Observation basis this cycle"));
     expect(screen.getByText("Not observed")).toBeVisible(); expect(screen.getByText("0 pp")).toBeVisible();
-    expect(screen.getByText(quotaCoachCopy("en", "dailyNote"))).toBeVisible();
+    expect(screen.getByText(quotaCoachCopy("en", "dailyNote"), { exact: false })).toBeVisible();
     data.coachExtras.observedWindow!.resetsAt = iso(9999); rerender(<PulsePaceCard data={data} {...actions()}/>);
     expect(screen.queryByText("Daily observations this cycle")).not.toBeInTheDocument();
   });

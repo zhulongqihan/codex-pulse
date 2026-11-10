@@ -12,6 +12,7 @@ export type OverviewResponse = {
   startDate: string;
   endDate: string;
   updatedAt: string | null;
+  retainedFrom?: string | null;
   daily: Array<{
     date: string;
     inputTokens: number;
@@ -166,6 +167,7 @@ export type CodexCredits = {
 };
 
 export type CodexLimitsResponse = {
+  identityRevision?: number;
   session: CodexLimitWindow | null;
   weekly: CodexLimitWindow | null;
   credits?: CodexCredits | null;
@@ -592,6 +594,23 @@ export async function updateWidgetSnapshot(data: TrayPopoverData): Promise<void>
 export type PulsePaths = { data: string; logs: string; profile: string; temporary: string; exports: string };
 export async function getPulsePaths(): Promise<PulsePaths> {
   return invoke<PulsePaths>("get_pulse_paths");
+}
+
+export type UpdateRecoveryResult = {
+  id: string;
+  status: "restored" | "incomplete" | "failed";
+  reason: string;
+  attemptedVersion: string | null;
+  recordedAt: string | null;
+};
+export function fetchUpdateRecoveryResult(): Promise<UpdateRecoveryResult | null> {
+  return invoke("fetch_update_recovery_result");
+}
+export function dismissUpdateRecoveryResult(id: string): Promise<void> {
+  return invoke("dismiss_update_recovery_result", { id });
+}
+export function openUpdateRecords(): Promise<void> {
+  return invoke("open_update_records");
 }
 
 export type SessionRescanResponse = {

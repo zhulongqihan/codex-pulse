@@ -2,14 +2,27 @@
 import { act, renderHook } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { invoke } from "@tauri-apps/api/core";
+import { listen } from "@tauri-apps/api/event";
 import { compactPaceRange, fetchPulsePace, hasPaceEstimate, paceRange, paceStates, primaryPaceWindow, syntheticCoachSnapshot, syntheticPaceSnapshot, usePulsePace } from "./pulse-pace";
 
 vi.mock("@tauri-apps/api/core", () => ({ invoke: vi.fn() }));
-beforeEach(() => { vi.mocked(invoke).mockReset(); history.replaceState(null, "", "/"); });
+vi.mock("@tauri-apps/api/event", () => ({ listen: vi.fn().mockResolvedValue(() => {}) }));
+beforeEach(() => { vi.mocked(invoke).mockReset(); vi.mocked(listen).mockReset().mockResolvedValue(() => {}); history.replaceState(null, "", "/"); });
 afterEach(() => { vi.useRealTimers(); });
 const window = () => syntheticPaceSnapshot().windows[0];
 
 describe("quota forecast presentation", () => {
+  it("rereads the local snapshot on account-update events without querying the account, then removes its listener", async () => {
+    const remove = vi.fn(); let update!: () => void;
+    vi.mocked(listen).mockImplementation(async (_event, handler) => { update = handler as () => void; return remove; });
+    const initial = syntheticPaceSnapshot(); vi.mocked(invoke).mockResolvedValueOnce(initial);
+    const { result, unmount } = renderHook(() => usePulsePace()); await act(async () => {});
+    const fresh = { ...initial, updatedAt: new Date(Date.parse(initial.updatedAt!) + 60_000).toISOString() };
+    vi.mocked(invoke).mockResolvedValueOnce(fresh); await act(async () => { update(); });
+    expect(result.current.data?.updatedAt).toBe(fresh.updatedAt);
+    expect(vi.mocked(invoke).mock.calls.every(([command]) => command === "fetch_pulse_pace")).toBe(true);
+    unmount(); expect(remove).toHaveBeenCalledOnce();
+  });
   it("rounds a forecast outwards without invented decimal precision", () => {
     expect(compactPaceRange({ ...window(), etaLowerMinutes: 121, etaUpperMinutes: 179 })).toBe("≈2–3h");
     expect(compactPaceRange({ ...window(), etaLowerMinutes: 21, etaUpperMinutes: 33 })).toBe("≈20–35m");

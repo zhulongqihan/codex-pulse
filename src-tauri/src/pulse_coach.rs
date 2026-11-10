@@ -770,6 +770,7 @@ mod tests {
     }
     fn quota(at: i64, used: f64) -> CodexLimitsResponse {
         CodexLimitsResponse {
+            identity_revision: None,
             session: None,
             weekly: Some(CodexLimitWindow {
                 used_percent: used,

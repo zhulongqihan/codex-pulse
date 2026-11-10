@@ -6,6 +6,7 @@ import { StrictMode } from "react";
 import { listen } from "@tauri-apps/api/event";
 import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from "vitest";
 import App from "./App";
+import { syntheticCoachSnapshot } from "@/lib/pulse-pace";
 import i18n from "./i18n";
 import tauriConfig from "../../src-tauri/tauri.conf.json";
 import forecastFixture from "../../e2e/fixtures/reset-forecast.json";
@@ -24,10 +25,16 @@ const updateWidgetSnapshotMock = vi.hoisted(() => vi.fn());
 const setBackgroundRefreshIntervalMock = vi.hoisted(() => vi.fn());
 const writeTextMock = vi.hoisted(() => vi.fn());
 const eventListeners = vi.hoisted(() => new Map<string, Array<(event: { payload: any }) => void>>());
+const recoveryReadMock = vi.hoisted(() => vi.fn());
+const recoveryDismissMock = vi.hoisted(() => vi.fn());
+const updateRecordsMock = vi.hoisted(() => vi.fn());
 
 vi.mock("@tauri-apps/api/core", () => ({
   isTauri: () => false,
   invoke: (command: string, ...args: any[]) => {
+    if (command === "fetch_update_recovery_result") return recoveryReadMock();
+    if (command === "dismiss_update_recovery_result") return recoveryDismissMock(...args);
+    if (command === "open_update_records") return updateRecordsMock();
     if (command === "update_widget_snapshot") { updateWidgetSnapshotMock(...args); return Promise.resolve(); }
     if (command === "get_pulse_paths") return Promise.resolve({ data: "F:/CodexPulse/data", exports: "F:/CodexPulse/data/exports", logs: "F:/CodexPulse/data/logs", profile: "F:/CodexPulse/data/webview", temporary: "F:/CodexPulse/data/tmp" });
     if (command === "update_tray") {
@@ -202,8 +209,11 @@ function mockLoadedDashboard() {
 }
 
 describe("App", () => {
-  it.each(["sessions", "settings"])("opens account details after the native pace card leaves %s", async source => {
+  it.each(["sessions", "settings"])("opens cycle pace observations after the native pace card leaves %s", async source => {
     mockLoadedDashboard();
+    const invokeLoaded = invokeMock.getMockImplementation()!;
+    invokeMock.mockImplementation((command: string, ...args: unknown[]) => command === "fetch_pulse_pace"
+      ? Promise.resolve(syntheticCoachSnapshot("roomy")) : invokeLoaded(command, ...args));
     setPageActive(true);
     render(<App />);
     await screen.findByTestId("dashboard-hero");
@@ -215,17 +225,75 @@ describe("App", () => {
     });
     await waitFor(() => expect(screen.queryByRole("tab", { name: "Appearance" })).not.toBeInTheDocument());
     expect(screen.getByTestId("dashboard-hero")).toBeVisible();
-    expect(document.getElementById("pulse-account-details")).toBeInTheDocument();
-    expect(document.activeElement).not.toBe(document.getElementById("pulse-account-details"));
+    expect(document.getElementById("pulse-pace-details")).toBeInTheDocument();
+    expect(document.activeElement).not.toBe(document.getElementById("pulse-pace-details"));
     setPageActive(true);
     fireEvent.focus(window);
-    await waitFor(() => expect(document.activeElement).toBe(document.getElementById("pulse-account-details")));
+    await waitFor(() => expect(document.activeElement).toBe(document.getElementById("pulse-pace-details")));
+    const observations = document.querySelector<HTMLDetailsElement>("#pulse-pace-details .coach-daily")!;
+    expect(observations.open).toBe(true);
+    observations.open = false;
+    await act(async () => {
+      for (const callback of eventListeners.get("pulse-show-pace-details") ?? []) callback({ payload: null });
+    });
+    await waitFor(() => expect(observations.open).toBe(true));
+  });
+  it.each([760, 1440])("prioritizes pace in compact windows while keeping today's usage reachable at %ipx", async width => {
+    Object.defineProperty(window, "innerWidth", { configurable: true, writable: true, value: width });
+    mockLoadedDashboard();
+    render(<App />);
+    await screen.findByTestId("dashboard-hero");
+    const pace = screen.getByTestId("pulse-coach-overview");
+    const today = screen.getByTestId("today-summary");
+    const earlier = width <= 1100 ? pace : today;
+    const later = width <= 1100 ? today : pace;
+    expect(earlier.compareDocumentPosition(later) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(screen.getByTestId("today-tokens")).toBeVisible();
+    expect(document.querySelector(".pulse-statusbar")?.textContent).not.toContain("— logs");
+  });
+  it.each([760, 1440])("opens account recovery directly from a native companion at %ipx", async width => {
+    Object.defineProperty(window, "innerWidth", { configurable: true, writable: true, value: width });
+    setPageActive(true);
+    mockLoadedDashboard();
+    render(<App />);
+    await screen.findByTestId("dashboard-hero");
+    await userEvent.click(screen.getByTestId("settings-nav-tab"));
+    await act(async () => {
+      for (const callback of eventListeners.get("pulse-show-account") ?? []) callback({ payload: null });
+    });
+    if (width <= 1100) {
+      expect(await screen.findByRole("dialog", { name: "Account capacity" })).toBeVisible();
+      await userEvent.keyboard("{Escape}");
+      expect(screen.queryByRole("dialog", { name: "Account capacity" })).not.toBeInTheDocument();
+      expect(screen.getByRole("tab", { name: "Appearance" })).toBeVisible();
+    } else {
+      await waitFor(() => expect(document.getElementById("pulse-account-rail")).toBeVisible());
+      await waitFor(() => expect(document.activeElement).toBe(document.getElementById("pulse-account-rail")));
+      expect(screen.getByTestId("dashboard-hero")).toBeVisible();
+      expect(screen.queryByRole("tab", { name: "Appearance" })).not.toBeInTheDocument();
+    }
+  });
+  it("keeps the previous update result visible across navigation until marking it read succeeds", async () => {
+    mockLoadedDashboard();
+    recoveryReadMock.mockResolvedValue({ id: "synthetic-receipt", status: "restored", reason: "Updated app did not confirm startup", attemptedVersion: "0.7.2", recordedAt: "2026-11-10T00:00:00Z" });
+    render(<App />);
+    expect(await screen.findByTestId("update-recovery-notice")).toHaveTextContent("restored and verified");
+    await userEvent.click(screen.getByTestId("settings-nav-tab"));
+    expect(screen.getByTestId("update-recovery-notice")).toBeVisible();
+    await userEvent.click(screen.getByRole("button", { name: "Open update records" }));
+    await waitFor(() => expect(updateRecordsMock).toHaveBeenCalledOnce());
+    await userEvent.click(screen.getByRole("button", { name: "Got it" }));
+    await waitFor(() => expect(recoveryDismissMock).toHaveBeenCalledWith({ id: "synthetic-receipt" }));
+    await waitFor(() => expect(screen.queryByTestId("update-recovery-notice")).not.toBeInTheDocument());
   });
   afterEach(() => {
     vi.useRealTimers();
   });
 
   beforeEach(() => {
+    recoveryReadMock.mockReset().mockResolvedValue(null);
+    recoveryDismissMock.mockReset().mockResolvedValue(undefined);
+    updateRecordsMock.mockReset().mockResolvedValue(undefined);
     Object.defineProperty(window, "innerWidth", { configurable: true, writable: true, value: 1440 });
     Element.prototype.scrollIntoView = vi.fn();
     Element.prototype.hasPointerCapture = vi.fn(() => false);
@@ -3264,14 +3332,14 @@ describe("App", () => {
     expect(localStorage.getItem("dismissed_update_tag")).toBe("v0.5.0");
 
     // The small upgrade button in the header next to CODEX USAGE DESKTOP should appear
-    const headerUpgradeButton = screen.getByRole("button", { name: "Upgrade v0.5.0" });
+    const headerUpgradeButton = screen.getByRole("button", { name: "Download update v0.5.0" });
     expect(headerUpgradeButton).toBeInTheDocument();
 
     // Click the header upgrade button to download and install the update
     await userEvent.click(headerUpgradeButton);
     expect(invokeMock).toHaveBeenCalledWith("download_and_install_update");
 
-    const restartButton = await screen.findByRole("button", { name: "Restart to update" });
+    const restartButton = await screen.findByRole("button", { name: "Restart to finish update" });
     await userEvent.click(restartButton);
     expect(invokeMock).toHaveBeenCalledWith("restart_app");
   });
@@ -3318,7 +3386,7 @@ describe("App", () => {
     await waitFor(() => expect(screen.getByText("New update available: v0.5.0")).toBeInTheDocument());
     await waitFor(() => expect(eventListeners.get("update-download-progress")?.length).toBeGreaterThan(0));
 
-    await userEvent.click(screen.getByRole("button", { name: "Upgrade Now" }));
+    await userEvent.click(screen.getByRole("button", { name: "Download update" }));
 
     eventListeners.get("update-download-progress")?.forEach((listener) => {
       listener({ payload: { downloaded: 50, total: 100, finished: false } });
@@ -3328,7 +3396,7 @@ describe("App", () => {
     expect(screen.getByRole("progressbar")).toHaveAttribute("aria-valuenow", "50");
 
     finishDownload({ version: "0.5.0" });
-    expect(await screen.findByRole("button", { name: "Restart to Update" })).toBeInTheDocument();
+    expect(await screen.findByRole("button", { name: "Restart to finish update" })).toBeInTheDocument();
   });
 
   it("defaults to hiding the Logs tab, and shows it when toggled in Settings", async () => {
@@ -3473,7 +3541,7 @@ describe("App", () => {
     await userEvent.click(await screen.findByRole("button", { name: "Settings" }));
     await userEvent.click(screen.getByRole("tab", { name: "General" }));
 
-    const intervalSelect = screen.getByRole("combobox", { name: "Dashboard Auto-refresh" });
+    const intervalSelect = screen.getByRole("combobox", { name: "Local log scan interval" });
     expect(intervalSelect).toHaveTextContent(`Every ${minutes} minutes`);
     await waitFor(() => expect(setBackgroundRefreshIntervalMock).toHaveBeenCalledWith({ minutes }));
 

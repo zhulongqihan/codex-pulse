@@ -116,6 +116,7 @@ pub fn stage(app: &tauri::AppHandle, data_dir: &Path) -> Result<UpdateInstallRes
     verify_package(&partial, &manifest)?;
     // Only verified bytes and their signed metadata can become a pending update.
     fs::copy(&partial, &package).map_err(|e| e.to_string())?;
+    crate::pulse_update_result::archive_previous(data_dir)?;
     fs::write(directory.join("pending.json"), signed).map_err(|e| e.to_string())?;
     let _ = fs::remove_file(partial);
     let _ = app.emit("update-download-progress", UpdateDownloadProgress { downloaded, total: Some(downloaded), finished: true });

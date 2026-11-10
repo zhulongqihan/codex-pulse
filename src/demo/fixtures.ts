@@ -67,7 +67,7 @@ export function overview(range = "30d", project?: string): OverviewResponse {
   }
   const total = zero(); for (const row of daily.values()) add(total, row);
   return {
-    range, days, startDate, endDate, timezone: "Asia/Shanghai", updatedAt: now.toISOString(), daily: [...daily.values()],
+    range, days, startDate, endDate, timezone: "Asia/Shanghai", updatedAt: now.toISOString(), retainedFrom, daily: [...daily.values()],
     totals: { ...total, avgTokensPerDay: total.totalTokens / days, avgCostPerDay: total.costUSD === null ? null : total.costUSD / days,
       cacheHitRate: total.inputTokens ? total.cachedInputTokens / total.inputTokens : 0,
       costPerMillionTokens: total.costUSD === null || !total.totalTokens ? null : total.costUSD / total.totalTokens * 1e6 },

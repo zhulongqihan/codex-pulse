@@ -42,6 +42,10 @@ import {
   setBackgroundRefreshInterval,
   type UsageRefreshResponse,
   type ScanResponse,
+  fetchUpdateRecoveryResult,
+  dismissUpdateRecoveryResult,
+  openUpdateRecords,
+  type UpdateRecoveryResult,
 } from "@/lib/api";
 import { formatCurrency, formatCurrencyShort, formatNumber } from "@/lib/formatters";
 import type { TrayQuotaIndicator, TrayMetricIndicator } from "@/lib/tray-icon";
@@ -176,6 +180,35 @@ export function useUsageDashboard() {
   const [updateInstallStatus, setUpdateInstallStatus] = useState<UpdateInstallStatus>("idle");
   const [updateProgress, setUpdateProgress] = useState<UpdateProgressState>(emptyUpdateProgress);
   const [updateInstallError, setUpdateInstallError] = useState<string | null>(null);
+  const [updateRecoveryResult, setUpdateRecoveryResult] = useState<UpdateRecoveryResult | null>(null);
+  const [updateRecoveryError, setUpdateRecoveryError] = useState<string | null>(null);
+  useEffect(() => {
+    let active = true;
+    void fetchUpdateRecoveryResult().then(result => {
+      if (active) { setUpdateRecoveryResult(result ?? null); setUpdateRecoveryError(null); }
+    }).catch(error => {
+      console.error("Failed to read the previous update result:", error);
+      if (active) setUpdateRecoveryError(errorMessage(error, "Could not read the previous update result."));
+    });
+    return () => { active = false; };
+  }, []);
+
+  const handleDismissUpdateRecovery = async () => {
+    try {
+      if (updateRecoveryResult) await dismissUpdateRecoveryResult(updateRecoveryResult.id);
+      setUpdateRecoveryResult(null); setUpdateRecoveryError(null);
+    } catch (error) {
+      console.error("Failed to acknowledge the previous update result:", error);
+      setUpdateRecoveryError(errorMessage(error, "Could not acknowledge the previous update result."));
+    }
+  };
+  const handleOpenUpdateRecords = async () => {
+    try { await openUpdateRecords(); }
+    catch (error) {
+      console.error("Failed to open the update records:", error);
+      setUpdateRecoveryError(errorMessage(error, "Could not open the update records."));
+    }
+  };
   const [isUpdateDismissed, setIsUpdateDismissed] = useState(false);
   const [trayClockMinute, setTrayClockMinute] = useState(() => Math.floor(Date.now() / 60_000));
 
@@ -314,6 +347,7 @@ export function useUsageDashboard() {
   const lastLimitsFetchTimeRef = useRef<number>(0);
   const limitsFetchInFlightRef = useRef(false);
   const limitsGeneration = useRef(0);
+  const quotaIdentityRevision = useRef(0);
   const lastAutoScanTimeRef = useRef<number>(0);
   const scanInFlightRef = useRef<Promise<void> | null>(null);
   const updateCheckInFlightRef = useRef<Promise<void> | null>(null);
@@ -377,6 +411,8 @@ export function useUsageDashboard() {
     try {
       const data = await fetchCodexLimits();
       if (generation !== limitsGeneration.current) return;
+      if (data.identityRevision !== undefined && data.identityRevision < quotaIdentityRevision.current) return;
+      if (data.identityRevision !== undefined) quotaIdentityRevision.current = data.identityRevision;
       setCodexLimits(data);
       setCodexLimitsError(null);
     } catch (limitsError) {
@@ -389,6 +425,49 @@ export function useUsageDashboard() {
       }
     }
   });
+
+  // The native sampler and the legacy account panel consume the same successful
+  // quota read. Receiving it must not start another authenticated request.
+  const acceptSharedCodexLimits = useEffectEvent((data: CodexLimitsResponse) => {
+    if ((data.identityRevision ?? 0) < quotaIdentityRevision.current) return;
+    quotaIdentityRevision.current = data.identityRevision ?? 0;
+    limitsGeneration.current++;
+    limitsFetchInFlightRef.current = false;
+    setIsLimitsLoading(false);
+    setCodexLimits(data);
+    setCodexLimitsError(null);
+    lastLimitsFetchTimeRef.current = Date.now();
+  });
+
+  const invalidateQuotaIdentity = useEffectEvent((revision: number) => {
+    if (!Number.isSafeInteger(revision) || revision <= quotaIdentityRevision.current) return;
+    quotaIdentityRevision.current = revision;
+    limitsGeneration.current++;
+    limitsFetchInFlightRef.current = false;
+    lastLimitsFetchTimeRef.current = 0;
+    windowActivationInFlightRef.current = false;
+    setCodexLimits(null); setCodexLimitsError(null);
+    setIsLimitsLoading(false); setIsLimitsRefreshing(false);
+    setIsWindowActivating(false); setWindowActivationStatus(null); setWindowActivationError(null);
+  });
+
+  useEffect(() => {
+    let cancelled = false;
+    const stops: (() => void)[] = [];
+    const add = (subscription: Promise<() => void>) => {
+      void subscription.then(unlisten => { if (cancelled) unlisten(); else stops.push(unlisten); })
+        .catch(error => console.error("Failed to listen for shared quota state:", error));
+    };
+    add(listen<CodexLimitsResponse>("codex-limits-updated", event => acceptSharedCodexLimits(event.payload)));
+    add(listen<{ revision: number }>("codex-identity-updated", event => invalidateQuotaIdentity(event.payload.revision)));
+    add(listen<{ revision: number; error: string }>("codex-limits-failed", event => {
+      if (event.payload.revision < quotaIdentityRevision.current) return;
+      invalidateQuotaIdentity(event.payload.revision);
+      setCodexLimitsError(event.payload.error);
+      setIsLimitsLoading(false);
+    }));
+    return () => { cancelled = true; stops.forEach(stop => stop()); };
+  }, []);
 
   const loadLatestCodexReset = useEffectEvent(async () => {
     setIsResetLoading(true);
@@ -637,10 +716,8 @@ export function useUsageDashboard() {
 
   const handleBackgroundRefreshCompleted = useEffectEvent(async (refresh: UsageRefreshResponse) => {
     if (refresh.limits) {
-      setCodexLimits(refresh.limits);
-      setCodexLimitsError(null);
-      lastLimitsFetchTimeRef.current = Date.now();
-    } else if (refresh.limitsError) {
+      if ((refresh.limits.identityRevision ?? 0) >= quotaIdentityRevision.current) acceptSharedCodexLimits(refresh.limits);
+    } else if (refresh.limitsError && refresh.limitsError !== "identityChanged") {
       setCodexLimitsError(refresh.limitsError);
       lastLimitsFetchTimeRef.current = Date.now();
     } else if (refresh.limitsSkipped && (codexLimitsError !== null || hasExpiredCodexLimitWindow(codexLimits))) {
@@ -902,6 +979,7 @@ export function useUsageDashboard() {
     }
 
     const widgetData: TrayPopoverData = {
+        quotaIdentityRevision: quotaIdentityRevision.current,
         localUsage: buildLocalUsageSummary(todayOverview, scanError !== null || isTodayStale),
         integration: buildPulseIntegration(todayOverview, codexLimits, scanError !== null || isTodayStale, codexLimitsError !== null),
         updatedAt: todayOverview?.updatedAt ?? null,
@@ -1097,20 +1175,25 @@ export function useUsageDashboard() {
     }
 
     windowActivationInFlightRef.current = true;
+    const activationIdentityRevision = quotaIdentityRevision.current;
     setIsWindowActivating(true);
     setWindowActivationStatus(null);
     setWindowActivationError(null);
     try {
       const response = await activateCodexWindow();
+      if (activationIdentityRevision !== quotaIdentityRevision.current) return;
       setCodexLimits(response.limits);
       setCodexLimitsError(null);
       setWindowActivationStatus(response.status);
       lastLimitsFetchTimeRef.current = Date.now();
     } catch (activationError) {
+      if (activationIdentityRevision !== quotaIdentityRevision.current) return;
       setWindowActivationError(errorMessage(activationError, t("limits.activate_failed")));
     } finally {
-      windowActivationInFlightRef.current = false;
-      setIsWindowActivating(false);
+      if (activationIdentityRevision === quotaIdentityRevision.current) {
+        windowActivationInFlightRef.current = false;
+        setIsWindowActivating(false);
+      }
     }
   }
 
@@ -1237,6 +1320,7 @@ export function useUsageDashboard() {
       await downloadAndInstallUpdate();
       setUpdateProgress((progress) => ({ ...progress, percent: 100, finished: true }));
       setUpdateInstallStatus("installed");
+      setUpdateRecoveryResult(null); setUpdateRecoveryError(null);
     } catch (e) {
       setUpdateInstallStatus("idle");
       setUpdateProgress(emptyUpdateProgress);
@@ -1302,6 +1386,10 @@ export function useUsageDashboard() {
     updateInstallStatus,
     updateProgress,
     updateInstallError,
+    updateRecoveryResult,
+    updateRecoveryError,
+    handleDismissUpdateRecovery,
+    handleOpenUpdateRecords,
     isUpdateDismissed,
     launchAtLogin,
     launchAtLoginKnown,

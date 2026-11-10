@@ -65,10 +65,17 @@ describe("desktop widget quota pacing", () => {
     };
     state.data!.coachExtras = { dailyObservations: [], resetNotice: notice };
     const { rerender } = render(<PulseWidget/>);
-    fireEvent.click(screen.getByRole("button", { name: "Reset notice" }));
+    fireEvent.click(screen.getByRole("button", { name: "Third-party notice · unconfirmed" }));
     expect(state.action).toHaveBeenCalledWith("expand");
     notice.endAt = new Date(now - 1).toISOString();
     rerender(<PulseWidget/>);
-    expect(screen.queryByRole("button", { name: "Reset notice" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Third-party notice · unconfirmed" })).not.toBeInTheDocument();
+  });
+  it("routes account recovery separately from ordinary workspace and pace details", () => {
+    state.data!.windows = []; state.data!.updatedAt = null; state.data!.reason = "login_required";
+    render(<PulseWidget/>);
+    fireEvent.click(screen.getByRole("button", { name: "Check account and connection" }));
+    expect(state.details).toHaveBeenCalledWith("account");
+    expect(state.action).not.toHaveBeenCalledWith("showMain");
   });
 });

@@ -251,7 +251,7 @@ export function SettingsPage({
                           <Sparkles className="h-4 w-4 text-primary" />
                           {t("settings.update_available", { version: updateInfo.latestVersion })}
                         </h5>
-                        <p className="text-xs text-muted-foreground leading-relaxed">
+                        <p className="text-[12px] text-muted-foreground leading-relaxed">
                           {t("settings.update_available_desc")} {updateInfo.releaseName ? `"${updateInfo.releaseName}"` : ""}
                         </p>
                       </div>
@@ -266,16 +266,17 @@ export function SettingsPage({
                         {upgradeLabel}
                       </Button>
                     </div>
+                    <p role="status" className="text-[12px] text-muted-foreground">{t(isUpdateInstalled ? "ux.update_step_restart" : "ux.update_step_download")}</p>
                     {updateInfo.releaseNotes ? (
                       isRateLimitError ? (
-                        <div className="rounded-lg bg-amber-50/60 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-500/20 p-3 text-xs text-amber-800 dark:text-amber-300 leading-normal flex items-start gap-2 select-text font-sans">
+                        <div className="rounded-lg bg-amber-50/60 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-500/20 p-3 text-[12px] text-amber-800 dark:text-amber-300 leading-normal flex items-start gap-2 select-text font-sans">
                           <AlertTriangle className="h-4 w-4 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
                           <div className="whitespace-pre-wrap">
                             {t("update.rate_limit_error")}
                           </div>
                         </div>
                       ) : (
-                        <div className="rounded-lg bg-indigo-50/50 dark:bg-black/25 border border-indigo-100 dark:border-white/5 p-3 text-xs font-mono text-muted-foreground max-h-32 overflow-y-auto whitespace-pre-wrap leading-relaxed select-text">
+                        <div className="rounded-lg bg-indigo-50/50 dark:bg-black/25 border border-indigo-100 dark:border-white/5 p-3 text-[12px] font-mono text-muted-foreground max-h-32 overflow-y-auto whitespace-pre-wrap leading-relaxed select-text">
                           {parsedReleaseNotes}
                         </div>
                       )
@@ -307,7 +308,7 @@ export function SettingsPage({
                     <CheckCircle className="h-5 w-5 text-emerald-600 dark:text-emerald-400 shrink-0" />
                     <div>
                       <p className="font-medium text-foreground">{t("settings.up_to_date")}</p>
-                      <p className="text-xs text-muted-foreground">{t("settings.up_to_date_desc", { version: updateInfo.currentVersion })}</p>
+                      <p className="text-[12px] text-muted-foreground">{t("settings.up_to_date_desc", { version: updateInfo.currentVersion })}</p>
                     </div>
                   </div>
                 )}
@@ -492,7 +493,7 @@ export function SettingsPage({
           <div className="space-y-1">
             <h4 className="text-sm font-medium text-foreground">{isMac ? t("settings.menu_bar_format_title") : shellCopy("formatTitle")}</h4>
             <p className="text-sm leading-6 text-muted-foreground">
-              {isMac ? t("settings.menu_bar_format_desc") : shellCopy("formatDescription")}
+              {t("ux.countdown_description")}
             </p>
           </div>
           <div className="space-y-4">
@@ -501,7 +502,7 @@ export function SettingsPage({
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
                 {(["minute", "hour", "day"] as const).map((unit) => (
                   <label key={unit} className="space-y-2">
-                    <span className="block text-xs text-muted-foreground">
+                    <span className="block text-[12px] text-muted-foreground">
                       {t(`settings.menu_bar_countdown_unit_${unit}`)}
                     </span>
                     <input
@@ -515,6 +516,7 @@ export function SettingsPage({
                   </label>
                 ))}
               </div>
+              <p className="text-[12px] text-muted-foreground" aria-live="polite">{t("ux.countdown_preview", {value: `1${trayCountdownUnits.day} 2${trayCountdownUnits.hour} 30${trayCountdownUnits.minute}`})}</p>
             </fieldset>
           </div>
         </div>

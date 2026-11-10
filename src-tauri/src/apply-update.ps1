@@ -97,7 +97,7 @@ try {
   }
   if (!$ready) { throw 'Updated app did not confirm startup' }
   Remove-Item -LiteralPath (Join-Path $dataDirectory 'updates/pending.json') -Force -ErrorAction SilentlyContinue
-  'Update installed successfully' | Set-Content -LiteralPath (Join-Path $dataDirectory 'updates/result.txt')
+  'Update installed successfully' | Set-Content -LiteralPath (Join-Path $dataDirectory 'updates/result.txt') -Encoding UTF8
 } catch {
   $failure = $_.Exception.Message
   if ($newProcess -and !$newProcess.HasExited) { Stop-Process -Id $newProcess.Id -Force; Wait-Process -Id $newProcess.Id -ErrorAction SilentlyContinue }
@@ -109,7 +109,7 @@ try {
   if (Test-Path -LiteralPath $pending) { Move-Item -LiteralPath $pending -Destination (Join-Path $dataDirectory 'updates/pending.failed.json') -Force }
   if (Test-Path -LiteralPath $update.health) { Remove-Item -LiteralPath $update.health -Force }
   if (Test-Path -LiteralPath $incoming) { Remove-Item -LiteralPath $incoming -Force }
-  "Update failed: $failure. Previous executable restored; user data preserved." | Set-Content -LiteralPath (Join-Path $dataDirectory 'updates/result.txt')
+  "Update failed: $failure. Previous executable restored; user data preserved." | Set-Content -LiteralPath (Join-Path $dataDirectory 'updates/result.txt') -Encoding UTF8
   $env:PULSE_DATA_DIR = $dataDirectory
   Start-Process -FilePath $destination -WorkingDirectory (Split-Path -Parent $destination) -WindowStyle Hidden
   exit 1

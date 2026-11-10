@@ -7,6 +7,7 @@ vi.mock("@tauri-apps/api/core", () => ({ isTauri: () => state.native }));
 vi.mock("@tauri-apps/api/mocks", () => ({ mockIPC, mockWindows: vi.fn() }));
 vi.mock("@tauri-apps/api/event", () => ({ emit: vi.fn() }));
 import { installDemoBridge } from "./bridge";
+import { fetchPulsePace } from "../pulse/lib/pulse-pace";
 
 beforeEach(() => {
   state.native = false;
@@ -48,5 +49,20 @@ describe("explicit browser-only demo transport", () => {
     await state.callback!("update_tray", { payload: { popover: { quotas: [], tokens: null, cost: null } } });
     expect(await state.callback!("get_widget_snapshot")).toEqual(widget);
     expect(await state.callback!("get_tray_popover")).toMatchObject({ quotas: [], tokens: null, cost: null });
+  });
+  it.each(["", "&coachScenario=fast", "&coachScenario=balanced", "&coachScenario=stale", "&paceState=forecast"])("shares the same synthetic quota reading across surfaces for %s", async query => {
+    history.replaceState(null, "", `/?demo=1${query}`);
+    installDemoBridge();
+    const limits = await state.callback!("fetch_codex_limits") as any;
+    const pace = await fetchPulsePace();
+    for (const window of pace.windows) {
+      const limit = limits[window.kind];
+      if (window.remainingPercent == null) expect(limit).toBeNull();
+      else {
+        expect(limit.remainingPercent).toBe(window.remainingPercent);
+        expect(limit.windowMinutes).toBe(window.windowMinutes);
+        expect(Math.abs(Date.parse(limit.resetsAt) - Date.parse(window.resetsAt!))).toBeLessThan(1000);
+      }
+    }
   });
 });

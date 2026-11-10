@@ -140,6 +140,19 @@ describe("sidebar reset countdown", () => {
 });
 
 describe("sidebar quota colors", () => {
+  it("keeps an expired quota as a neutral last reading and does not invent a reset", () => {
+    const expired={usedPercent:21,remainingPercent:79,windowMinutes:300,resetsAt:new Date(Date.now()-1000).toISOString()};
+    render(<CodexSidebarLimits limits={{session:expired,weekly:null,updatedAt:new Date().toISOString(),source:"test"}} error={null}/>);
+    expect(screen.getByText("Last reading")).toBeInTheDocument();expect(screen.getByText("79%")).toBeInTheDocument();
+    expect(screen.getByRole("progressbar")).toHaveAttribute("data-quota-level","unknown");
+    expect(screen.getByRole("progressbar")).toHaveAttribute("aria-valuetext",expect.stringContaining("79%"));
+    expect(screen.queryByText("100%")).not.toBeInTheDocument();
+  });
+  it("does not offer a five-hour activation for a weekly-only account", () => {
+    const onActivate=vi.fn();render(<CodexSidebarLimits limits={{session:null,weekly:{usedPercent:20,remainingPercent:80,windowMinutes:10080,resetsAt:null},updatedAt:new Date().toISOString(),source:"test",membershipLevel:"plus"}} error={null} onRefreshLimits={vi.fn()} onActivateWindow={onActivate}/>);
+    expect(screen.getByRole("button",{name:"Check quota"})).toBeEnabled();expect(screen.queryByRole("button",{name:"Start limit window"})).not.toBeInTheDocument();
+    expect(screen.getByText(/No 5-hour window was returned/)).toBeInTheDocument();expect(onActivate).not.toHaveBeenCalled();
+  });
   it("restores the original thresholds as mocked quota values change", () => {
     const { rerender } = render(<CodexSidebarLimits limits={null} error={null} />);
     for (const [remaining, color] of [[100, "success"], [70, "success"], [69.9, "warning"], [30, "warning"], [29.9, "error"], [0, "error"], [75, "success"]] as const) {
@@ -180,7 +193,7 @@ describe("CodexLimitsCard component", () => {
       />,
     );
 
-    fireEvent.click(screen.getByRole("button", { name: "Check limits" }));
+    fireEvent.click(screen.getByRole("button", { name: "Check quota" }));
     expect(onRefreshLimits).toHaveBeenCalledOnce();
     expect(onActivateWindow).not.toHaveBeenCalled();
 
@@ -231,7 +244,7 @@ describe("CodexLimitsCard component", () => {
     render(<CodexSidebarLimits limits={null} error={errorMsg} />);
 
     expect(screen.getByText("Not Logged In")).toBeInTheDocument();
-    expect(screen.getByText("codex auth login")).toBeInTheDocument();
+    expect(screen.getByText("codex login")).toBeInTheDocument();
     expect(screen.queryByText("Codex limits unavailable:")).not.toBeInTheDocument();
   });
 
@@ -246,7 +259,7 @@ describe("CodexLimitsCard component", () => {
 
   it("recognizes the native missing-login error code", () => {
     render(<CodexSidebarLimits limits={null} error="chatgptLoginRequired" />);
-    expect(screen.getByText("codex auth login")).toBeInTheDocument();
+    expect(screen.getByText("codex login")).toBeInTheDocument();
   });
 
   it.each([
@@ -256,7 +269,7 @@ describe("CodexLimitsCard component", () => {
   ])("gives specific guidance for %s", (error, message) => {
     render(<CodexSidebarLimits limits={null} error={error} />);
     expect(screen.getByText(message)).toBeInTheDocument();
-    expect(screen.queryByText("codex auth login")).not.toBeInTheDocument();
+    expect(screen.queryByText("codex login")).not.toBeInTheDocument();
   });
 
   it("labels returned windows by duration even when membership is free or absent", () => {
@@ -316,7 +329,7 @@ describe("CodexLimitsCard component", () => {
     render(<CodexLimitsCard onOpenResetCredits={() => {}} limits={{ session: null, weekly: null, resetCreditsAvailableCount: 1, resetCredits: [], updatedAt: "2026-07-15T00:00:00.000Z", source: "oauth", membershipLevel: "plus" }} />);
     expect(screen.getByTestId("reset-area")).toContainElement(screen.getByTestId("reset-credit-count"));
     expect(screen.queryByTestId("limit-row-weekly")).not.toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Check limits" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Check quota" })).not.toBeInTheDocument();
   });
 
   it("shows skeletons only while requests are loading and replaces them independently", () => {

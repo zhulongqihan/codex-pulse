@@ -25,6 +25,8 @@ A quiet quota-pacing companion for Codex on Windows: view remaining quota and re
 - **Two styles and six languages:** Clear/Meter, light/dark/system, density and motion are independent preferences that preserve your working state. Supports Simplified Chinese, Traditional Chinese, English, Japanese, Korean and German.
 - **Exports and updates:** XLSX/Markdown contain range summary, daily, model and project statistics. Pulse updates verify the release signature, product, platform and package digest, preserving data and restoring the previous executable if startup fails.
 
+0.7.2 improves compact-window pacing priority, cycle observations, synchronized readings and stale-data labels. Charts distinguish dates before retained records from zero usage, with fixes for previous-account state and update recovery notices. Read the [release notes](docs/releases/v0.7.2.md#english).
+
 ## Interactive pace preview
 
 | Clear | Meter |
@@ -46,7 +48,7 @@ Both styles share the same capabilities. Clear uses lightweight comparisons and 
 1. Download `CodexPulse-<version>-windows-x64.zip` and its `.sha256` file from the [latest release](https://github.com/zhulongqihan/codex-pulse/releases/latest).
 2. Extract the complete archive into a writable folder, such as `F:\Apps\CodexPulse`. Run **Start-Codex-Pulse.cmd** or **CodexPulse.exe**.
 3. Requires Windows 10/11 x64 and [Microsoft Edge WebView2 Evergreen Runtime](https://developer.microsoft.com/microsoft-edge/webview2/). The portable archive does not bundle that system runtime. Node.js and Rust are not required.
-4. Confirm your Codex Home in settings, then choose appearance, refresh interval and widget preferences. Account queries require an existing ChatGPT sign-in; API key mode does not expose subscription quotas.
+4. Confirm your Codex Home in settings, then choose appearance, local log scan interval and widget preferences. Account queries require an existing ChatGPT sign-in; API key mode does not expose subscription quotas.
 
 To add desktop and Start menu entries, use the app's shortcut action or run **Create-Codex-Pulse-Shortcuts.cmd** from the portable package. Recreate the shortcuts after moving the application directory.
 

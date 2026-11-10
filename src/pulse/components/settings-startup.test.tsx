@@ -35,6 +35,23 @@ beforeEach(async () => {
 });
 
 describe("login startup and the existing titlebar setting", () => {
+  it("keeps downloading separate from applying an update on restart", async () => {
+    const updateInfo={hasUpdate:true,currentVersion:"0.7.1",latestVersion:"0.7.2",latestTag:"v0.7.2",releaseName:"0.7.2",releaseNotes:"",releaseUrl:"https://github.com/zhulongqihan/codex-pulse/releases/tag/v0.7.2",etag:null,notModified:false};
+    const handlers=props({updateInfo});const {rerender}=render(<SettingsPage {...handlers}/>);
+    await userEvent.click(screen.getByRole("button",{name:"Download update"}));expect(handlers.onUpgrade).toHaveBeenCalledOnce();
+    expect(screen.getByText(/Step 1: download and verify/)).toBeVisible();
+    rerender(<SettingsPage {...handlers} updateInstallStatus="installed"/>);
+    expect(screen.getByRole("button",{name:"Restart to finish update"})).toBeEnabled();
+    expect(screen.getByText(/The current app is still running/)).toBeVisible();
+    expect(handlers.onUpgrade).toHaveBeenCalledTimes(1);
+  });
+  it("previews countdown suffix text without treating it as a precision selector", async () => {
+    const handlers=props({initialSection:"menuBar"});const {rerender}=render(<SettingsPage {...handlers}/>);
+    expect(screen.getByText("Display example: 1d 2h 30m")).toBeVisible();
+    rerender(<SettingsPage {...handlers} trayCountdownUnits={{minute:"min",hour:"hr",day:"day"}}/>);
+    expect(screen.getByText("Display example: 1day 2hr 30min")).toBeVisible();
+    expect(handlers.onTrayCountdownUnitChange).not.toHaveBeenCalled();
+  });
   it.each(["en", "zh", "zh-Hant", "ja", "ko", "de"])("keeps login startup separate from opening Codex in %s", async language => {
     await i18n.changeLanguage(language);
     render(<SettingsPage {...props()}/>);

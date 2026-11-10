@@ -25,6 +25,8 @@
 - **两版外观与六种语言**：清爽／刻度、浅色／深色／系统、密度与动效分别选择；切换保留正在查看的数据。支持简体中文、繁体中文、English、日本語、한국어、Deutsch。
 - **导出与更新**：XLSX／Markdown 包含所选范围的汇总、日期、模型和项目。自有更新源验证签名、品牌、平台与包摘要，更新失败保留数据并恢复原程序。
 
+0.7.2 改善小窗口配速优先级、观测详情、跨入口读数同步与陈旧提示；图表区分留存前无记录和零用量，并修复账号切换后的旧状态与更新回滚提示。查看[本版更新说明](docs/releases/v0.7.2.md)。
+
 ## 节奏卡片交互预览
 
 | 清爽 Clear | 刻度 Meter |
@@ -46,7 +48,7 @@
 1. 在 [发布页](https://github.com/zhulongqihan/codex-pulse/releases/latest) 下载 `CodexPulse-<版本>-windows-x64.zip` 和对应 `.sha256` 文件。
 2. 完整解压到可写目录，例如 `F:\Apps\CodexPulse`，双击 **Start-Codex-Pulse.cmd** 或 **CodexPulse.exe**。
 3. 需要 Windows 10/11 x64 和 [Microsoft Edge WebView2 Evergreen Runtime](https://developer.microsoft.com/microsoft-edge/webview2/)。便携包不包含该系统运行时，不需要 Node.js 或 Rust。
-4. 在设置中确认 Codex Home，选择外观、刷新间隔与悬浮窗。账号查询需要已有的 ChatGPT 登录；API Key 模式不提供订阅额度。
+4. 在设置中确认 Codex Home，选择外观、本机日志扫描间隔与悬浮窗。账号查询需要已有的 ChatGPT 登录；API Key 模式不提供订阅额度。
 
 需要桌面与开始菜单入口时，可使用程序内的创建快捷方式操作，或运行便携包中的 **Create-Codex-Pulse-Shortcuts.cmd**。移动程序目录后，重新创建即可修复入口。
 

@@ -29,14 +29,14 @@ type ProjectUsageCardProps = {
 const costToneClasses: Record<CostTone, string> = {
   unavailable: "bg-transparent",
   zero: "bg-muted-foreground/25",
-  low: "bg-emerald-500",
-  medium: "bg-amber-500",
-  high: "bg-rose-500",
+  low: "bg-primary/40",
+  medium: "bg-primary/65",
+  high: "bg-primary",
 };
 const compactTokenFormatter = new Intl.NumberFormat("en-US", { notation: "compact", maximumFractionDigits: 2 });
 
 function Peak({ show, label }: { show: boolean; label: string }) {
-  return show ? <span className="rounded-full bg-primary/10 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-primary">{label}</span> : null;
+  return show ? <span className="rounded-full bg-primary/10 px-1.5 py-0.5 text-[12px] font-semibold uppercase tracking-wide text-primary">{label}</span> : null;
 }
 
 export function ProjectUsageCard({ projects, projectDaily, onProjectClick }: ProjectUsageCardProps) {
@@ -55,16 +55,14 @@ export function ProjectUsageCard({ projects, projectDaily, onProjectClick }: Pro
     <Card data-testid="project-comparison">
       <CardContent className="p-0">
         <div className="flex flex-wrap items-center justify-between gap-4 border-b border-border px-4 py-4 sm:px-6">
-          <div className="flex flex-wrap items-center gap-x-5 gap-y-2 text-xs text-muted-foreground" aria-label={t("projects.token_legend")}>
-            <span className="inline-flex items-center gap-1.5"><i className="h-2 w-2 rounded-full bg-sky-500" />{t("projects.legend.uncached")}</span>
-            <span className="inline-flex items-center gap-1.5"><i className="h-2 w-2 rounded-full bg-emerald-500" />{t("projects.legend.cached")}</span>
-            <span className="inline-flex items-center gap-1.5"><i className="h-2 w-2 rounded-full bg-violet-500" />{t("projects.legend.output")}</span>
-            <span className="text-emerald-600 dark:text-emerald-400">● {t("projects.legend.low_cost")}</span>
-            <span className="text-amber-600 dark:text-amber-400">● {t("projects.legend.medium_cost")}</span>
-            <span className="text-rose-600 dark:text-rose-400">● {t("projects.legend.high_cost")}</span>
+          <div className="flex flex-wrap items-center gap-x-5 gap-y-2 text-[12px] text-muted-foreground" aria-label={t("projects.token_legend")}>
+            <span className="inline-flex items-center gap-1.5"><i className="h-2 w-2 rounded-full pulse-token-input" />{t("projects.legend.uncached")}</span>
+            <span className="inline-flex items-center gap-1.5"><i className="h-2 w-2 rounded-full pulse-token-cached" />{t("projects.legend.cached")}</span>
+            <span className="inline-flex items-center gap-1.5"><i className="h-2 w-2 rounded-full pulse-token-output" />{t("projects.legend.output")}</span>
+            <span>{t("ux.relative_project_cost")}</span>
           </div>
           <div className="flex min-w-0 items-center gap-2">
-            <label htmlFor="project-sort" className="shrink-0 text-xs text-muted-foreground">{t("projects.sort.label")}</label>
+            <label htmlFor="project-sort" className="shrink-0 text-[12px] text-muted-foreground">{t("projects.sort.label")}</label>
             <Select value={sort} onValueChange={(value) => changeSort(value as ProjectSort)}>
               <SelectTrigger id="project-sort" aria-label={t("projects.sort.label")} className="h-9 w-[150px]">
                 <SelectValue />
@@ -89,7 +87,7 @@ export function ProjectUsageCard({ projects, projectDaily, onProjectClick }: Pro
         ) : (
           <div className="overflow-x-auto px-4 sm:px-6">
             <table className="min-w-[680px] w-full table-fixed border-separate border-spacing-0 text-sm">
-              <thead><tr className="text-left text-xs uppercase tracking-[0.14em] text-muted-foreground">
+              <thead><tr className="text-left text-[12px] uppercase tracking-[0.14em] text-muted-foreground">
                 <th className="w-[25%] border-b border-border py-3 font-medium">{t("projects.cols.project")}</th>
                 <th className="w-[37%] border-b border-border px-3 py-3 font-medium">{t("projects.cols.trend")}</th>
                 <th className="w-[38%] border-b border-border py-3 font-medium">{t("projects.cols.tokens_cost")}</th>
@@ -110,7 +108,7 @@ export function ProjectUsageCard({ projects, projectDaily, onProjectClick }: Pro
                 }} onKeyDown={(event) => {
                   if (event.target === event.currentTarget && onProjectClick && (event.key === "Enter" || event.key === " ")) { event.preventDefault(); activate(); }
                 }} className={cn("group align-top", onProjectClick && "cursor-pointer hover:bg-muted/40 focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary/50")}>
-                  <td className="border-b border-border/70 py-4 pr-4"><div className="flex min-w-0 items-center gap-2"><p className="truncate font-medium text-foreground group-hover:text-primary">{label}</p>{project.codexProjectName ? <span className="shrink-0 rounded-full border border-indigo-500/20 bg-indigo-500/10 px-1.5 py-0.5 text-[9px] font-semibold text-indigo-500">{t("projects.codex_project")}</span> : null}</div><p className="mt-1 break-all font-mono text-xs leading-5 text-muted-foreground">{project.project}</p></td>
+                  <td className="border-b border-border/70 py-4 pr-4"><div className="flex min-w-0 items-center gap-2"><p className="truncate font-medium text-foreground group-hover:text-primary">{label}</p>{project.codexProjectName ? <span className="shrink-0 rounded-full border border-indigo-500/20 bg-indigo-500/10 px-1.5 py-0.5 text-[12px] font-semibold text-indigo-500">{t("projects.codex_project")}</span> : null}</div><p className="mt-1 break-all font-mono text-[12px] leading-5 text-muted-foreground">{project.project}</p></td>
                   <td className="border-b border-border/70 px-3 py-2" data-project-trend={projectDaily?.[project.project] ? project.project : undefined}>
                     {projectDaily?.[project.project] ? <UsageTrendsCard
                       daily={projectDaily[project.project]}
@@ -123,14 +121,14 @@ export function ProjectUsageCard({ projects, projectDaily, onProjectClick }: Pro
                     /> : null}
                   </td>
                   <td className="border-b border-border/70 py-3 pl-3 tabular-nums">
-                    <div className="flex items-center justify-between gap-2"><span className="flex items-center gap-1.5 font-semibold text-foreground" title={formatNumber(project.totalTokens)}>{compactTokenFormatter.format(project.totalTokens)}<Peak show={isPositivePeak(project.totalTokens, peaks.totalTokens)} label={t("projects.highest")} /></span>{!isPositivePeak(project.totalTokens, peaks.totalTokens) ? <span className="text-[10px] text-muted-foreground">{t("projects.relative_peak", { percent: Math.round(width) })}</span> : null}</div>
-                    <div className="mt-1.5 h-1.5 w-full rounded-full bg-muted"><div className="flex h-full overflow-hidden rounded-full" style={{ width: `${width}%` }} role="img" aria-label={t("projects.bar_label", { total: formatNumber(project.totalTokens), input: formatNumber(project.inputTokens), cached: formatNumber(project.cachedInputTokens), output: formatNumber(project.outputTokens) })}><span className="bg-sky-500" style={{ width: `${parts.nonCachedInput / segmentTotal * 100}%` }} /><span className="bg-emerald-500" style={{ width: `${parts.cachedInput / segmentTotal * 100}%` }} /><span className="bg-violet-500" style={{ width: `${parts.output / segmentTotal * 100}%` }} /></div></div>
-                    <dl className="mt-2 grid grid-cols-3 gap-2 text-[10px] text-muted-foreground">
-                      <div className="min-w-0"><dt>{t("projects.values.uncached")}</dt><dd className="truncate text-xs font-medium tabular-nums text-foreground" title={formatNumber(parts.nonCachedInput)}>{compactTokenFormatter.format(parts.nonCachedInput)}</dd></div>
-                      <div className="min-w-0"><dt>{t("projects.values.cached")} <span className="text-emerald-600 dark:text-emerald-400">{formatPercent(cacheHitRate)}</span></dt><dd className="truncate text-xs font-medium tabular-nums text-foreground" title={formatNumber(parts.cachedInput)}>{compactTokenFormatter.format(parts.cachedInput)}</dd></div>
-                      <div className="min-w-0"><dt>{t("projects.values.output")}</dt><dd className="truncate text-xs font-medium tabular-nums text-foreground" title={formatNumber(parts.output)}>{compactTokenFormatter.format(parts.output)}</dd></div>
+                    <div className="flex items-center justify-between gap-2"><span className="flex items-center gap-1.5 font-semibold text-foreground" title={formatNumber(project.totalTokens)}>{compactTokenFormatter.format(project.totalTokens)}<Peak show={isPositivePeak(project.totalTokens, peaks.totalTokens)} label={t("projects.highest")} /></span>{!isPositivePeak(project.totalTokens, peaks.totalTokens) ? <span className="text-[12px] text-muted-foreground">{t("projects.relative_peak", { percent: Math.round(width) })}</span> : null}</div>
+                    <div className="mt-1.5 h-1.5 w-full rounded-full bg-muted"><div className="flex h-full overflow-hidden rounded-full" style={{ width: `${width}%` }} role="img" aria-label={t("projects.bar_label", { total: formatNumber(project.totalTokens), input: formatNumber(project.inputTokens), cached: formatNumber(project.cachedInputTokens), output: formatNumber(project.outputTokens) })}><span className="pulse-token-input" style={{ width: `${parts.nonCachedInput / segmentTotal * 100}%` }} /><span className="pulse-token-cached" style={{ width: `${parts.cachedInput / segmentTotal * 100}%` }} /><span className="pulse-token-output" style={{ width: `${parts.output / segmentTotal * 100}%` }} /></div></div>
+                    <dl className="mt-2 grid grid-cols-3 gap-2 text-[12px] text-muted-foreground">
+                      <div className="min-w-0"><dt>{t("projects.values.uncached")}</dt><dd className="truncate text-[12px] font-medium tabular-nums text-foreground" title={formatNumber(parts.nonCachedInput)}>{compactTokenFormatter.format(parts.nonCachedInput)}</dd></div>
+                      <div className="min-w-0"><dt>{t("projects.values.cached")} <span className="text-emerald-600 dark:text-emerald-400">{formatPercent(cacheHitRate)}</span></dt><dd className="truncate text-[12px] font-medium tabular-nums text-foreground" title={formatNumber(parts.cachedInput)}>{compactTokenFormatter.format(parts.cachedInput)}</dd></div>
+                      <div className="min-w-0"><dt>{t("projects.values.output")}</dt><dd className="truncate text-[12px] font-medium tabular-nums text-foreground" title={formatNumber(parts.output)}>{compactTokenFormatter.format(parts.output)}</dd></div>
                     </dl>
-                    <div className="mt-2 flex items-center justify-between gap-2"><span className="text-[11px] text-muted-foreground">{t("projects.cols.cost")}</span><span className="font-medium text-foreground" title={formatCurrency(project.costUSD)}>{formatCurrencyShort(project.costUSD)}</span></div>
+                    <div className="mt-2 flex items-center justify-between gap-2"><span className="text-[12px] text-muted-foreground">{t("projects.cols.cost")}</span><span className="font-medium text-foreground" title={formatCurrency(project.costUSD)}>{formatCurrencyShort(project.costUSD)}</span></div>
                     <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-muted"><div className={cn("h-full rounded-full", costToneClasses[costTone])} data-cost-tone={costTone} style={{ width: `${costWidth}%` }} /></div>
                   </td>
                 </tr>;

@@ -902,7 +902,7 @@ describe("session titles", () => {
 
     await waitFor(() => expect(screen.getByText("Alpha launch notes")).toBeInTheDocument());
     const header = screen.getByTestId("project-modal-header");
-    for (const [label, value] of [["Uncached", "160"], ["Input (including cache)", "200"], ["Cached", "40"], ["Output", "80"]]) {
+    for (const [label, value] of [["Uncached input", "160"], ["Input (including cache)", "200"], ["Cached", "40"], ["Output", "80"]]) {
       expect(within(header).getByText(label).parentElement).toHaveTextContent(value);
     }
     expect(screen.queryByRole("table")).not.toBeInTheDocument();

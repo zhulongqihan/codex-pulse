@@ -97,6 +97,7 @@ export function CodexSidebarLimits({ compact = false, limits, error, isLimitsRef
   const { t } = useTranslation();
   const [, refreshCountdown] = useState(0);
   const now = Date.now();
+  const hasExpiredReading = [limits?.session, limits?.weekly].some(window => window?.resetsAt != null && Date.parse(window.resetsAt) <= now);
   useEffect(() => {
     const timer = window.setInterval(() => refreshCountdown((tick) => tick + 1), 30_000);
     return () => window.clearInterval(timer);
@@ -104,17 +105,17 @@ export function CodexSidebarLimits({ compact = false, limits, error, isLimitsRef
 
   return (
     <section className="sidebar-limits space-y-3" aria-label={t("limits.sidebar_title")}>
-      {!compact ? <div className="flex min-w-0 items-center justify-between gap-1 text-[10px]">
+      {!compact ? <div className="flex min-w-0 items-center justify-between gap-1 text-[12px]">
         <h2 className="font-semibold">{t("limits.sidebar_title")}</h2>
         <span className="flex min-w-0 items-center gap-1 text-muted-foreground" title={limits ? t("limits.updated", { time: dayjs(limits.updatedAt).format("HH:mm") }) : undefined}>
-          <span className={cn("h-1.5 w-1.5 shrink-0 rounded-full", error ? "bg-warning" : limits ? "bg-success" : "bg-muted-foreground")} />
-          <span className="truncate">{t(error ? "limits.unavailable" : limits ? "limits.sidebar_updated" : "limits.not_fetched")}</span>
+          <span className={cn("h-1.5 w-1.5 shrink-0 rounded-full", error ? "bg-warning" : limits && !hasExpiredReading ? "bg-success" : "bg-muted-foreground")} />
+          <span className="truncate">{t(error ? "limits.unavailable" : hasExpiredReading ? "ux.window_elapsed" : limits ? "limits.sidebar_updated" : "limits.not_fetched")}</span>
         </span>
       </div> : null}
       {!compact && onRefreshLimits && onActivateWindow ? (
         <LimitActions
           window={limits?.session ?? null}
-          showActivation={hasSubscription(limits) || limits?.session != null}
+          showActivation={limits?.session != null && quotaWindowKind(limits.session) === "5h"}
           isRefreshing={isLimitsRefreshing}
           isActivating={isWindowActivating}
           activationStatus={windowActivationStatus}
@@ -123,23 +124,24 @@ export function CodexSidebarLimits({ compact = false, limits, error, isLimitsRef
           onActivate={onActivateWindow}
         />
       ) : null}
+      {limits?.weekly && !limits.session ? <p className="text-[12px] text-muted-foreground">{t("ux.no_short_window")}</p> : null}
       {error ? (
-        compact ? <p className="break-words text-center text-[9px] text-warning" title={error}>{t("limits.unavailable")}</p> : isOAuthLoginError(error) ? (
+        compact ? <p className="break-words text-center text-[12px] text-warning" title={error}>{t("limits.unavailable")}</p> : isOAuthLoginError(error) ? (
           <div className="rounded-xl border border-warning/20 bg-warning/5 p-4 text-sm flex flex-col justify-between h-full">
             <div className="space-y-2">
               <div className="flex items-center gap-2 text-warning font-semibold">
                 <LogIn className="h-4.5 w-4.5" />
                 <span>{t("limits.not_logged_in")}</span>
               </div>
-              <p className="text-xs text-muted-foreground leading-normal">
+              <p className="text-[12px] text-muted-foreground leading-normal">
                 {t("limits.login_instruction")}
               </p>
-              <div className="bg-muted/60 hover:bg-muted p-2 rounded-lg font-mono text-[10px] select-all border border-border flex flex-wrap items-center justify-between gap-1 group transition-colors">
-                <span className="break-all text-foreground select-all">codex auth login</span>
-                <span className="text-[10px] text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity">{t("limits.click_to_select")}</span>
+              <div className="bg-muted/60 hover:bg-muted p-2 rounded-lg font-mono text-[12px] select-all border border-border flex flex-wrap items-center justify-between gap-1 group transition-colors">
+                <span className="break-all text-foreground select-all">codex login</span>
+                <span className="text-[12px] text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity">{t("limits.click_to_select")}</span>
               </div>
             </div>
-            <p className="text-[10px] text-muted-foreground/80 leading-normal mt-2 pt-2 border-t border-border/40">
+            <p className="text-[12px] text-muted-foreground/80 leading-normal mt-2 pt-2 border-t border-border/40">
               {t("limits.login_hint")}
             </p>
           </div>
@@ -154,7 +156,7 @@ export function CodexSidebarLimits({ compact = false, limits, error, isLimitsRef
         <div className="space-y-3">
           {limits?.session ? <LimitRow label={quotaWindowKind(limits.session) === "5h" ? "5 hour" : quotaWindowKind(limits.session)} window={limits.session} now={now} compact={compact}/> : null}
           {limits?.weekly ? <LimitRow label={quotaWindowKind(limits.weekly) === "weekly" ? "Weekly" : quotaWindowKind(limits.weekly)} window={limits.weekly} now={now} compact={compact}/> : null}
-          {!limits?.session && !limits?.weekly ? <p className="text-xs leading-6 text-muted-foreground">{t("limits.no_window_returned")}</p> : null}
+          {!limits?.session && !limits?.weekly ? <p className="text-[12px] leading-6 text-muted-foreground">{t("limits.no_window_returned")}</p> : null}
         </div>
       ) : null}
     </section>
@@ -193,18 +195,18 @@ function LimitActions({
   return (
     <div className="space-y-2">
       <div className="flex gap-1.5">
-        <Button type="button" size="sm" variant="secondary" className="h-8 min-w-0 flex-1 gap-1 px-1.5 text-[10px]" aria-label={t("limits.query_action")} title={t("limits.query_desc")} disabled={busy} onClick={onRefresh}>
+        <Button type="button" size="sm" variant="secondary" className="h-8 min-w-0 flex-1 gap-1 px-1.5 text-[12px]" aria-label={t("limits.query_action")} title={t("limits.query_desc")} disabled={busy} onClick={onRefresh}>
           {isRefreshing ? <LoaderCircle className="h-3 w-3 shrink-0 animate-spin" /> : <RefreshCw className="h-3 w-3 shrink-0" />}
           <span className="truncate">{t("limits.query_action")}</span>
         </Button>
         {showActivation ? (
-          <Button type="button" size="sm" className="h-8 min-w-0 flex-1 gap-1 px-1.5 text-[10px]" aria-label={t(isActivating ? "limits.activating_action" : "limits.activate_action")} title={statusText} disabled={busy || !canActivate || activationAlreadyRequested} onClick={onActivate}>
+          <Button type="button" size="sm" className="h-8 min-w-0 flex-1 gap-1 px-1.5 text-[12px]" aria-label={t(isActivating ? "limits.activating_action" : "limits.activate_action")} title={statusText} disabled={busy || !canActivate || activationAlreadyRequested} onClick={onActivate}>
             {isActivating ? <LoaderCircle className="h-3 w-3 shrink-0 animate-spin" /> : <Play className="h-3 w-3 shrink-0" />}
             <span className="truncate">{t(isActivating ? "limits.activating_action" : "limits.sidebar_activate")}</span>
           </Button>
         ) : null}
       </div>
-      {activationStatus || activationError ? <p role="status" className={cn("text-[10px] leading-normal", activationError ? "text-error" : "text-muted-foreground")}>{statusText}</p> : null}
+      {activationStatus || activationError ? <p role="status" className={cn("text-[12px] leading-normal", activationError ? "text-error" : "text-muted-foreground")}>{statusText}</p> : null}
     </div>
   );
 }
@@ -242,7 +244,7 @@ function ResetArea({
       className="grid grid-cols-1 gap-3 rounded-xl border border-border bg-surface p-2.5 sm:p-3 content-md:grid-cols-2"
     >
       <div className="grid grid-cols-1 gap-2">
-        {resetError && latestReset ? <p role="status" className="text-xs text-warning">{copy("stale")}</p> : null}
+        {resetError && latestReset ? <p role="status" className="text-[12px] text-warning">{copy("stale")}</p> : null}
         {latestReset ? (
           <LatestResetButton
             reset={latestReset}
@@ -251,13 +253,13 @@ function ResetArea({
             onOpen={() => onOpenResetHistory?.()}
           />
         ) : !isResetLoading ? (
-          <div data-testid="latest-reset-empty" className="space-y-2 rounded-lg border border-border px-2.5 py-3 text-xs">
+          <div data-testid="latest-reset-empty" className="space-y-2 rounded-lg border border-border px-2.5 py-3 text-[12px]">
             <p className="font-semibold text-muted-foreground">{t("limits.latest_reset")}</p>
             <p className="leading-5 text-muted-foreground">{t(resetError ? "recovery.reset_failed" : "recovery.reset_empty")}</p>
           </div>
         ) : (
           <div data-testid="latest-reset-skeleton" role="status" aria-label={t("limits.latest_reset")} className="space-y-3 rounded-lg border border-border px-2.5 py-3">
-            <p className="text-xs font-semibold text-muted-foreground">{t("limits.latest_reset")}</p>
+            <p className="text-[12px] font-semibold text-muted-foreground">{t("limits.latest_reset")}</p>
             <div aria-hidden="true" className="space-y-3 motion-safe:animate-pulse">
               <div className="h-4 w-2/3 rounded bg-muted" />
               <div className="h-2.5 w-1/2 rounded bg-muted" />
@@ -277,13 +279,13 @@ function ResetArea({
           separated
         />
       ) : !isLimitsLoading ? (
-        <div data-testid="reset-credits-empty" className="space-y-2 border-t border-border/60 pt-2.5 text-xs content-md:border-l content-md:border-t-0 content-md:pl-3 content-md:pt-0">
+        <div data-testid="reset-credits-empty" className="space-y-2 border-t border-border/60 pt-2.5 text-[12px] content-md:border-l content-md:border-t-0 content-md:pl-3 content-md:pt-0">
           <p className="font-semibold text-muted-foreground">{t("limits.reset_credits")}</p>
           <p className="leading-5 text-muted-foreground">{t(limitsError ? "recovery.credits_failed" : "recovery.credits_empty")}</p>
         </div>
       ) : (
         <div data-testid="reset-credits-skeleton" role="status" aria-label={t("limits.reset_credits")} className="space-y-3 border-t border-border/60 pt-2.5 content-md:border-l content-md:border-t-0 content-md:pl-3 content-md:pt-0">
-          <p className="text-[10px] font-semibold text-muted-foreground">{t("limits.reset_credits")}</p>
+          <p className="text-[12px] font-semibold text-muted-foreground">{t("limits.reset_credits")}</p>
           <div aria-hidden="true" className="space-y-3 motion-safe:animate-pulse">
             <div className="h-4 w-16 rounded-full bg-muted" />
             <div className="h-3 w-full rounded bg-muted" />
@@ -315,10 +317,10 @@ function LimitRow({ label, window, now, compact }: LimitRowProps & { now: number
   const expired = window?.resetsAt != null && Date.parse(window.resetsAt) <= now;
   const reset = window?.resetsAt && Number.isFinite(Date.parse(window.resetsAt)) ? dayjs(window.resetsAt).format("MM/DD HH:mm") : null;
   return <div data-testid={`limit-row-${label.toLowerCase().replaceAll(" ","-")}`} className={`pulse-limit-row ${compact ? "is-compact" : ""}`}>
-    <div className="pulse-limit-heading"><span data-quota-label>{friendlyLabel}</span><small>{t("limits.remaining")}</small></div>
+    <div className="pulse-limit-heading"><span data-quota-label>{friendlyLabel}</span><small>{t(expired ? "ux.last_reading" : "limits.remaining")}</small></div>
     <strong className="pulse-limit-value">{remaining == null ? "—" : `${Math.round(remaining)}%`}</strong>
-    <div className="pulse-limit-meter" data-quota-level={remaining == null ? "unknown" : remaining < 30 ? "error" : remaining < 70 ? "warning" : "success"} role="progressbar" aria-label={friendlyLabel} aria-valuemin={0} aria-valuemax={100} aria-valuenow={remaining ?? undefined} aria-valuetext={remaining == null ? t("limits.no_window_returned") : undefined}><span style={{width:`${remaining ?? 0}%`}}/></div>
-    {!compact ? <div className="pulse-limit-reset"><span title={window?.resetsAt ?? undefined}>{reset ? `${reset} ${t("limits.sidebar_reset")}` : t("limits.reset_unavailable")}</span>{countdown != null ? <span data-quota-countdown>{expired ? t("limits.resetting_soon") : countdown}</span> : null}</div> : null}
+    <div className="pulse-limit-meter" data-quota-level={expired || remaining == null ? "unknown" : remaining < 30 ? "error" : remaining < 70 ? "warning" : "success"} role="progressbar" aria-label={friendlyLabel} aria-valuemin={0} aria-valuemax={100} aria-valuenow={remaining ?? undefined} aria-valuetext={expired ? t("ux.expired_reading", {percent: remaining == null ? "—" : Math.round(remaining)}) : remaining == null ? t("limits.no_window_returned") : undefined}><span style={{width:`${remaining ?? 0}%`}}/></div>
+    {!compact ? <div className="pulse-limit-reset"><span title={window?.resetsAt ?? undefined}>{reset ? `${reset} ${t("limits.sidebar_reset")}` : t("limits.reset_unavailable")}</span>{countdown != null ? <span data-quota-countdown>{expired ? t("ux.window_elapsed") : countdown}</span> : null}</div> : null}
   </div>;
 }
 
@@ -354,12 +356,12 @@ function ResetCreditsPanel({
         >
           <span className="flex items-center gap-1.5 text-muted-foreground transition-colors group-hover:text-foreground">
             <RotateCcw className="h-3.5 w-3.5" aria-hidden="true" />
-            <span className="text-[10px] font-semibold">{t("limits.reset_credits")}</span>
+            <span className="text-[12px] font-semibold">{t("limits.reset_credits")}</span>
             <ExternalLink className="h-3 w-3 opacity-55 transition-opacity group-hover:opacity-90" aria-hidden="true" />
           </span>
           <span
             data-testid="reset-credit-count"
-            className="shrink-0 rounded-full bg-muted px-2 py-0.5 text-[9px] font-medium tabular-nums text-muted-foreground transition-colors group-hover:text-foreground"
+            className="shrink-0 rounded-full bg-muted px-2 py-0.5 text-[12px] font-medium tabular-nums text-muted-foreground transition-colors group-hover:text-foreground"
           >
             {t("limits.reset_credits_available", { count })}
           </span>
@@ -369,7 +371,7 @@ function ResetCreditsPanel({
         role="region"
         aria-label={t("limits.reset_credits")}
         tabIndex={0}
-        className="mt-2 max-h-40 overflow-y-auto overscroll-contain border-t border-border/40 text-[10px] leading-normal text-foreground/85 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        className="mt-2 max-h-40 overflow-y-auto overscroll-contain border-t border-border/40 text-[12px] leading-normal text-foreground/85 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
       >
         {count === 0 ? (
           <p className="pt-2 text-muted-foreground">{t("limits.reset_credits_none")}</p>

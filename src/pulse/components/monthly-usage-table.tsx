@@ -107,7 +107,7 @@ function buildDisplayRows(monthly: DerivedMonth[], field: SortField, direction: 
 
 function PeakBadge({ label }: { label: string }) {
   return (
-    <span className="inline-flex rounded-full bg-amber-500/15 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-700 dark:text-amber-300">
+    <span className="inline-flex rounded-full bg-amber-500/15 px-1.5 py-0.5 text-[12px] font-semibold uppercase tracking-wide text-amber-700 dark:text-amber-300">
       {label}
     </span>
   );
@@ -144,7 +144,7 @@ function MonthDelta({ current, previous, labels }: { current: number | null; pre
 
 function QuotaPercent({ value }: { value?: number | null }) {
   const { t } = useTranslation();
-  if (value == null) return <span className="text-muted-foreground">--</span>;
+  if (value == null) return <span className="text-muted-foreground" title={t("ux.quota_missing_detail")}>{t("ux.no_quota_samples")}</span>;
   return <span>{value < 0.5 ? "<1%" : `${t("sessions.quota.approx")} ${Math.round(value)}%`}</span>;
 }
 
@@ -188,21 +188,21 @@ export function MonthlyUsageTable({ data }: MonthlyUsageTableProps) {
     <Card>
       <CardContent className="p-0">
         <div className="flex flex-wrap items-center justify-between gap-4 border-b border-border px-4 py-4 sm:px-6">
-          <div className="flex flex-wrap items-center gap-x-5 gap-y-2 text-xs text-muted-foreground">
+          <div className="flex flex-wrap items-center gap-x-5 gap-y-2 text-[12px] text-muted-foreground">
             <span>{t("monthly.comparison_range", { start: data.startMonth, end: data.endMonth })}</span>
             {data.throughDate ? <span>{t("monthly.through_date", { date: data.throughDate })}</span> : null}
             {data.retainedFrom ? <span title={t("monthly.retention_note")}>{t("monthly.retained_from", { date: data.retainedFrom })}</span> : null}
             <span className="inline-flex items-center gap-3" aria-label={t("monthly.token_legend_label")}>
-              <span className="inline-flex items-center gap-1.5"><span className="h-2 w-2 rounded-full bg-blue-500" />{t("monthly.uncached_input")}</span>
-              <span className="inline-flex items-center gap-1.5"><span className="h-2 w-2 rounded-full bg-emerald-500" />{t("monthly.cached_input")}</span>
-              <span className="inline-flex items-center gap-1.5"><span className="h-2 w-2 rounded-full bg-violet-500" />{t("monthly.output")}</span>
+              <span className="inline-flex items-center gap-1.5"><span className="h-2 w-2 rounded-full pulse-token-input" />{t("monthly.uncached_input")}</span>
+              <span className="inline-flex items-center gap-1.5"><span className="h-2 w-2 rounded-full pulse-token-cached" />{t("monthly.cached_input")}</span>
+              <span className="inline-flex items-center gap-1.5"><span className="h-2 w-2 rounded-full pulse-token-output" />{t("monthly.output")}</span>
             </span>
             <span aria-label={t("monthly.cost_legend_label")}>
               {t("monthly.cost_scale")} <span className="text-emerald-600">●</span> ≤⅓ <span className="text-amber-500">●</span> ≤⅔ <span className="text-rose-500">●</span> &gt;⅔
             </span>
           </div>
           <div className="flex min-w-0 items-center gap-2">
-            <label className="shrink-0 text-xs text-muted-foreground" htmlFor="monthly-sort">{t("monthly.sort.label")}</label>
+            <label className="shrink-0 text-[12px] text-muted-foreground" htmlFor="monthly-sort">{t("monthly.sort.label")}</label>
             <Select
               value={sortField}
               onValueChange={(value) => {
@@ -235,7 +235,7 @@ export function MonthlyUsageTable({ data }: MonthlyUsageTableProps) {
           <div className="overflow-x-auto px-4 sm:px-6" data-monthly-scroll>
             <table className="min-w-[680px] w-full border-separate border-spacing-0 text-sm">
               <thead>
-                <tr className="text-left text-xs uppercase tracking-[0.14em] text-muted-foreground">
+                <tr className="text-left text-[12px] uppercase tracking-[0.14em] text-muted-foreground">
                   <th className="w-36 border-b border-border py-3 font-medium">{t("monthly.cols.month")}</th>
                   <th className="border-b border-border px-4 py-3 font-medium">{t("monthly.cols.tokens")}</th>
                   <th className="w-36 border-b border-border px-4 py-3 font-medium">{t("daily.cols.quota")}</th>
@@ -254,7 +254,7 @@ export function MonthlyUsageTable({ data }: MonthlyUsageTableProps) {
                     return (
                       <tr key={`inactive-${row.startMonth}-${row.endMonth}`} className="align-top">
                         <td className="border-b border-border/70 py-4 font-medium text-foreground">{monthLabel}</td>
-                        <td className="border-b border-border/70 px-4 py-4"><span className="inline-flex rounded-full bg-muted px-3 py-1 text-xs font-medium text-muted-foreground">{usageLabel}</span></td>
+                        <td className="border-b border-border/70 px-4 py-4"><span className="inline-flex rounded-full bg-muted px-3 py-1 text-[12px] font-medium text-muted-foreground">{usageLabel}</span></td>
                         <td className="border-b border-border/70 px-4 py-4 text-muted-foreground">--</td>
                         <td className="border-b border-border/70 py-4 text-right text-muted-foreground">--</td>
                       </tr>
@@ -285,7 +285,7 @@ export function MonthlyUsageTable({ data }: MonthlyUsageTableProps) {
 
                   return (
                     <tr key={month.month} className="align-top" data-monthly-row={month.month} data-coverage={month.coverage}>
-                      <td className="border-b border-border/70 py-4 font-medium text-foreground">{month.month}{month.coverage === "partial" ? <span className="mt-1 block text-xs font-normal text-muted-foreground">{t("monthly.partial_retention")}</span> : null}</td>
+                      <td className="border-b border-border/70 py-4 font-medium text-foreground">{month.month}{month.coverage === "partial" ? <span className="mt-1 block text-[12px] font-normal text-muted-foreground">{t("monthly.partial_retention")}</span> : null}</td>
                       <td className="border-b border-border/70 px-4 py-4">
                         <div className="space-y-2.5">
                           <div className="flex items-center gap-2 font-semibold text-foreground" data-metric="totalTokens">
@@ -295,12 +295,12 @@ export function MonthlyUsageTable({ data }: MonthlyUsageTableProps) {
                           </div>
                           <div className="h-2.5 overflow-hidden rounded-full bg-muted" aria-label={t("monthly.total_bar_label", { total: formatNumber(month.totalTokens), percent: formatPercent(totalWidth / 100) })}>
                             <div className="flex h-full overflow-hidden rounded-full" data-token-bar style={{ width: `${totalWidth}%` }}>
-                              <span className="h-full bg-blue-500" data-token-segment="uncached" style={{ width: `${segmentTotal > 0 ? nonCachedInput / segmentTotal * 100 : 0}%` }} />
-                              <span className="h-full bg-emerald-500" data-token-segment="cached" style={{ width: `${segmentTotal > 0 ? month.cachedInputTokens / segmentTotal * 100 : 0}%` }} />
-                              <span className="h-full bg-violet-500" data-token-segment="output" style={{ width: `${segmentTotal > 0 ? month.outputTokens / segmentTotal * 100 : 0}%` }} />
+                              <span className="h-full pulse-token-input" data-token-segment="uncached" style={{ width: `${segmentTotal > 0 ? nonCachedInput / segmentTotal * 100 : 0}%` }} />
+                              <span className="h-full pulse-token-cached" data-token-segment="cached" style={{ width: `${segmentTotal > 0 ? month.cachedInputTokens / segmentTotal * 100 : 0}%` }} />
+                              <span className="h-full pulse-token-output" data-token-segment="output" style={{ width: `${segmentTotal > 0 ? month.outputTokens / segmentTotal * 100 : 0}%` }} />
                             </div>
                           </div>
-                          <div className="flex flex-wrap gap-x-5 gap-y-1 text-xs text-muted-foreground" aria-label={t("monthly.token_bar_label", { input: formatNumber(nonCachedInput), cached: formatNumber(month.cachedInputTokens), output: formatNumber(month.outputTokens), total: formatNumber(month.totalTokens) })}>
+                          <div className="flex flex-wrap gap-x-5 gap-y-1 text-[12px] text-muted-foreground" aria-label={t("monthly.token_bar_label", { input: formatNumber(nonCachedInput), cached: formatNumber(month.cachedInputTokens), output: formatNumber(month.outputTokens), total: formatNumber(month.totalTokens) })}>
                             <span className="inline-flex items-center gap-1.5" data-metric="inputTokens">{t("monthly.input_including_cache")} <strong className="font-medium text-foreground">{formatNumber(month.inputTokens)}</strong><MonthDelta current={month.inputTokens} previous={month.previous?.inputTokens ?? null} labels={deltaLabels} />{month.inputTokens > 0 && month.inputTokens === peaks.inputTokens ? <PeakBadge label={peakLabel} /> : null}</span>
                             <span className="inline-flex items-center gap-1.5" data-metric="cachedInputTokens">{t("monthly.cached_with_rate", { rate: formatPercent(cacheHitRate) })} <strong className="font-medium text-foreground">{formatNumber(month.cachedInputTokens)}</strong><MonthDelta current={month.cachedInputTokens} previous={month.previous?.cachedInputTokens ?? null} labels={deltaLabels} />{month.cachedInputTokens > 0 && month.cachedInputTokens === peaks.cachedInputTokens ? <PeakBadge label={peakLabel} /> : null}</span>
                             <span className="inline-flex items-center gap-1.5" data-metric="outputTokens">{t("monthly.output")} <strong className="font-medium text-foreground">{formatNumber(month.outputTokens)}</strong><MonthDelta current={month.outputTokens} previous={month.previous?.outputTokens ?? null} labels={deltaLabels} />{month.outputTokens > 0 && month.outputTokens === peaks.outputTokens ? <PeakBadge label={peakLabel} /> : null}</span>
@@ -308,7 +308,7 @@ export function MonthlyUsageTable({ data }: MonthlyUsageTableProps) {
                         </div>
                       </td>
                       <td className="border-b border-border/70 px-4 py-4 tabular-nums">
-                        <div className="space-y-1 text-xs">
+                        <div className="space-y-1 text-[12px]">
                           <div data-quota="fiveHour"><span className="font-medium text-muted-foreground">{t("sessions.quota.five_hour")}</span> <QuotaPercent value={month.fiveHourPercent} /></div>
                           <div data-quota="weekly"><span className="font-medium text-muted-foreground">{t("sessions.quota.weekly")}</span> <QuotaPercent value={month.weeklyPercent} /></div>
                         </div>
@@ -322,7 +322,7 @@ export function MonthlyUsageTable({ data }: MonthlyUsageTableProps) {
                           </div>
                           <div className="h-2 overflow-hidden rounded-full bg-muted" aria-label={t("monthly.cost_bar_label", { cost: formatCurrency(month.costUSD), percent: formatPercent(costRatio) })}>
                             <div
-                              className={`h-full rounded-full ${costTone === "low" ? "bg-emerald-500" : costTone === "medium" ? "bg-amber-500" : costTone === "high" ? "bg-rose-500" : "bg-muted-foreground/25"}`}
+                              className={`h-full rounded-full ${costTone === "low" ? "pulse-token-cached" : costTone === "medium" ? "bg-amber-500" : costTone === "high" ? "bg-rose-500" : "bg-muted-foreground/25"}`}
                               data-cost-bar
                               data-cost-tone={costTone}
                               style={{ width: `${costRatio * 100}%` }}

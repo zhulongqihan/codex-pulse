@@ -349,20 +349,22 @@ pub fn titlebar_action(
             #[cfg(not(windows))]
             Err("The attached shortcut is available on Windows".into())
         }
-        "showMain" | "details" => {
+        "showMain" | "details" | "account" => {
             state.popup.store(false, Ordering::SeqCst);
             #[cfg(windows)]
             native::tick(&app, state.inner());
-            if let Some(window) = app.get_webview_window("main") {
-                window.show().map_err(|error| error.to_string())?;
-                window.unminimize().map_err(|error| error.to_string())?;
-                window.set_focus().map_err(|error| error.to_string())?;
-            }
-            if action == "details" {
-                app.emit("pulse-show-pace-details", ())
-                    .map_err(|error| error.to_string())?;
-            }
-            Ok(())
+            crate::pulse_desktop::show_main_action(
+                &action,
+                || {
+                    if let Some(window) = app.get_webview_window("main") {
+                        window.show().map_err(|error| error.to_string())?;
+                        window.unminimize().map_err(|error| error.to_string())?;
+                        window.set_focus().map_err(|error| error.to_string())?;
+                    }
+                    Ok(())
+                },
+                |event| app.emit(event, ()).map_err(|error| error.to_string()),
+            )
         }
         _ => Err("Unknown titlebar action".into()),
     }

@@ -82,8 +82,8 @@ describe("MonthlyUsageTable", () => {
     expect(within(row("2026-01").querySelector('[data-quota="fiveHour"]') as HTMLElement).getByText("Approx. 246%")).toBeInTheDocument();
     expect(within(row("2026-01").querySelector('[data-quota="weekly"]') as HTMLElement).getByText("<1%")).toBeInTheDocument();
     expect(row("2026-02").querySelectorAll("[data-quota]")).toHaveLength(2);
-    expect(within(row("2026-02").querySelector('[data-quota="fiveHour"]') as HTMLElement).getByText("--")).toBeInTheDocument();
-    expect(within(row("2026-02").querySelector('[data-quota="weekly"]') as HTMLElement).getByText("--")).toBeInTheDocument();
+    expect(within(row("2026-02").querySelector('[data-quota="fiveHour"]') as HTMLElement).getByText("No samples")).toBeInTheDocument();
+    expect(within(row("2026-02").querySelector('[data-quota="weekly"]') as HTMLElement).getByText("No samples")).toBeInTheDocument();
     expect(within(row("2026-03").querySelector('[data-quota="weekly"]') as HTMLElement).getByText("Approx. 12%")).toBeInTheDocument();
   });
 

@@ -70,7 +70,7 @@ export function SessionQuotaUsageView({ usage, detailed = false }: SessionQuotaU
 
   if (!detailed) {
     return (
-      <div className="space-y-1 text-[10px] tabular-nums" aria-label={t("sessions.quota.aria_label")} title={caveat}>
+      <div className="space-y-1 text-[12px] tabular-nums" aria-label={t("sessions.quota.aria_label")} title={caveat}>
         {groups.map((group) => (
           <div key={group.key} className="grid grid-cols-[auto_1fr] gap-x-2">
             <span className="font-semibold text-muted-foreground">{group.label}</span>
@@ -107,7 +107,7 @@ export function SessionQuotaUsageView({ usage, detailed = false }: SessionQuotaU
                   );
                 })}
               </span>
-            ) : <span className="min-w-0 text-right font-semibold text-muted-foreground">--</span>}
+            ) : <span className="min-w-0 text-right text-muted-foreground" title={t("ux.quota_missing_detail")}>{t("ux.no_quota_samples")}</span>}
           </div>
         ))}
       </div>
@@ -115,18 +115,18 @@ export function SessionQuotaUsageView({ usage, detailed = false }: SessionQuotaU
   }
 
   return (
-    <section className="flex flex-wrap items-start gap-x-4 gap-y-1 text-[11px]" aria-labelledby="session-quota-title" title={caveat}>
+    <section className="flex flex-wrap items-start gap-x-4 gap-y-1 text-[12px]" aria-labelledby="session-quota-title" title={caveat}>
       <div className="flex items-center gap-1.5 py-0.5">
         <Clock3 className="h-3.5 w-3.5 text-amber-500" />
         <h3 id="session-quota-title" className="font-semibold">{t("sessions.quota.title")}</h3>
-        <span className="text-[10px] font-semibold text-amber-700 dark:text-amber-300">{t("sessions.quota.estimated")}</span>
+        <span className="text-[12px] font-semibold text-amber-700 dark:text-amber-300">{t("sessions.quota.estimated")}</span>
       </div>
       <div className="flex flex-1 flex-wrap gap-x-4 gap-y-1">
         {groups.map((group) => (
           <div key={group.key} className="flex items-baseline gap-2 py-0.5">
             <div className="shrink-0 font-semibold text-muted-foreground">{group.label}</div>
             {group.windows.length === 0 ? (
-              <div className="font-bold text-muted-foreground">--</div>
+              <div className="text-muted-foreground" title={t("ux.quota_missing_detail")}>{t("ux.no_quota_samples")}</div>
             ) : (
               <div className="flex flex-wrap gap-x-3 gap-y-1">
                 {group.windows.map((window, index) => (

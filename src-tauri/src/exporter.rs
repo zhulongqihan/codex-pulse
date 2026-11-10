@@ -408,6 +408,7 @@ mod tests {
             start_date: "2026-04-01".to_string(),
             end_date: "2026-04-30".to_string(),
             updated_at: Some("2026-04-30T00:00:00Z".to_string()),
+            retained_from: Some("2026-04-01".to_string()),
             daily: vec![OverviewDailyRow {
                 date: "2026-04-30".to_string(),
                 input_tokens: 1200,

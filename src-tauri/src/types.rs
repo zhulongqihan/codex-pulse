@@ -235,6 +235,7 @@ pub struct OverviewResponse {
     pub start_date: String,
     pub end_date: String,
     pub updated_at: Option<String>,
+    pub retained_from: Option<String>,
     pub daily: Vec<OverviewDailyRow>,
     pub totals: OverviewTotals,
     pub models: Vec<OverviewModelRow>,
@@ -327,6 +328,8 @@ pub struct CodexCredits {
 #[derive(Debug, Clone, Serialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct CodexLimitsResponse {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub identity_revision: Option<u64>,
     pub session: Option<CodexLimitWindow>,
     pub weekly: Option<CodexLimitWindow>,
     pub credits: Option<CodexCredits>,

@@ -96,7 +96,7 @@ function buildDisplayRows(daily: OverviewResponse["daily"], field: SortField, di
 
 function PeakBadge({ label }: { label: string }) {
   return (
-    <span className="inline-flex rounded-full bg-amber-500/15 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-700 dark:text-amber-300">
+    <span className="inline-flex rounded-full bg-amber-500/15 px-1.5 py-0.5 text-[12px] font-semibold uppercase tracking-wide text-amber-700 dark:text-amber-300">
       {label}
     </span>
   );
@@ -104,7 +104,7 @@ function PeakBadge({ label }: { label: string }) {
 
 function QuotaPercent({ value }: { value?: number | null }) {
   const { t } = useTranslation();
-  if (value == null) return <span className="text-muted-foreground">--</span>;
+  if (value == null) return <span className="text-muted-foreground" title={t("ux.quota_missing_detail")}>{t("ux.no_quota_samples")}</span>;
   return <span>{value < 0.5 ? "<1%" : `${t("sessions.quota.approx")} ${Math.round(value)}%`}</span>;
 }
 
@@ -152,19 +152,19 @@ export function DailyUsageTable({ range, daily, onRowClick }: DailyUsageTablePro
     <Card>
       <CardContent className="p-0">
         <div className="flex flex-wrap items-center justify-between gap-4 border-b border-border px-4 py-4 sm:px-6">
-          <div className="flex flex-wrap items-center gap-x-5 gap-y-2 text-xs text-muted-foreground">
+          <div className="flex flex-wrap items-center gap-x-5 gap-y-2 text-[12px] text-muted-foreground">
             <span>{t("daily.comparison_range", { range: getRangeLabel(range, t) })}</span>
             <span className="inline-flex items-center gap-3" aria-label={t("daily.token_legend_label")}>
-              <span className="inline-flex items-center gap-1.5"><span className="h-2 w-2 rounded-full bg-blue-500" />{t("daily.uncached_input")}</span>
-              <span className="inline-flex items-center gap-1.5"><span className="h-2 w-2 rounded-full bg-emerald-500" />{t("daily.cached_input")}</span>
-              <span className="inline-flex items-center gap-1.5"><span className="h-2 w-2 rounded-full bg-violet-500" />{t("daily.output")}</span>
+              <span className="inline-flex items-center gap-1.5"><span className="h-2 w-2 rounded-full pulse-token-input" />{t("daily.uncached_input")}</span>
+              <span className="inline-flex items-center gap-1.5"><span className="h-2 w-2 rounded-full pulse-token-cached" />{t("daily.cached_input")}</span>
+              <span className="inline-flex items-center gap-1.5"><span className="h-2 w-2 rounded-full pulse-token-output" />{t("daily.output")}</span>
             </span>
             <span aria-label={t("daily.cost_legend_label")}>
               {t("daily.cost_scale")} <span className="text-emerald-600">●</span> ≤⅓ <span className="text-amber-500">●</span> ≤⅔ <span className="text-rose-500">●</span> &gt;⅔
             </span>
           </div>
           <div className="flex min-w-0 items-center gap-2">
-            <label className="shrink-0 text-xs text-muted-foreground" htmlFor="daily-sort">{t("daily.sort.label")}</label>
+            <label className="shrink-0 text-[12px] text-muted-foreground" htmlFor="daily-sort">{t("daily.sort.label")}</label>
             <Select
               value={sortField}
               onValueChange={(value) => {
@@ -197,7 +197,7 @@ export function DailyUsageTable({ range, daily, onRowClick }: DailyUsageTablePro
           <div className="overflow-x-auto px-4 sm:px-6">
             <table className="min-w-[800px] w-full border-separate border-spacing-0 text-sm">
               <thead>
-                <tr className="text-left text-xs uppercase tracking-[0.14em] text-muted-foreground">
+                <tr className="text-left text-[12px] uppercase tracking-[0.14em] text-muted-foreground">
                   <th className="w-40 border-b border-border py-3 font-medium">{t("daily.cols.date")}</th>
                   <th className="border-b border-border px-4 py-3 font-medium">{t("daily.cols.tokens")}</th>
                   <th className="w-36 border-b border-border px-4 py-3 font-medium">{t("daily.cols.quota")}</th>
@@ -216,7 +216,7 @@ export function DailyUsageTable({ range, daily, onRowClick }: DailyUsageTablePro
                     return (
                       <tr key={`inactive-${row.startDate}-${row.endDate}`} className="daily-usage-row align-top">
                         <td className="border-b border-border/70 py-4 font-medium text-foreground">{dateLabel}</td>
-                        <td className="border-b border-border/70 px-4 py-4"><span className="inline-flex rounded-full bg-muted px-3 py-1 text-xs font-medium text-muted-foreground">{activityLabel}</span></td>
+                        <td className="border-b border-border/70 px-4 py-4"><span className="inline-flex rounded-full bg-muted px-3 py-1 text-[12px] font-medium text-muted-foreground">{activityLabel}</span></td>
                         <td className="border-b border-border/70 px-4 py-4 text-muted-foreground">--</td>
                         <td className="border-b border-border/70 py-4 text-right text-muted-foreground">--</td>
                       </tr>
@@ -249,7 +249,7 @@ export function DailyUsageTable({ range, daily, onRowClick }: DailyUsageTablePro
                       aria-label={onRowClick ? t("daily.open_sessions", { date: day.date }) : undefined}
                     >
                       <td className="border-b border-border/70 py-4 font-medium text-foreground transition-colors group-hover:text-primary">
-                        <div>{day.date}</div><div className="mt-1 text-xs font-normal text-muted-foreground">{weekday}</div>
+                        <div>{day.date}</div><div className="mt-1 text-[12px] font-normal text-muted-foreground">{weekday}</div>
                       </td>
                       <td className="border-b border-border/70 px-4 py-4">
                         <div className="space-y-2.5">
@@ -259,19 +259,19 @@ export function DailyUsageTable({ range, daily, onRowClick }: DailyUsageTablePro
                           </div>
                           <div className="h-2.5 overflow-hidden rounded-full bg-muted" aria-label={t("daily.total_bar_label", { total: formatNumber(day.totalTokens), percent: formatPercent(totalWidth / 100) })}>
                             <div className="flex h-full overflow-hidden rounded-full" data-token-bar style={{ width: `${totalWidth}%` }}>
-                              <span className="h-full bg-blue-500" data-token-segment="uncached" style={{ width: `${segmentTotal > 0 ? nonCachedInput / segmentTotal * 100 : 0}%` }} />
-                              <span className="h-full bg-emerald-500" data-token-segment="cached" style={{ width: `${segmentTotal > 0 ? day.cachedInputTokens / segmentTotal * 100 : 0}%` }} />
-                              <span className="h-full bg-violet-500" data-token-segment="output" style={{ width: `${segmentTotal > 0 ? day.outputTokens / segmentTotal * 100 : 0}%` }} />
+                              <span className="h-full pulse-token-input" data-token-segment="uncached" style={{ width: `${segmentTotal > 0 ? nonCachedInput / segmentTotal * 100 : 0}%` }} />
+                              <span className="h-full pulse-token-cached" data-token-segment="cached" style={{ width: `${segmentTotal > 0 ? day.cachedInputTokens / segmentTotal * 100 : 0}%` }} />
+                              <span className="h-full pulse-token-output" data-token-segment="output" style={{ width: `${segmentTotal > 0 ? day.outputTokens / segmentTotal * 100 : 0}%` }} />
                             </div>
                           </div>
-                          <div className="flex flex-wrap gap-x-5 gap-y-1 text-xs text-muted-foreground" aria-label={t("daily.token_bar_label", { input: formatNumber(nonCachedInput), cached: formatNumber(day.cachedInputTokens), output: formatNumber(day.outputTokens), total: formatNumber(day.totalTokens) })}>
+                          <div className="flex flex-wrap gap-x-5 gap-y-1 text-[12px] text-muted-foreground" aria-label={t("daily.token_bar_label", { input: formatNumber(nonCachedInput), cached: formatNumber(day.cachedInputTokens), output: formatNumber(day.outputTokens), total: formatNumber(day.totalTokens) })}>
                             <span className="inline-flex items-center gap-1.5" data-metric="inputTokens">{t("daily.input_including_cache")} <strong className="font-medium text-foreground">{formatNumber(day.inputTokens)}</strong>{day.inputTokens > 0 && day.inputTokens === peaks.inputTokens ? <PeakBadge label={peakLabel} /> : null}</span>
                             <span className="inline-flex items-center gap-1.5" data-metric="cachedInputTokens">{t("daily.cached_with_rate", { rate: formatPercent(cacheHitRate) })} <strong className="font-medium text-foreground">{formatNumber(day.cachedInputTokens)}</strong>{day.cachedInputTokens > 0 && day.cachedInputTokens === peaks.cachedInputTokens ? <PeakBadge label={peakLabel} /> : null}</span>
                             <span className="inline-flex items-center gap-1.5" data-metric="outputTokens">{t("daily.output")} <strong className="font-medium text-foreground">{formatNumber(day.outputTokens)}</strong>{day.outputTokens > 0 && day.outputTokens === peaks.outputTokens ? <PeakBadge label={peakLabel} /> : null}</span>
                           </div>
                         </div>
                       </td>
-                      <td className="border-b border-border/70 px-4 py-4 text-xs tabular-nums">
+                      <td className="border-b border-border/70 px-4 py-4 text-[12px] tabular-nums">
                         <div className="space-y-1">
                           <div data-quota="fiveHour"><span className="font-medium text-muted-foreground">{t("sessions.quota.five_hour")}</span> <QuotaPercent value={day.fiveHourPercent} /></div>
                           <div data-quota="weekly"><span className="font-medium text-muted-foreground">{t("sessions.quota.weekly")}</span> <QuotaPercent value={day.weeklyPercent} /></div>
@@ -282,7 +282,7 @@ export function DailyUsageTable({ range, daily, onRowClick }: DailyUsageTablePro
                           <div className="flex items-center justify-end gap-2 font-medium text-foreground" data-metric="costUSD">{formatCurrency(day.costUSD)}{day.costUSD != null && day.costUSD > 0 && day.costUSD === peaks.costUSD ? <PeakBadge label={peakLabel} /> : null}</div>
                           <div className="h-2 overflow-hidden rounded-full bg-muted" aria-label={t("daily.cost_bar_label", { cost: formatCurrency(day.costUSD), percent: formatPercent(costRatio) })}>
                             <div
-                              className={`h-full rounded-full ${costTone === "low" ? "bg-emerald-500" : costTone === "medium" ? "bg-amber-500" : costTone === "high" ? "bg-rose-500" : "bg-muted-foreground/25"}`}
+                              className={`h-full rounded-full ${costTone === "low" ? "pulse-token-cached" : costTone === "medium" ? "bg-amber-500" : costTone === "high" ? "bg-rose-500" : "bg-muted-foreground/25"}`}
                               data-cost-bar
                               data-cost-tone={costTone}
                               style={{ width: `${costRatio * 100}%` }}

@@ -5,7 +5,7 @@ import { pulseWidgetAction, usePulsePreferences } from "@/lib/pulse-appearance";
 import { usePulseCopy } from "@/lib/pulse-copy";
 import { titlebarAction, usePulsePace } from "@/lib/pulse-pace";
 import { paceCopy } from "@/lib/pulse-pace-copy";
-import { quotaCoachCopy } from "@/lib/quota-pace-coach-copy";
+import { quotaCoachCopy, quotaCoachFeedback } from "@/lib/quota-pace-coach-copy";
 import { quotaCoachFromSnapshot } from "@/lib/quota-pace-coach";
 import { PulseBrandMark } from "./pulse-brand-mark";
 import { PulsePaceCard } from "./pulse-pace";
@@ -18,14 +18,14 @@ export function PulseWidget() {
   const pace = usePulsePace();
   const [actionFailed, setActionFailed] = useState(false);
   const language = i18n.resolvedLanguage ?? i18n.language;
-  const notice = quotaCoachFromSnapshot(pace.data, Date.now(), pace.error).resetNotice;
+  const compactNotice = !preferences.widgetExpanded && quotaCoachFromSnapshot(pace.data, Date.now(), pace.error).resetNotice?.isUnread;
   const action = (value: Parameters<typeof pulseWidgetAction>[0]) => {
     setActionFailed(false);
     void pulseWidgetAction(value).catch(() => setActionFailed(true));
   };
   return <main className={`pulse-widget pulse-widget-coach ${preferences.widgetExpanded ? "is-expanded" : ""}`}>
     <header className="pulse-widget-header" data-tauri-drag-region>
-      <PulseBrandMark size={20}/>{notice?.isUnread ? <button type="button" className="pulse-widget-notice" onClick={() => action("expand")} title={quotaCoachCopy(language, "notice")}><Bell size={13}/><span>{quotaCoachCopy(language, "notice")}</span></button> : <strong data-tauri-drag-region>{quotaCoachCopy(language, "title")}</strong>}
+      <PulseBrandMark size={20}/>{compactNotice ? <button type="button" className="pulse-widget-notice" onClick={() => action("expand")} title={quotaCoachFeedback(language, "noticeCompact")}><Bell size={13}/><span>{quotaCoachFeedback(language, "noticeCompact")}</span></button> : <strong data-tauri-drag-region>{quotaCoachCopy(language, "title")}</strong>}
       <GripHorizontal size={15} className="pulse-widget-grip" data-tauri-drag-region aria-hidden="true"/>
       <button type="button" onClick={() => action("showMain")} aria-label={copy("open")} title={copy("open")}><ExternalLink size={14}/></button>
       <button type="button" onClick={() => action(preferences.widgetAlwaysOnTop ? "unpin" : "pin")} aria-pressed={preferences.widgetAlwaysOnTop} aria-label={copy("pin")} title={copy("pin")}>{preferences.widgetAlwaysOnTop ? <Pin size={14}/> : <PinOff size={14}/>}</button>
@@ -34,8 +34,10 @@ export function PulseWidget() {
     </header>
     <div className="pulse-widget-coach-content">
       <PulsePaceCard variant={preferences.widgetExpanded ? "widget" : "compact"}
+        showCompactNotice={false}
         data={pace.data} failed={pace.error} refreshing={pace.refreshing}
         onRefresh={() => void pace.refresh()} onDetails={() => { setActionFailed(false); void titlebarAction("details").catch(() => setActionFailed(true)); }}
+        onRecover={() => { setActionFailed(false); void titlebarAction("account").catch(() => setActionFailed(true)); }}
         onMarkNoticeRead={pace.markNoticeRead} noticePending={pace.noticePending} noticeFailed={pace.noticeError}/>
     </div>
     {actionFailed ? <p className="pulse-error" role="alert">{paceCopy(language, "actionFailed")}</p> : null}

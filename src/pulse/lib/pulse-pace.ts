@@ -1,4 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
+import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 export type PaceState = "unavailable" | "sampling" | "stale" | "expired" | "idle" | "slow" | "forecast" | "exhausted";
@@ -132,14 +133,17 @@ export function fetchPulsePace(refresh = false): Promise<PaceSnapshot> {
       return Promise.resolve(value);
     }
     const state = (query.get("paceScenario") ?? query.get("paceState")) as PaceState;
-    return Promise.resolve(syntheticPaceSnapshot(paceStates.includes(state) ? state : "forecast"));
+    return Promise.resolve(paceStates.includes(state) ? syntheticPaceSnapshot(state) : syntheticCoachSnapshot("roomy"));
   }
   if (refresh) return invoke<PaceSnapshot>("refresh_pulse_pace");
   if (!pendingRead) pendingRead = invoke<PaceSnapshot>("fetch_pulse_pace").finally(() => { pendingRead = null; });
   return pendingRead;
 }
-export async function titlebarAction(action: "toggle" | "close" | "showMain" | "details") {
+export async function titlebarAction(action: "toggle" | "close" | "showMain" | "details" | "account") {
   if (demo()) {
+    if (action === "account" || action === "details") {
+      try { sessionStorage.setItem("pulse-demo-companion-action", action); } catch { /* Main view remains reachable without browser storage. */ }
+    }
     if (action === "toggle") location.hash = "pulse-pace";
     else if (action === "close") location.hash = "pulse-badge";
     else location.hash = "";
@@ -179,10 +183,16 @@ export function usePulsePace() {
       catch { if (active && ownRevision === requestRevision.current) { failedAt.current = { updatedAt: current.current?.updatedAt ?? null }; setError(true); } }
     };
     void read();
+    let unlisten: UnlistenFn | undefined;
+    // Successful account reads update all companions through a local snapshot read.
+    // This event must never issue another account refresh.
+    void listen("pulse-pace-updated", () => { void read(); }).then(remove => {
+      if (active) unlisten = remove; else remove();
+    }).catch(() => { /* The background local poll remains available without native events. */ });
     const timer = window.setInterval(() => { if (!document.hidden) void read(); }, 20_000);
     const visible = () => { if (!document.hidden) void read(); };
     document.addEventListener("visibilitychange", visible);
-    return () => { active = false; mounted.current = false; clearInterval(timer); document.removeEventListener("visibilitychange", visible); };
+    return () => { active = false; mounted.current = false; unlisten?.(); clearInterval(timer); document.removeEventListener("visibilitychange", visible); };
   }, [accept]);
   const refresh = useCallback(async () => {
     if (manualPending.current) return;

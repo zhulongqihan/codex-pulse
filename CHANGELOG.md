@@ -4,6 +4,25 @@ User-facing changes are grouped by release, following [Keep a Changelog](https:/
 
 ## [Unreleased]
 
+## [0.7.2] - 2026-11-10
+
+### Fixed / 修复
+
+- Keep successful account readings synchronized across the workspace and companions; evaluate each snapshot's freshness independently and label expired readings as previous-window values.
+- 主界面与伴随窗口同步成功的账号读数，分别判断各数据源时效，并将到期读数明确标为上次窗口。
+- Explain unavailable estimates and refresh cooldowns; distinguish a plugin snapshot reread from querying account capacity.
+- 说明无法估算的原因与刷新冷却，区分插件重读快照和实际查询账号额度。
+- Prioritize pacing advice in compact windows, open cycle observations from consumption details, and keep expanded widget actions reachable.
+- 小窗口优先呈现配速建议，消耗详情展开本轮观测依据，展开浮窗保留可达的操作按钮。
+- Distinguish missing retention from zero usage, align chart tables with selected metrics, disambiguate project names and improve terminology and small-text readability in both styles.
+- 区分留存前无记录与零用量，让图表数据表随指标切换，区分同名项目，并改善两版界面的术语与小字可读性。
+- Align synthetic demo readings and clarify log-source selection, countdown labels and the two update steps.
+- 统一合成演示读数，明确日志来源选择、倒计时单位文字与更新的两个步骤。
+- Clear previous account state when changing identity, and show the recorded outcome and reason after a failed update.
+- 切换账号时清除旧账号状态，更新失败后显示记录的恢复结果与原因。
+
+[完整中英说明 / Full release notes](docs/releases/v0.7.2.md)
+
 ## [0.7.1] - 2026-11-09
 
 ### Fixed / 修复

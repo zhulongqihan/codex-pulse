@@ -585,6 +585,9 @@ a { text-underline-offset: 3px; }
 .pulse-chart-legend i { width: 10px; height: 7px; border-radius: 1px; display: block; }
 .pulse-series-input { background: var(--pulse-input); }
 .pulse-series-cached { background: var(--pulse-cached); }
+.pulse-token-input { background: var(--pulse-input); }
+.pulse-token-cached { background: var(--pulse-cached); }
+.pulse-token-output { background: var(--pulse-output); }
 .pulse-series-output { background: var(--pulse-output); }
 .pulse-series-cost { background: rgb(var(--primary)); }
 .pulse-series-five-hour { background: #b77f35; }
@@ -623,9 +626,11 @@ a { text-underline-offset: 3px; }
 .pulse-account-details { border-top: 1px solid rgb(var(--border)); padding-top: 24px; }
 .pulse-account-details > h2 { font-size: 16px; font-weight: 650; margin-bottom: 15px; }
 .pulse-chart-table { max-height: 390px; overflow: auto; }
-.pulse-chart-table table { min-width: 660px; width: 100%; border-collapse: collapse; font-size: 11px; }
+.pulse-chart-table table { min-width: 660px; width: 100%; border-collapse: collapse; font-size: 12px; }
+.pulse-chart-table[data-mode="quota"] table, .pulse-chart-table[data-mode="cost"] table { min-width: 0; }
 .pulse-chart-table td, .pulse-chart-table th { padding: 11px 8px; text-align: right; border-bottom: 1px solid rgb(var(--border)); }
 .pulse-chart-table td:first-child, .pulse-chart-table th:first-child { text-align: left; }
+.pulse-chart-table td[data-no-retention] { text-align: left; }
 .pulse-chart-table th { font-weight: 500; color: rgb(var(--muted-foreground)); }
 .pulse-chart-fullscreen { position: fixed; inset: 0; z-index: 150; overflow: auto; background: rgb(var(--background)); padding: 32px; }
 .pulse-chart-fullscreen .pulse-trends { min-height: calc(100vh - 100px); margin: 0; }
@@ -801,6 +806,17 @@ a { text-underline-offset: 3px; }
 
 .pulse-limit-meter[data-quota-level="warning"] > span { background: rgb(var(--warning)); }
 .pulse-limit-meter[data-quota-level="error"] > span { background: rgb(var(--error)); }
+.pulse-limit-meter[data-quota-level="unknown"] > span { background: rgb(var(--muted-foreground) / .45); }
+
+/* Critical qualifiers keep a readable size without changing the skin hierarchy. */
+.pulse-limit-heading small, .pulse-limit-reset,
+.pulse-source-note, .pulse-source-path, .pulse-chart-caption,
+.pulse-chart-legend, .pulse-aggregation-note, .pulse-chart-table,
+.pulse-inspector-breakdown, .pulse-day-inspector small,
+.pulse-account-facts, .pulse-period-totals > span,
+.pulse-rank-row small, .pulse-today-heading p, .pulse-today-values small {
+  font-size: 12px;
+}
 
 .pulse-browser-welcome { min-height: 100vh; background: rgb(var(--surface)); color: rgb(var(--foreground)); }
 .pulse-browser-welcome > header { display: flex; justify-content: space-between; align-items: center; padding: 28px 6vw; border-bottom: 1px solid rgb(var(--border)); background: rgb(var(--sidebar)); }

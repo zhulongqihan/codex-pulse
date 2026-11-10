@@ -17,6 +17,7 @@ import { PulseAccountDrawer } from "@/components/pulse-account-drawer";
 import { PulseGettingStarted } from "@/components/pulse-getting-started";
 import { PulseBrandMark } from "@/components/pulse-brand-mark";
 import { PulseCoachOverview } from "@/components/pulse-coach-overview";
+import { UpdateRecoveryNotice } from "@/components/update-recovery-notice";
 import { SessionUsageTable } from "@/components/session-usage-table";
 import { SessionDetailModal } from "@/components/session-detail-modal";
 import { ProjectSessionsModal } from "@/components/project-sessions-modal";
@@ -30,7 +31,7 @@ import { PulseStyleSwitcher } from "@/components/pulse-appearance-controls";
 import { usePulseCopy } from "@/lib/pulse-copy";
 import { usePulsePreferences } from "@/lib/pulse-appearance";
 import { useShellCopy } from "@/lib/shell-copy";
-import { invoke } from "@tauri-apps/api/core";
+import { invoke, isTauri } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { Sparkles, X, ChevronDown, ChevronUp, AlertTriangle, ArrowLeft, UserRound, Settings2, MonitorUp, CircleHelp } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -59,6 +60,7 @@ export default function App() {
   const [accountExpanded, setAccountExpanded] = useState(true);
   const compactWindow = useCompactWindow();
   const [accountDrawerOpen, setAccountDrawerOpen] = useState(false);
+  const [accountFocusRequested, setAccountFocusRequested] = useState(false);
   const [settingsInitialSection, setSettingsInitialSection] = useState<SettingsSection>("appearance");
   const [settingsEntry, setSettingsEntry] = useState(0);
   const [showQuickStart, setShowQuickStart] = useState(() => { try { return localStorage.getItem(QUICK_START_DISMISSED) !== "true"; } catch { return true; } });
@@ -140,6 +142,10 @@ export default function App() {
     updateInstallStatus,
     updateProgress,
     updateInstallError,
+    updateRecoveryResult,
+    updateRecoveryError,
+    handleDismissUpdateRecovery,
+    handleOpenUpdateRecords,
     isUpdateDismissed,
     launchAtLogin,
     launchAtLoginKnown,
@@ -177,14 +183,17 @@ export default function App() {
   } = useUsageDashboard();
 
   const [paceDetailsRequested, setPaceDetailsRequested] = useState(false);
+  const [paceObservationsExpanded, setPaceObservationsExpanded] = useState(false);
   useEffect(() => {
-    if (!paceDetailsRequested || view !== "dashboard") return;
+    if (!paceDetailsRequested || view !== "dashboard" || (!hasScanned && !overview?.updatedAt)) return;
     let frame = 0;
     const focusDetails = () => {
       cancelAnimationFrame(frame);
       frame = requestAnimationFrame(() => {
-        const target = document.getElementById("pulse-account-details");
+        const target = document.getElementById("pulse-pace-details");
         if (!target || !document.hasFocus()) return;
+        const observations = target.querySelector<HTMLDetailsElement>(".coach-daily");
+        if (observations) observations.open = true;
         target.scrollIntoView({ block: "start", behavior: "auto" });
         target.focus({ preventScroll: true });
         if (document.activeElement === target) setPaceDetailsRequested(false);
@@ -193,7 +202,7 @@ export default function App() {
     window.addEventListener("focus", focusDetails);
     focusDetails();
     return () => { cancelAnimationFrame(frame); window.removeEventListener("focus", focusDetails); };
-  }, [paceDetailsRequested, view]);
+  }, [paceDetailsRequested, view, hasScanned, Boolean(overview?.updatedAt)]);
   const paceDetails = useRef<() => void>(() => {});
   paceDetails.current = () => {
     setSelectedProjectForModal(null);
@@ -202,6 +211,7 @@ export default function App() {
     setAccountDrawerOpen(false);
     setAccountExpanded(true);
     savedScroll.current = 0;
+    setPaceObservationsExpanded(true);
     setPaceDetailsRequested(true);
     void handleViewChange("dashboard");
   };
@@ -213,6 +223,15 @@ export default function App() {
       else stop = unlisten;
     }).catch(() => { /* The public browser preview has no native window events. */ });
     return () => { disposed = true; stop?.(); };
+  }, []);
+  useEffect(() => {
+    if (isTauri() || new URLSearchParams(location.search).get("demo") !== "1") return;
+    try {
+      const action = sessionStorage.getItem("pulse-demo-companion-action");
+      sessionStorage.removeItem("pulse-demo-companion-action");
+      if (action === "details") paceDetails.current();
+      else if (action === "account") accountRecovery.current();
+    } catch { /* Private browser settings may disable session storage. */ }
   }, []);
 
   useEffect(() => {
@@ -286,7 +305,45 @@ export default function App() {
   };
 
   const openSettings = (section: SettingsSection = "appearance") => { setSettingsInitialSection(section); setSettingsEntry(value => value + 1); navigate("settings"); };
-  const showAccount = () => { if (compactWindow) setAccountDrawerOpen(true); else setAccountExpanded(true); };
+  const showAccount = () => {
+    if (compactWindow) setAccountDrawerOpen(true);
+    else {
+      setAccountExpanded(true);
+      setAccountFocusRequested(true);
+      if (view === "settings" || view === "logs") navigate("dashboard");
+    }
+  };
+  useEffect(() => {
+    if (!accountFocusRequested || compactWindow || view === "settings" || view === "logs") return;
+    let frame = 0;
+    const focus = () => {
+      cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(() => {
+        const target = document.getElementById("pulse-account-rail");
+        if (!target || !document.hasFocus()) return;
+        target.focus({ preventScroll: true });
+        if (document.activeElement === target) setAccountFocusRequested(false);
+      });
+    };
+    focus(); window.addEventListener("focus", focus);
+    return () => { cancelAnimationFrame(frame); window.removeEventListener("focus", focus); };
+  }, [accountFocusRequested, compactWindow, view]);
+  const accountRecovery = useRef<() => void>(() => {});
+  accountRecovery.current = () => {
+    setSelectedProjectForModal(null);
+    setSelectedSession(null);
+    setIsResetHistoryOpen(false);
+    showAccount();
+  };
+  useEffect(() => {
+    let disposed = false;
+    let stop: (() => void) | undefined;
+    void listen("pulse-show-account", () => accountRecovery.current()).then(unlisten => {
+      if (disposed) unlisten();
+      else stop = unlisten;
+    }).catch(() => { /* Browser previews do not have native companion events. */ });
+    return () => { disposed = true; stop?.(); };
+  }, []);
   const openHelp = () => { setShowQuickStart(true); setHelpExpanded(true); navigate("dashboard"); savedScroll.current = 0; if (contentScroll.current) contentScroll.current.scrollTop = 0; };
   const dismissQuickStart = () => { setShowQuickStart(false); setHelpExpanded(false); try { localStorage.setItem(QUICK_START_DISMISSED, "true"); } catch { /* The help remains available without storage. */ } };
   async function runDesktopAction(action: "widget" | "shortcuts") {
@@ -314,11 +371,12 @@ export default function App() {
         <div className="pulse-brand"><PulseBrandMark size={28}/><strong>Pulse</strong>{document.documentElement.dataset.demo === "true" ? <span className="pulse-demo-label">{copy("sample")}</span> : null}<span className="pulse-page-label">{t(`common.${view === "models" ? "model" : view === "projects" ? "project" : view}`)}</span></div>
         <div className="pulse-global-actions"><PulseStyleSwitcher/>
           <button type="button" data-testid="open-widget" className="pulse-shell-action pulse-widget-action" disabled={desktopAction !== null} aria-busy={desktopAction === "widget"} onClick={() => void runDesktopAction("widget")}><MonitorUp size={16}/><span>{shellCopy(desktopAction === "widget" ? "widgetBusy" : preferences.widgetVisible ? "widgetVisible" : "widget")}</span></button>
-          <button type="button" data-testid="account-toggle" className="pulse-shell-action" aria-label={shellCopy("account")} aria-expanded={compactWindow ? accountDrawerOpen : accountExpanded} aria-controls={compactWindow ? "pulse-account-drawer" : "pulse-account-rail"} onClick={() => compactWindow ? setAccountDrawerOpen(true) : setAccountExpanded(value => !value)}><UserRound size={17}/><span>{shellCopy("account")}</span>{compactWindow && quotaSummary ? <small className="pulse-account-summary">{quotaSummary} {shellCopy("remaining")}</small> : null}</button>
+          <button type="button" data-testid="account-toggle" className="pulse-shell-action" aria-label={shellCopy("account")} aria-expanded={compactWindow ? accountDrawerOpen : accountExpanded && view !== "settings" && view !== "logs"} aria-controls={compactWindow ? "pulse-account-drawer" : "pulse-account-rail"} onClick={() => compactWindow || view === "settings" || view === "logs" ? showAccount() : setAccountExpanded(value => !value)}><UserRound size={17}/><span>{shellCopy("account")}</span>{compactWindow && quotaSummary ? <small className="pulse-account-summary">{quotaSummary} {shellCopy("remaining")}</small> : null}</button>
           <button type="button" data-testid="help" className="pulse-shell-action pulse-help-action" onClick={openHelp} aria-label={shellCopy("help")} title={shellCopy("help")}><CircleHelp size={17}/><span>{shellCopy("help")}</span></button>
           <button type="button" className="pulse-icon-button" aria-label={copy("appearance")} title={t("common.settings")} onClick={() => openSettings()}><Settings2 size={18}/></button>
         </div>
       </header>
+      <UpdateRecoveryNotice result={updateRecoveryResult} error={updateRecoveryError} onDismiss={handleDismissUpdateRecovery} onOpenRecords={handleOpenUpdateRecords}/>
       {(!showQuickStart || view !== "dashboard") && (desktopError || desktopNotice) ? <p className={`pulse-shell-notice ${desktopError ? "pulse-error" : ""}`} role={desktopError ? "alert" : "status"}>{desktopError ?? desktopNotice}</p> : null}
       <div className="pulse-workspace">
       <div data-tauri-drag-region aria-hidden="true" className="absolute inset-x-0 top-0 z-10 h-[var(--window-controls-height)] select-none" />
@@ -512,8 +570,8 @@ export default function App() {
           {visitedViews.current.has("dashboard") ? (
             <Activity mode={view === "dashboard" ? "visible" : "hidden"}>
             <div className="space-y-5">
-              {showQuickStart ? <PulseGettingStarted expanded={helpExpanded} onExpand={() => setHelpExpanded(value => !value)} localReady={!!overview?.updatedAt || diagnostics?.status === "ready"} accountReady={!!codexLimits} source={diagnostics?.codexHome} busy={desktopAction !== null} notice={desktopNotice} error={desktopError} onSource={() => openSettings("source")} onAccount={showAccount} onWidget={() => void runDesktopAction("widget")} onShortcuts={() => void runDesktopAction("shortcuts")} onDismiss={dismissQuickStart}/> : null}
-              {!showDashboard || !overview ? <PulseCoachOverview onDetails={() => paceDetails.current()}/> : null}
+              {showQuickStart && !compactWindow ? <PulseGettingStarted expanded={helpExpanded} onExpand={() => setHelpExpanded(value => !value)} localReady={!!overview?.updatedAt || diagnostics?.status === "ready"} accountReady={!!codexLimits} source={diagnostics?.codexHome} busy={desktopAction !== null} notice={desktopNotice} error={desktopError} onSource={() => openSettings("source")} onAccount={showAccount} onWidget={() => void runDesktopAction("widget")} onShortcuts={() => void runDesktopAction("shortcuts")} onDismiss={dismissQuickStart}/> : null}
+              {!showDashboard || !overview ? <PulseCoachOverview onDetails={() => paceDetails.current()} onRecover={showAccount} observationsExpanded={paceObservationsExpanded}/> : null}
               {showDashboard && overview ? <DashboardHeroCard
                 overview={overview}
                   todayOverview={todayOverview}
@@ -528,9 +586,12 @@ export default function App() {
                 onExport={(format) => void handleExport(format)}
                 metrics={metrics}
                 codexLimits={codexLimits}
-                coach={<PulseCoachOverview onDetails={() => paceDetails.current()}/>}
+                coach={<PulseCoachOverview onDetails={() => paceDetails.current()} onRecover={showAccount} observationsExpanded={paceObservationsExpanded}/>}
+                coachFirst={compactWindow}
                 onOpenDay={(date) => { setSelectedSessionDate(date); void handleViewChange("sessions"); }}
               /> : null}
+
+              {showQuickStart && compactWindow ? <PulseGettingStarted expanded={helpExpanded} onExpand={() => setHelpExpanded(value => !value)} localReady={!!overview?.updatedAt || diagnostics?.status === "ready"} accountReady={!!codexLimits} source={diagnostics?.codexHome} busy={desktopAction !== null} notice={desktopNotice} error={desktopError} onSource={() => openSettings("source")} onAccount={showAccount} onWidget={() => void runDesktopAction("widget")} onShortcuts={() => void runDesktopAction("shortcuts")} onDismiss={dismissQuickStart}/> : null}
 
               <section id="pulse-account-details" className="pulse-account-details" tabIndex={-1} aria-labelledby="pulse-account-details-heading">
                 <h2 id="pulse-account-details-heading">{copy("details")}</h2>
@@ -718,13 +779,13 @@ export default function App() {
       ) : null}
       </div>
       </div>
-      {!compactWindow && accountExpanded && view !== "settings" && view !== "logs" ? <aside id="pulse-account-rail" className="pulse-account-rail" aria-label={copy("account")}>
+      {!compactWindow && accountExpanded && view !== "settings" && view !== "logs" ? <aside id="pulse-account-rail" className="pulse-account-rail" aria-label={copy("account")} tabIndex={-1}>
         <h2>{copy("account")}</h2>
         {accountPanel}
       </aside> : null}
       </div>
       {compactWindow && accountDrawerOpen ? <PulseAccountDrawer onClose={() => setAccountDrawerOpen(false)}>{accountPanel}</PulseAccountDrawer> : null}
-      <footer className="pulse-statusbar"><span>{copy("local")} · {diagnostics?.filesFound ?? "—"} {t("session.file", {defaultValue: "logs"})}</span><span title={diagnostics?.codexHome}>{diagnostics?.runtime ?? "Codex"}</span><span>{overview?.timezone ?? ""}</span><span className="pulse-statusbar-end">{copy("motion")} {copy(preferences.motionLevel)}</span></footer>
+      <footer className="pulse-statusbar"><span>{copy("local")}{diagnostics?.filesFound != null ? <> · {diagnostics.filesFound} {t("session.file", {defaultValue: "logs"})}</> : null}</span><span title={diagnostics?.codexHome}>{diagnostics?.runtime ?? "Codex"}</span><span>{overview?.timezone ?? ""}</span><span className="pulse-statusbar-end">{copy("motion")} {copy(preferences.motionLevel)}</span></footer>
     </div>
   );
 }

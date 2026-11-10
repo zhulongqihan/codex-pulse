@@ -110,7 +110,7 @@ export async function updatePulsePreferences(patch: Partial<PulsePreferences>) {
 export const usePulsePreferences = () => useSyncExternalStore(subscribe, () => preferences, () => defaultPulsePreferences);
 export const usePulsePreferencesError = () => useSyncExternalStore(subscribe, () => error, () => null);
 
-export async function pulseWidgetAction(action: "show" | "hide" | "expand" | "collapse" | "pin" | "unpin" | "showMain" | "quit") {
+export async function pulseWidgetAction(action: "show" | "hide" | "expand" | "collapse" | "pin" | "unpin" | "showMain" | "account" | "quit") {
   if (isTauri()) await invoke("widget_action", { action });
   else {
     const patch: Partial<PulsePreferences> = action === "show" ? { widgetVisible: true }

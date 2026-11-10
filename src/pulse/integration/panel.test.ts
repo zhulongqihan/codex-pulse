@@ -56,6 +56,34 @@ function snapshot() {
 }
 
 describe("the shipped MCP panel script", () => {
+  it("keeps fresh pace independent of stale legacy quotas and a stale local summary", async () => {
+    const p = panel(), usage = await p.connect();
+    const now = new Date().toISOString();
+    await p.respond(usage, { structuredContent: { ...snapshot(), quotaStale: true,
+      pace: { schemaVersion: 1, status: "sampling", updatedAt: now, windows: [{ kind: "session", state: "sampling", windowMinutes: 300, remainingPercent: 70, resetsAt: new Date(Date.now() + 120 * 60_000).toISOString() }] } } });
+    expect(p.doc.querySelector<HTMLElement>(".pace")!.dataset.state).toBe("ready");
+    expect(p.get("pace-reading").textContent).toBe("70%");
+    expect(p.get("session").classList.contains("outdated")).toBe(true);
+  });
+
+  it("does not use a fresh legacy quota timestamp to freshen stale or failed pace", async () => {
+    const p = panel(), usage = await p.connect(), now = Date.now();
+    const data = { ...snapshot(), quotaUpdatedAt: new Date(now).toISOString(), quotaStale: false,
+      pace: { schemaVersion: 1, status: "sampling", updatedAt: new Date(now - 10 * 60_000).toISOString(), windows: [{ kind: "session", state: "sampling", windowMinutes: 300, remainingPercent: 0, resetsAt: new Date(now + 120 * 60_000).toISOString() }] } };
+    await p.respond(usage, { structuredContent: data });
+    expect(p.doc.querySelector<HTMLElement>(".pace")!.dataset.state).toBe("stale");
+    expect(p.get("pace-reading").textContent).toBe("0%");
+    p.receive({ jsonrpc: "2.0", method: "ui/notifications/tool-result", params: { structuredContent: { ...data, pace: { ...data.pace, updatedAt: new Date(now).toISOString(), refreshFailed: true } } } });
+    expect(p.doc.querySelector<HTMLElement>(".pace")!.dataset.state).toBe("failed");
+  });
+
+  it("retains the legacy quota freshness fallback when an older snapshot has no pace", async () => {
+    const p = panel(), usage = await p.connect(), now = Date.now();
+    await p.respond(usage, { structuredContent: { ...snapshot(), quotaUpdatedAt: new Date(now).toISOString(),
+      quotas: [{ kind: "session", windowMinutes: 300, remainingPercent: 0, resetsAt: new Date(now + 120 * 60_000).toISOString() }] } });
+    expect(p.doc.querySelector<HTMLElement>(".pace")!.dataset.state).toBe("exhausted");
+    expect(p.get("pace-reading").textContent).toBe("0%");
+  });
   it("negotiates the UI bridge then reads usage with empty arguments, retaining independent timestamps and fractional quota", async () => {
     const p = panel(), usage = await p.connect();
     expect(p.messages[0].params).toMatchObject({ protocolVersion: "2026-01-26", appInfo: { name: "Codex Pulse" } });

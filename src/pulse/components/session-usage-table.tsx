@@ -313,7 +313,7 @@ export function SessionDayQuotaSummary({ sessions, showLabel = true }: {
 
   return <span
     data-testid="day-quota-summary"
-    className="block space-y-1 text-right text-xs tabular-nums"
+    className="block space-y-1 text-right text-[12px] tabular-nums"
     aria-label={t("sessions.quota.day_usage_label", { fiveHour: fiveHourQuota, weekly: weeklyQuota })}
     title={t("sessions.quota.day_caveat")}
   >
@@ -534,7 +534,7 @@ export function SessionUsageTable({
 
   return (
     <div className="pulse-session-list space-y-4">
-      {showSessionCredits && creditsActive ? <div className="flex items-center gap-3 text-xs text-muted-foreground">
+      {showSessionCredits && creditsActive ? <div className="flex items-center gap-3 text-[12px] text-muted-foreground">
         <Button variant="secondary" size="sm" onClick={() => credits.refresh()} disabled={credits.loading || creditThreads.length === 0}>{t("session_credits.refresh")}</Button>
         {credits.error ? <span role="status">{t(`session_credits.errors.${credits.error}`)}</span> : null}
       </div> : null}
@@ -542,7 +542,7 @@ export function SessionUsageTable({
         <div>
           <h2 className="text-xl font-bold tracking-tight text-foreground flex items-center gap-2.5">
             {t("sessions.title")}
-            <span className="inline-flex items-center rounded-full bg-primary/5 px-2.5 py-0.5 text-xs font-semibold text-primary border border-indigo-500/20">
+            <span className="inline-flex items-center rounded-full bg-primary/5 px-2.5 py-0.5 text-[12px] font-semibold text-primary border border-indigo-500/20">
               {selectedProject ? t("sessions.showing_info_filtered", { filtered: filteredCount, total: displaySessions.length }) : t("sessions.showing_info", { count: displaySessions.length })}
             </span>
           </h2>
@@ -559,10 +559,10 @@ export function SessionUsageTable({
               <Folder className="h-4 w-4" />
             </div>
             <div className="space-y-0.5">
-              <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-primary">{t("sessions.filtering_by_project", { defaultValue: "Filtering by Project" })}</p>
+              <p className="text-[12px] font-semibold uppercase tracking-[0.14em] text-primary">{t("sessions.filtering_by_project", { defaultValue: "Filtering by Project" })}</p>
               <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-2">
                 <span className="inline-flex items-center gap-1.5 font-bold text-foreground text-sm">{selectedProjectReference ? projectLabel(selectedProjectReference) : selectedProject.split(/[\\/]/).pop() || selectedProject}{selectedProjectReference?.codexProjectName ? <span className="rounded-full border border-indigo-500/20 bg-primary/5 px-1.5 py-0.5 text-[8px] font-semibold text-indigo-500">{t("projects.codex_project")}</span> : null}</span>
-                <span className="text-[11px] font-mono text-muted-foreground truncate max-w-xs md:max-w-md">({selectedProject})</span>
+                <span className="text-[12px] font-mono text-muted-foreground truncate max-w-xs md:max-w-md">({selectedProject})</span>
               </div>
             </div>
           </div>
@@ -570,7 +570,7 @@ export function SessionUsageTable({
             variant="secondary"
             size="sm"
             onClick={onClearProjectFilter}
-            className="h-8 font-medium text-xs border-indigo-500/20 hover:bg-primary/5 hover:text-primary transition"
+            className="h-8 font-medium text-[12px] border-indigo-500/20 hover:bg-primary/5 hover:text-primary transition"
           >
             {t("sessions.btn_clear_filters")}
           </Button>
@@ -585,7 +585,7 @@ export function SessionUsageTable({
                 <Folder className="h-8 w-8 text-primary" />
               </div>
               <h3 className="text-base font-semibold text-foreground">{t("project_modal.no_sessions")}</h3>
-              <p className="mt-2 max-w-sm text-xs text-muted-foreground">
+              <p className="mt-2 max-w-sm text-[12px] text-muted-foreground">
                 {t("projects.no_projects")}
               </p>
             </CardContent>
@@ -626,7 +626,7 @@ export function SessionUsageTable({
                       <Calendar className="h-4 w-4 text-primary" />
                       <span className="font-bold text-foreground text-base tracking-tight">{formattedDate}</span>
                     </div>
-                    <div className="flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
+                    <div className="flex flex-wrap items-center gap-1.5 text-[12px] text-muted-foreground">
                       <span className="inline-flex rounded bg-muted/80 px-2 py-0.5 font-semibold text-muted-foreground border border-border/20">
                         {t("sessions.count_sessions", { count: group.sessions.length, defaultValue: group.sessions.length === 1 ? "1 session" : `${group.sessions.length} sessions` })}
                       </span>
@@ -635,7 +635,7 @@ export function SessionUsageTable({
                           {group.models.map((model) => (
                             <span
                               key={model}
-                              className="inline-flex rounded-full bg-primary/5 px-2 py-0.2 text-[9px] font-bold text-primary"
+                              className="inline-flex rounded-full bg-primary/5 px-2 py-0.2 text-[12px] font-bold text-primary"
                             >
                               {model}
                             </span>
@@ -653,7 +653,7 @@ export function SessionUsageTable({
                   {/* Day total tokens indicator */}
                   {group.totalTokens > 0 ? (
                     <div className="space-y-1.5 min-w-[120px] text-right">
-                      <div className="text-xs text-muted-foreground">{t("sessions.day_total_tokens", { defaultValue: "Day Total Tokens" })}</div>
+                      <div className="text-[12px] text-muted-foreground">{t("sessions.day_total_tokens", { defaultValue: "Day Total Tokens" })}</div>
                       <div className="font-bold text-foreground tabular-nums text-sm">
                         {formatNumber(group.totalTokens)}
                       </div>
@@ -666,15 +666,15 @@ export function SessionUsageTable({
                       </div>
                     </div>
                   ) : (
-                    <div className="text-xs text-muted-foreground italic">{t("daily.no_activity")}</div>
+                    <div className="text-[12px] text-muted-foreground italic">{t("daily.no_activity")}</div>
                   )}
 
                   {/* Day total cost */}
                   {group.totalTokens > 0 && (
                     <div className="text-right">
-                      <div className="text-xs text-muted-foreground mb-1">{t("sessions.day_cost", { defaultValue: "Day Cost" })}</div>
+                      <div className="text-[12px] text-muted-foreground mb-1">{t("sessions.day_cost", { defaultValue: "Day Cost" })}</div>
                       <span
-                        className="inline-flex rounded-full px-3 py-0.5 font-bold text-foreground text-xs border border-white/5 shadow-sm"
+                        className="inline-flex rounded-full px-3 py-0.5 font-bold text-foreground text-[12px] border border-white/5 shadow-sm"
                         style={{
                           backgroundColor: `rgb(var(--secondary) / ${groupCostHeatAlpha})`,
                         }}
@@ -806,7 +806,7 @@ export function SessionUsageTable({
                         {isParentAgent ? (
                           <button
                             type="button"
-                            className="session-card-subagents flex w-full min-w-0 items-center gap-2 border-b border-indigo-500/15 pb-2 text-left text-xs transition hover:bg-indigo-500/5 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-indigo-400/50"
+                            className="session-card-subagents flex w-full min-w-0 items-center gap-2 border-b border-indigo-500/15 pb-2 text-left text-[12px] transition hover:bg-indigo-500/5 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-indigo-400/50"
                             data-testid="subagent-summary"
                             aria-expanded={isExpanded}
                             onClick={(event) => {
@@ -837,14 +837,14 @@ export function SessionUsageTable({
                             <SessionArchivedBadge path={session.path} />
                             {isSubagent ? (
                               <span
-                                className="shrink-0 rounded-full border border-indigo-500/25 bg-primary/5 px-1.5 py-px text-[9px] font-semibold text-primary"
+                                className="shrink-0 rounded-full border border-indigo-500/25 bg-primary/5 px-1.5 py-px text-[12px] font-semibold text-primary"
                                 title={session.agentPath || subagentLabel}
                               >
                                 {subagentLabel}
                               </span>
                             ) : null}
                           </div>
-                          <div className="flex min-w-0 items-center gap-1.5 text-[10px] text-muted-foreground" title={projectReferences.map((project) => project.path).join("\n")}>
+                          <div className="flex min-w-0 items-center gap-1.5 text-[12px] text-muted-foreground" title={projectReferences.map((project) => project.path).join("\n")}>
                             <Folder className="h-3 w-3 flex-none opacity-70" />
                             {shownProjects.length > 0 ? (
                               <span className="flex min-w-0 items-center gap-1 truncate font-medium">
@@ -854,7 +854,7 @@ export function SessionUsageTable({
                                       <span className="truncate">{projectLabel(project)}</span>
                                       {project.codexProjectName ? <span className="shrink-0 rounded-full border border-indigo-500/20 bg-primary/5 px-1 py-px text-[8px] font-semibold text-indigo-500">{t("projects.codex_project")}</span> : null}
                                     </span>
-                                    {project.codexProjectName && project.codexProjectName !== project.displayName ? <span className="truncate font-mono text-[9px] opacity-80">{project.displayName}</span> : null}
+                                    {project.codexProjectName && project.codexProjectName !== project.displayName ? <span className="truncate font-mono text-[12px] opacity-80">{project.displayName}</span> : null}
                                   </span>
                                 ))}
                                 {projectOverflow > 0 ? <span title={projectReferences.map((project) => project.path).join("\n")}>+{projectOverflow}</span> : null}
@@ -863,7 +863,7 @@ export function SessionUsageTable({
                             {session.threadName ? <span aria-hidden="true">·</span> : null}
                             {session.threadName ? <span className="min-w-0 truncate font-mono" title={session.path}>{cleanSessionId(session.sessionId)}</span> : null}
                           </div>
-                          <div className="flex min-w-0 items-center gap-1.5 text-[10px] text-muted-foreground/80">
+                          <div className="flex min-w-0 items-center gap-1.5 text-[12px] text-muted-foreground/80">
                             <span className="font-semibold tabular-nums text-foreground" title={fullTime}>{formattedTime}</span>
                             <span aria-hidden="true">·</span>
                             <span className="shrink-0 tabular-nums" data-testid="session-turn-count">{t("sessions.count_turns", { count: session.turnCount })}</span>
@@ -877,7 +877,7 @@ export function SessionUsageTable({
                                       key={model}
                                       data-model={model}
                                       data-model-tone={tone.index}
-                                      className={`whitespace-nowrap rounded-full border px-1.5 py-px text-[9px] font-semibold ${tone.className}`}
+                                      className={`whitespace-nowrap rounded-full border px-1.5 py-px text-[12px] font-semibold ${tone.className}`}
                                     >
                                       {model}
                                     </span>
@@ -893,7 +893,7 @@ export function SessionUsageTable({
 
                         <div className="session-card-tokens min-w-0 space-y-1.5">
                           <div className="flex items-center gap-2">
-                            <span className="text-[10px] font-medium text-muted-foreground">{t("sessions.total_tokens")}</span>
+                            <span className="text-[12px] font-medium text-muted-foreground">{t("sessions.total_tokens")}</span>
                             <span
                               className="relative isolate inline-flex min-w-[6.5rem] overflow-hidden rounded-full border border-primary/20 bg-primary/5 px-2 py-0.5 text-sm font-bold tabular-nums tracking-tight text-foreground"
                               role="img"
@@ -910,12 +910,12 @@ export function SessionUsageTable({
                               <span className="relative">{formatSessionTokenCount(session.totalTokens)}</span>
                             </span>
                           </div>
-                          <div className="flex min-w-0 flex-wrap gap-x-1.5 gap-y-0.5 text-[10px] tabular-nums text-muted-foreground">
+                          <div className="flex min-w-0 flex-wrap gap-x-1.5 gap-y-0.5 text-[12px] tabular-nums text-muted-foreground">
                             <span>{t("sessions.input_including_cache")} <strong className="font-semibold text-foreground">{formatSessionTokenCount(session.inputTokens)}</strong></span>
                             <span aria-hidden="true">·</span>
                             <span>{t("sessions.cached")} <strong className="font-semibold text-foreground">{formatSessionTokenCount(session.cachedInputTokens)}</strong></span>
                           </div>
-                          <div className="flex min-w-0 flex-wrap gap-x-1.5 gap-y-0.5 text-[10px] tabular-nums text-muted-foreground">
+                          <div className="flex min-w-0 flex-wrap gap-x-1.5 gap-y-0.5 text-[12px] tabular-nums text-muted-foreground">
                             <span>{t("sessions.output")} <strong className="font-semibold text-foreground">{formatSessionTokenCount(session.outputTokens)}</strong></span>
                             <span aria-hidden="true">·</span>
                             <span className="shrink-0">{t(showSessionCredits ? "session_credits.estimated_cost" : "sessions.cols.cost")}</span>
@@ -940,13 +940,13 @@ export function SessionUsageTable({
                           <div className="flex h-1.5 overflow-hidden rounded-full bg-muted" role="img" aria-label={tokenLabel} data-testid="token-bar">
                             {isInactive ? null : (
                               <>
-                                <span data-token-segment="input" className="h-full flex-none bg-sky-500" style={{ width: `${(nonCachedInputTokens / session.totalTokens) * 100}%`, minWidth: nonCachedInputTokens > 0 ? 2 : undefined }} />
-                                <span data-token-segment="cached" className="h-full flex-none bg-emerald-500" style={{ width: `${(session.cachedInputTokens / session.totalTokens) * 100}%`, minWidth: session.cachedInputTokens > 0 ? 2 : undefined }} />
-                                <span data-token-segment="output" className="h-full flex-none bg-violet-500" style={{ width: `${(session.outputTokens / session.totalTokens) * 100}%`, minWidth: session.outputTokens > 0 ? 2 : undefined }} />
+                                <span data-token-segment="input" className="h-full flex-none pulse-token-input" style={{ width: `${(nonCachedInputTokens / session.totalTokens) * 100}%`, minWidth: nonCachedInputTokens > 0 ? 2 : undefined }} />
+                                <span data-token-segment="cached" className="h-full flex-none pulse-token-cached" style={{ width: `${(session.cachedInputTokens / session.totalTokens) * 100}%`, minWidth: session.cachedInputTokens > 0 ? 2 : undefined }} />
+                                <span data-token-segment="output" className="h-full flex-none pulse-token-output" style={{ width: `${(session.outputTokens / session.totalTokens) * 100}%`, minWidth: session.outputTokens > 0 ? 2 : undefined }} />
                               </>
                             )}
                           </div>
-                          {isInactive ? <div className="text-[9px] italic text-muted-foreground">{t("daily.no_activity")}</div> : null}
+                          {isInactive ? <div className="text-[12px] italic text-muted-foreground">{t("daily.no_activity")}</div> : null}
                         </div>
 
                         <div className="session-card-quota min-w-0">

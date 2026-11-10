@@ -372,7 +372,7 @@ describe('Pulse native parity', () => {
 
   it('shares preferences and engine across widget and tray, with actual native visibility', async () => {
     const widgetSizes: Record<string, unknown> = {};
-    async function verifyWidgetClient(name: string, height: 156 | 480) {
+    async function verifyWidgetClient(name: string, height: 180 | 480) {
       const nativeClient = async () => {
         const [scaleFactor, physicalClient] = await Promise.all([
           invoke<number>('plugin:window|scale_factor', { label: 'widget' }),
@@ -415,12 +415,15 @@ describe('Pulse native parity', () => {
         };
         const mainBounds = main.getBoundingClientRect();
         const readings = [...document.querySelectorAll('.coach-key-readings > div')];
+        const state = document.querySelector('.coach-state');
+        const recover = document.querySelector('.coach-recover');
         const actions = [...document.querySelectorAll('.pulse-widget-header > button')];
         return { viewport: { width: innerWidth, height: innerHeight }, devicePixelRatio,
           documentFits: document.documentElement.scrollWidth <= innerWidth + 1,
           mainFits: mainBounds.left >= -1 && mainBounds.top >= -1 && mainBounds.right <= innerWidth + 1 && mainBounds.bottom <= innerHeight + 1,
           contentFitsWidth: scroll.scrollWidth <= scroll.clientWidth + 1,
           readings: readings.length, readingsHit: readings.length === 2 && readings.every(hit),
+          recoveryHit: state !== null && recover !== null && hit(state) && hit(recover),
           headerActions: actions.length, headerActionsHit: actions.length >= 4 && actions.every(hit),
           footerExists: footer !== null, footerHit: footer !== null && hit(footer),
           footerActionsHit: footer !== null && [...footer.querySelectorAll('button')].every(hit) };
@@ -432,10 +435,13 @@ describe('Pulse native parity', () => {
       expect(Math.abs(content.viewport.width - 350)).toBeLessThanOrEqual(1);
       expect(Math.abs(content.viewport.height - height)).toBeLessThanOrEqual(1);
       expect(content.documentFits).toBe(true); expect(content.mainFits).toBe(true);
-      expect(content.contentFitsWidth).toBe(true); expect(content.readingsHit).toBe(true);
+      expect(content.contentFitsWidth).toBe(true);
+      expect([0, 2]).toContain(content.readings);
+      if (content.readings === 2) expect(content.readingsHit).toBe(true);
+      else expect(content.recoveryHit).toBe(true);
       expect(content.headerActionsHit).toBe(true);
-      expect(content.footerExists).toBe(height === 480);
-      if (height === 480) { expect(content.footerHit).toBe(true); expect(content.footerActionsHit).toBe(true); }
+      expect(content.footerExists).toBe(true);
+      expect(content.footerHit).toBe(true); expect(content.footerActionsHit).toBe(true);
     }
     await $('[data-testid="help"]').click();
     await $('[data-testid="getting-started"]').waitForDisplayed();
@@ -454,7 +460,7 @@ describe('Pulse native parity', () => {
       await $('#root').waitForDisplayed();
       await invoke('widget_action', { action: 'collapse' });
       await $('.pulse-widget:not(.is-expanded)').waitForDisplayed();
-      await verifyWidgetClient(`${skin}-collapsed`, 156);
+      await verifyWidgetClient(`${skin}-collapsed`, 180);
       await shot(`${skin}-widget`);
       await invoke('widget_action', { action: 'expand' });
       await $('.pulse-widget.is-expanded').waitForDisplayed();

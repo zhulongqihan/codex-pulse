@@ -4,20 +4,24 @@ import { mockIPC, mockWindows } from "@tauri-apps/api/mocks";
 import appManifest from "../../package.json";
 import type { TrayPopoverData } from "../pulse/lib/tray-popover";
 import type { PulsePreferences } from "../pulse/lib/pulse-appearance";
-import { syntheticCoachSnapshot } from "../pulse/lib/pulse-pace";
+import { paceStates, syntheticCoachSnapshot, syntheticPaceSnapshot, type PaceSnapshot, type PaceWindow } from "../pulse/lib/pulse-pace";
 import { account, catalog, forecast, monthly, now, overview, projectAnalytics, projectDaySessions, projectSessionDays, replay, resets, retainedFrom, sessions, today } from "./fixtures";
 
 const unavailable = () => { throw new Error("此操作需要 Codex Pulse 桌面版。合成演示不会访问本机文件、账号或执行模型请求。 / Available in the desktop app only."); };
 const stamp = () => new Date().toISOString();
 function coachAccount() {
   const result = account();
-  const scenario = typeof location === "undefined" ? null : new URLSearchParams(location.search).get("coachScenario");
-  if (!scenario || !["roomy", "balanced", "fast", "notice", "stale"].includes(scenario)) return result;
-  const snapshot = syntheticCoachSnapshot(scenario as Parameters<typeof syntheticCoachSnapshot>[0]);
-  const weekly = snapshot.windows.find(window => window.kind === "weekly");
-  if (!weekly || weekly.remainingPercent == null) return result;
-  return { ...result, session: null, weekly: { usedPercent: 100 - weekly.remainingPercent, remainingPercent: weekly.remainingPercent,
-    windowMinutes: weekly.windowMinutes, resetsAt: weekly.resetsAt }, updatedAt: snapshot.updatedAt ?? result.updatedAt };
+  const query = new URLSearchParams(location.search);
+  const scenario = query.get("coachScenario") as NonNullable<Parameters<typeof syntheticCoachSnapshot>[0]>;
+  const state = (query.get("paceScenario") ?? query.get("paceState")) as NonNullable<Parameters<typeof syntheticPaceSnapshot>[0]>;
+  const snapshot: PaceSnapshot = ["roomy", "balanced", "fast", "notice", "stale"].includes(scenario) ? syntheticCoachSnapshot(scenario)
+    : state && paceStates.includes(state) ? syntheticPaceSnapshot(state) : syntheticCoachSnapshot("roomy");
+  const limit = (kind: PaceWindow["kind"]) => {
+    const window = snapshot.windows.find(item => item.kind === kind);
+    return window?.remainingPercent == null ? null : { usedPercent: 100 - window.remainingPercent,
+      remainingPercent: window.remainingPercent, windowMinutes: window.windowMinutes, resetsAt: window.resetsAt };
+  };
+  return { ...result, session: limit("session"), weekly: limit("weekly"), updatedAt: snapshot.updatedAt ?? result.updatedAt };
 }
 const scan = () => ({ importedDays: overview("all").daily.length, scannedAt: stamp(), timezone: "Asia/Shanghai", metrics: { totalMs: 0, pricingMs: 0, parseMs: 0, dbMs: 0, filesScanned: sessions.length, filesParsed: 0, filesReused: sessions.length, bytesRead: 0 } });
 const paths = { data: "F:/Demo/CodexPulse/data", logs: "F:/Demo/CodexPulse/data/logs", profile: "F:/Demo/CodexPulse/data/webview", temporary: "F:/Demo/CodexPulse/data/tmp", exports: "F:/Demo/CodexPulse/data/exports" };
@@ -27,10 +31,16 @@ let widget: TrayPopoverData | null = null;
 const creditScopes = new Map<string, { revision: number; active: boolean }>();
 
 function initialSnapshot(): TrayPopoverData {
-  const limits = account(); const day = overview("1d").totals;
+  const limits = coachAccount(); const day = overview("1d").totals;
+  const quotas: TrayPopoverData["quotas"] = (["session", "weekly"] as const).flatMap(kind => {
+    const window = limits[kind];
+    if (!window) return [];
+    const minutes = window.resetsAt ? Math.max(0, Math.ceil((Date.parse(window.resetsAt) - Date.now()) / 60_000)) : null;
+    return [{ kind: kind === "session" ? "5h" as const : "weekly" as const, label: kind === "session" ? "5h" : "Weekly", remainingPercent: window.remainingPercent,
+      usedText: `${window.usedPercent}%`, resetText: minutes == null ? "—" : minutes >= 1440 ? `${Math.ceil(minutes / 1440)}d` : `${minutes}m` }];
+  });
   return { account: limits.account ?? null, membership: "Pro · Demo", workspace: "Synthetic workspace", updatedAt: limits.updatedAt, stale: false,
-    quotas: [{ kind: "5h", label: "5h", remainingPercent: limits.session!.remainingPercent, usedText: "28%", resetText: "2h 30m" },
-      { kind: "weekly", label: "Weekly", remainingPercent: limits.weekly!.remainingPercent, usedText: "41%", resetText: "4d 4h" }],
+    quotas,
     tokens: { value: (day.totalTokens / 1000).toFixed(1) + "K", exact: day.totalTokens.toLocaleString() }, cost: day.costUSD === null ? "—" : "$" + day.costUSD.toFixed(3),
     labels: { remaining: "剩余 / Remaining", today: "今日 / Today", cost: "API 估价", unavailable: "未提供", showMain: "主窗口", quit: "退出" } };
 }
@@ -68,6 +78,7 @@ export function installDemoBridge() {
       case "fetch_project_day_sessions": return projectDaySessions(args.project, args.date, args.query ?? "");
       case "fetch_model_pricing_catalog": case "refresh_model_pricing": return catalog();
       case "fetch_codex_limits": return coachAccount();
+      case "fetch_update_recovery_result": return null;
       case "fetch_codex_quota_forecast": return forecast();
       case "fetch_latest_codex_reset": return resets[0];
       case "fetch_codex_reset_history": return resets.filter(row => Date.parse(row.announcedAt) >= now.getTime() - Number(args.days ?? 30) * 86_400_000);

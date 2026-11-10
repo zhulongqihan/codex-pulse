@@ -1,8 +1,10 @@
 /* Task-first shell: wide account rail, explicit compact-window drawer, and setup actions. */
 .pulse-coach-overview{min-width:0}
+.pulse-update-recovery{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:start;gap:12px 20px;margin:12px 18px;padding:14px 16px;border:1px solid rgb(var(--border));border-left:3px solid rgb(var(--primary));border-radius:7px;background:rgb(var(--surface));font-size:12px;line-height:1.6}
+.pulse-update-recovery h2{font-size:14px;font-weight:650;margin:0 0 4px}.pulse-update-recovery p{margin:4px 0}.pulse-update-recovery summary{cursor:pointer;color:rgb(var(--primary))}.pulse-update-recovery-reason{white-space:pre-wrap;overflow-wrap:anywhere;max-height:100px;overflow:auto}.pulse-update-recovery-actions{display:flex;gap:8px;flex-wrap:wrap}
 .pulse-app .pulse-shell-action { display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-height: 34px; padding: 6px 10px; border: 1px solid rgb(var(--border)); border-radius: 7px; color: rgb(var(--foreground)); background: rgb(var(--surface)); font-size: 12px; white-space: nowrap; }
 .pulse-app .pulse-shell-action:hover { background: rgb(var(--muted)); }
-.pulse-app .pulse-shell-action small { color: rgb(var(--primary)); font-size: 11px; }
+.pulse-app .pulse-shell-action small { color: rgb(var(--primary)); font-size: 12px; }
 .pulse-app .pulse-global-actions { gap: 8px; }
 .pulse-app .pulse-global-actions .pulse-widget-action { color: rgb(var(--primary)); }
 .pulse-getting-started { padding: 5px 0 9px; margin-bottom: 6px; border-bottom: 1px solid rgb(var(--border)); }
@@ -12,7 +14,7 @@
 .pulse-getting-started > header { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
 .pulse-getting-started h2 { margin: 0; font-size: 14px; font-weight: 650; }
 .pulse-getting-started header p { margin: 3px 0 0; font-size: 12px; color: rgb(var(--muted-foreground)); }
-.pulse-setup-status, .pulse-setup-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; font-size: 11px; }
+.pulse-setup-status, .pulse-setup-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; font-size: 12px; }
 .pulse-setup-status > button { display: inline-flex; align-items: center; gap: 5px; color: rgb(var(--muted-foreground)); }
 .pulse-setup-status svg { color: rgb(var(--primary)); }
 .pulse-setup-status strong { color: rgb(var(--foreground)); font-weight: 550; margin-right: 2px; }
