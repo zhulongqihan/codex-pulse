@@ -38,13 +38,45 @@ describe("Dashboard cost distribution", () => {
     await i18n.changeLanguage("en");
   });
 
+  it("explains the selected period and changes the share denominator with the metric", async () => {
+    const user = userEvent.setup();
+    render(hero(null, breakdownOverview([
+      { name: "high-volume", tokens: 900, cost: 10 },
+      { name: "high-cost", tokens: 100, cost: 90 },
+    ], 100)));
+    const region = screen.getByRole("region", { name: "Period usage breakdown" });
+    const explanation = within(region).getByTestId("distribution-scope");
+    expect(explanation).toHaveTextContent("2026-10-01 — 2026-10-30");
+    expect(explanation).toHaveTextContent("Share of local tokens in the selected period; separate from account quota.");
+    expect(region.querySelector(".pulse-rank-row")).toHaveTextContent("90.0%");
+    await user.click(within(region).getByRole("button", { name: /^API estimate$/ }));
+    expect(explanation).toHaveTextContent("Share of this period’s API estimate");
+    expect(explanation).toHaveTextContent("unknown prices keep shares unknown");
+    expect(region.querySelector(".pulse-rank-row")).toHaveTextContent("high-cost");
+    expect(region.querySelector(".pulse-rank-row")).toHaveTextContent("90.0%");
+  });
+
+  it.each([
+    ["en", "Period usage breakdown"], ["zh", "所选时段用量分布"],
+    ["zh-Hant", "所選時段用量分布"], ["ja", "選択期間の使用量内訳"],
+    ["ko", "선택 기간 사용량 분석"], ["de", "Verteilung im gewählten Zeitraum"],
+  ])("labels period scope and actual source time zone in %s", async (language, title) => {
+    await i18n.changeLanguage(language);
+    render(hero(null, { ...overview, timezone: "America/New_York" }));
+    const region = screen.getByRole("region", { name: title });
+    expect(within(region).getByTestId("distribution-scope")).toHaveTextContent("2026-10-01 — 2026-10-30");
+    expect(screen.getByTestId("today-timezone")).toHaveTextContent("America/New_York");
+    expect(screen.getByTestId("today-timezone")).not.toHaveTextContent("reading_context");
+    expect(region).not.toHaveTextContent("reading_context");
+  });
+
   it.each(["Project", "Model", "Dates"])("ranks %s by cost and uses total cost shares when token order disagrees", async (dimension) => {
     const user = userEvent.setup();
     render(hero(null, breakdownOverview([
       { name: "high-volume", tokens: 900, cost: 10 },
       { name: "high-cost", tokens: 100, cost: 90 },
     ], 100)));
-    const region = screen.getByRole("region", { name: "Usage breakdown" });
+    const region = screen.getByRole("region", { name: "Period usage breakdown" });
     await user.click(within(region).getByRole("button", { name: new RegExp(`^${dimension}$`) }));
     const labels = dimension === "Dates" ? ["2026-10-01", "2026-10-02"] : ["high-volume", "high-cost"];
     expect(region.querySelector(".pulse-rank-row")).toHaveTextContent(labels[0]);
@@ -68,7 +100,7 @@ describe("Dashboard cost distribution", () => {
       { name: "known-price", tokens: 100, cost: 90 },
       { name: "free-route", tokens: 300, cost: 0 },
     ], null)));
-    const region = screen.getByRole("region", { name: "Usage breakdown" });
+    const region = screen.getByRole("region", { name: "Period usage breakdown" });
     await user.click(within(region).getByRole("button", { name: new RegExp(`^${dimension}$`) }));
     await user.click(within(region).getByRole("button", { name: /^API estimate$/ }));
     const rows = Array.from(region.querySelectorAll(".pulse-rank-row"));
@@ -89,7 +121,7 @@ describe("Dashboard cost distribution", () => {
   it("shows an empty cost distribution without invented rows or shares", async () => {
     const user = userEvent.setup();
     render(hero(null));
-    const region = screen.getByRole("region", { name: "Usage breakdown" });
+    const region = screen.getByRole("region", { name: "Period usage breakdown" });
     await user.click(within(region).getByRole("button", { name: /^API estimate$/ }));
     expect(within(region).getByText("No records in this range")).toBeInTheDocument();
     expect(region.querySelectorAll(".pulse-rank-row")).toHaveLength(0);
@@ -98,7 +130,7 @@ describe("Dashboard cost distribution", () => {
   it("keeps explicit zero cost distinct from unknown shares when the total is zero", async () => {
     const user = userEvent.setup();
     render(hero(null, breakdownOverview([{ name: "free-route", tokens: 100, cost: 0 }], 0)));
-    const region = screen.getByRole("region", { name: "Usage breakdown" });
+    const region = screen.getByRole("region", { name: "Period usage breakdown" });
     await user.click(within(region).getByRole("button", { name: /^API estimate$/ }));
     expect(within(region).getByText("$0.00")).toBeInTheDocument();
     expect(region.querySelector(".pulse-rank-row small")).toHaveTextContent("—");
@@ -137,8 +169,10 @@ describe("stable today and separate period",()=>{
       const props={overview,range:"30d",isBusy:false,isExporting:null,onRangeChange:vi.fn(),onExport:vi.fn(),metrics:[],codexLimits:null};
       const rendered=render(<DashboardHeroCard {...props} todayOverview={snapshot}/>);cleanup=rendered.unmount;
       expect(screen.getByTestId("today-tokens")).toHaveTextContent("77");expect(screen.getByTestId("today-summary")).toHaveTextContent("2026-11-06");
+      expect(screen.getByTestId("today-timezone")).toHaveTextContent("America/Los_Angeles");
       rendered.rerender(<DashboardHeroCard {...props} todayOverview={{...snapshot,timezone:"Asia/Shanghai"}}/>);
       expect(screen.getByTestId("today-summary")).toHaveTextContent("2026-11-07");expect(screen.getByTestId("today-tokens")).toHaveTextContent("—");
+      expect(screen.getByTestId("today-timezone")).toHaveTextContent("Asia/Shanghai");
     } finally {cleanup();vi.useRealTimers();}
   });
 });

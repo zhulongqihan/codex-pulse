@@ -56,6 +56,17 @@ function snapshot() {
 }
 
 describe("the shipped MCP panel script", () => {
+  it.each([59.9, 60, 60.1, 1439.9, 1440, 1440.1])("uses the same remaining-horizon reference at %s minutes before a weekly reset", async minutes => {
+    const now = Date.parse("2026-11-09T08:00:00Z");
+    const p = panel(); vi.spyOn(p.child.Date, "now").mockReturnValue(now);
+    const usage = await p.connect();
+    await p.respond(usage, { structuredContent: { ...snapshot(), pace: { schemaVersion: 1, status: "idle", updatedAt: new Date(now).toISOString(), windows: [{ kind: "weekly", state: "idle", windowMinutes: 10080, remainingPercent: 80, resetsAt: new Date(now + minutes * 60000).toISOString() }] } } });
+    const reference = p.get("coach-reference");
+    expect(reference.hidden).toBe(false);
+    expect(reference.textContent).toContain(minutes < 60 ? "Quota left before reset" : minutes < 1440 ? "Hourly reference allocation" : "Daily reference allocation");
+    if (minutes < 60) expect(reference.textContent).toContain("80%");
+    expect(reference.textContent).not.toContain("1920");
+  });
   it("keeps fresh pace independent of stale legacy quotas and a stale local summary", async () => {
     const p = panel(), usage = await p.connect();
     const now = new Date().toISOString();

@@ -5,6 +5,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { openUrl, type CodexQuotaForecastResponse, type CodexResetAnnouncement } from "@/lib/api";
 import { cn } from "@/lib/utils";
+import { localTimeZone } from "@/lib/time-context";
 
 const MAX_SIGNAL_AGE_MS = 5 * 60_000;
 
@@ -77,6 +78,7 @@ export function CodexForecastCard({ data, error, isRefreshing, onRefresh, resets
             {t(error && !data ? "forecast.retry" : "forecast.refresh")}
           </Button>
         </div>
+        {data ? <p className="pulse-time-context" data-testid="forecast-timezone">{t("reading_context.reset_local", { zone: localTimeZone() ?? t("reading_context.local_timezone") })}</p> : null}
         {error ? <p role="alert" className="text-xs text-warning">{t(data ? "forecast.refresh_failed" : "forecast.load_failed")}</p> : null}
         {!data && isRefreshing ? (
           <div data-testid="forecast-skeleton" role="status" aria-label={t("forecast.loading")}>

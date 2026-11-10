@@ -1016,5 +1016,14 @@
     "update_step_download": "第 1 步：下載並驗證更新套件。完成後仍需按「重新啟動以完成更新」。",
     "update_step_restart": "第 2 步：按「重新啟動以完成更新」後才會套用更新，目前程式仍在執行。",
     "no_short_window": "此帳號未傳回5小時視窗；此處僅查詢額度，不啟動視窗。"
+  },
+  "reading_context": {
+    "statistics_short": "統計時區：{{zone}}",
+    "statistics_dates": "「今天」和統計日期依 {{zone}} 劃分。",
+    "calendar_local": "公告日曆依本機日期劃分：{{zone}}。",
+    "reset_local": "重設時刻以本機時間顯示：{{zone}}。",
+    "local_timezone": "本機時區",
+    "distribution_tokens": "占比以所選時段的本機 Token 總量為分母，與帳號額度分開。",
+    "distribution_cost": "占比以所選時段的 API 估價總額為分母；缺少價格時維持未知，與帳單和帳號額度分開。"
   }
 }

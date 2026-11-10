@@ -36,6 +36,7 @@ describe("CodexForecastCard", () => {
     rerender(<CodexForecastCard {...props} data={data} isRefreshing />);
     expect(screen.queryByTestId("forecast-skeleton")).not.toBeInTheDocument();
     expect(status()).toHaveTextContent("Explicit announcement · time window");
+    expect(screen.getByTestId("forecast-timezone")).toHaveTextContent(new Intl.DateTimeFormat().resolvedOptions().timeZone);
     expect(screen.getByRole("button", { name: "Refresh forecast" })).toBeDisabled();
   });
 

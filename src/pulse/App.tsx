@@ -614,7 +614,7 @@ export default function App() {
 
           {visitedViews.current.has("models") && overview ? (
             <Activity mode={view === "models" ? "visible" : "hidden"}>
-            <ModelsPage models={overview.models} range={range} onRangeChange={handleRangeChange} onPricingRefreshed={handlePricingRefreshed} />
+            <ModelsPage models={overview.models} range={range} timezone={overview.timezone} onRangeChange={handleRangeChange} onPricingRefreshed={handlePricingRefreshed} />
             </Activity>
           ) : null}
 
@@ -627,7 +627,7 @@ export default function App() {
                   <p className="text-sm text-muted-foreground">{t("projects.subtitle")}</p>
                 </div>
                 <div className="flex items-center gap-3">
-                  <RangeSwitcher value={range} onChange={handleRangeChange} />
+                  <RangeSwitcher value={range} onChange={handleRangeChange} timezone={overview.timezone} />
                 </div>
               </div>
               <ProjectUsageCard
@@ -648,7 +648,7 @@ export default function App() {
                   <p className="text-sm text-muted-foreground">{t("daily.subtitle")}</p>
                 </div>
                 <div className="flex items-center gap-3">
-                  <RangeSwitcher value={range} onChange={handleRangeChange} />
+                  <RangeSwitcher value={range} onChange={handleRangeChange} timezone={overview.timezone} />
                 </div>
               </div>
               <DailyUsageTable
@@ -785,7 +785,7 @@ export default function App() {
       </aside> : null}
       </div>
       {compactWindow && accountDrawerOpen ? <PulseAccountDrawer onClose={() => setAccountDrawerOpen(false)}>{accountPanel}</PulseAccountDrawer> : null}
-      <footer className="pulse-statusbar"><span>{copy("local")}{diagnostics?.filesFound != null ? <> · {diagnostics.filesFound} {t("session.file", {defaultValue: "logs"})}</> : null}</span><span title={diagnostics?.codexHome}>{diagnostics?.runtime ?? "Codex"}</span><span>{overview?.timezone ?? ""}</span><span className="pulse-statusbar-end">{copy("motion")} {copy(preferences.motionLevel)}</span></footer>
+      <footer className="pulse-statusbar"><span>{copy("local")}{diagnostics?.filesFound != null ? <> · {diagnostics.filesFound} {t("session.file", {defaultValue: "logs"})}</> : null}</span><span title={diagnostics?.codexHome}>{diagnostics?.runtime ?? "Codex"}</span><span data-testid="statistics-timezone" title={overview ? t("reading_context.statistics_dates", { zone: overview.timezone }) : undefined}>{overview ? t("reading_context.statistics_short", { zone: overview.timezone }) : ""}</span><span className="pulse-statusbar-end">{copy("motion")} {copy(preferences.motionLevel)}</span></footer>
     </div>
   );
 }

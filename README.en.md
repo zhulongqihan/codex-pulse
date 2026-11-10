@@ -25,7 +25,7 @@ A quiet quota-pacing companion for Codex on Windows: view remaining quota and re
 - **Two styles and six languages:** Clear/Meter, light/dark/system, density and motion are independent preferences that preserve your working state. Supports Simplified Chinese, Traditional Chinese, English, Japanese, Korean and German.
 - **Exports and updates:** XLSX/Markdown contain range summary, daily, model and project statistics. Pulse updates verify the release signature, product, platform and package digest, preserving data and restoring the previous executable if startup fails.
 
-0.7.3 preserves quota observations for the same account after restart and includes improvements to compact-window pacing priority, cycle observations, synchronized readings and stale-data labels. Charts distinguish dates before retained records from zero usage, with fixes for previous-account state and update recovery notices. Read the [release notes](docs/releases/v0.7.3.md#english).
+0.7.4 adds expandable explanations for quota time progress and window selection, adapts reference allocations to the time left before reset, and clarifies cycle observations, date time zones and local consumption shares for the selected period. Same-account observations remain continuous after restart. Read the [release notes](docs/releases/v0.7.4.md#english).
 
 ## Interactive pace preview
 
@@ -66,7 +66,7 @@ Opening the app again restores the window for the same data folder. Closing the 
 
 | Measurement | Source and limits |
 |---|---|
-| Local tokens and conversations | Retained Codex logs, grouped in the local time zone; deleted records or unsynced history from other devices cannot be reconstructed |
+| Local tokens and conversations | Retained Codex logs, grouped in the statistical time zone shown in the interface; deleted records or unsynced history from other devices cannot be reconstructed |
 | Account capacity and Credits | Fields actually returned by the official account service; these may include other devices; missing fields remain unknown |
 | Quota pacing and conditional forecasts | Pacing compares the remaining quota and time in the same actual window. Forecasts additionally require at least 15 minutes and significant observed consumption; quantization and recent variation widen the range, and local tokens are never converted to quota |
 | API reference costs | Model reference prices, **not subscription bills, Credits charges or extra fees**; missing prices remain unknown, while genuinely free models show zero |
@@ -78,6 +78,8 @@ Cached input is already part of input and is never added twice. One thread can s
 The pace sampler makes a read-only query about every 60 seconds by default, with cooldowns for errors and rate limits. It sends no model requests and does not enable per-session Credits. Account changes, window resets, decreasing consumption or observation gaps over 10 minutes start new segments; readings older than about 6 minutes stop the estimate. Project/model shares describe today's local tokens, not the same share of subscription quota.
 
 Slower weekly changes accumulate a longer continuous observation span. An unchanged percentage does not mean no usage. Basic pacing still shows known quota and reset time without a forecast; local daily tokens remain in the workspace. Some accounts return only a weekly window; an omitted short window does not mean zero remaining quota.
+
+Time progress is derived from the official window duration and reset time, independently of when Pulse was installed. Daily pace observations use the time zone stored for their current cycle; reset timestamps use the current local time zone. Consumption shares describe local tokens within the selected period, separately from account quota shares.
 
 **Activate window** sends a minimal model request through Codex CLI after explicit confirmation and may consume quota. Ordinary refresh never activates a window. Completion of the CLI request is checked separately from confirmation that the quota window became active.
 

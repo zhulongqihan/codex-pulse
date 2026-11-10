@@ -37,6 +37,7 @@ export type PaceResetNotice = {
 };
 export type PaceCoachExtras = {
   observedWindow?: { kind: PaceWindow["kind"]; windowMinutes: number; resetsAt: string } | null;
+  observationTimezone?: string | null;
   dailyObservations: PaceDailyObservation[];
   resetNotice: PaceResetNotice | null;
 };
@@ -112,6 +113,7 @@ export function syntheticCoachSnapshot(scenario: SyntheticCoachScenario = "roomy
   data.primaryKind = "weekly"; data.status = scenario === "stale" ? "stale" : "idle";
   if (scenario === "stale") data.updatedAt = new Date(at - 600_000).toISOString();
   data.coachExtras = {
+    observationTimezone: "UTC",
     observedWindow: { kind: "weekly", windowMinutes: 10080, resetsAt: reset },
     dailyObservations: [
       { date: new Date(at - 2 * 86_400_000).toISOString().slice(0, 10), consumedPercentPoints: null, coveredMinutes: 0, partial: true },

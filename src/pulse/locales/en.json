@@ -1010,5 +1010,14 @@
     "update_step_download": "Step 1: download and verify the update package. Then choose Restart to finish update to apply it.",
     "update_step_restart": "Step 2: choose Restart to finish update to apply the package. The current app is still running.",
     "no_short_window": "No 5-hour window was returned for this account. Quota checks remain available; no window will be started."
+  },
+  "reading_context": {
+    "statistics_short": "Usage time zone: {{zone}}",
+    "statistics_dates": "Today and usage dates follow {{zone}}.",
+    "calendar_local": "Announcement calendar uses local dates: {{zone}}.",
+    "reset_local": "Reset times are shown in local time: {{zone}}.",
+    "local_timezone": "local time zone",
+    "distribution_tokens": "Share of local tokens in the selected period; separate from account quota.",
+    "distribution_cost": "Share of this period’s API estimate; unknown prices keep shares unknown. Separate from billing and account quota."
   }
 }

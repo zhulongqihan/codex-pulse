@@ -4,6 +4,19 @@ User-facing changes are grouped by release, following [Keep a Changelog](https:/
 
 ## [Unreleased]
 
+## [0.7.4] - 2026-11-10
+
+### Fixed / 修复
+
+- Explain quota time progress and automatic window selection with accessible, expandable details and the actual returned windows.
+- 提供可展开的额度时间进度与自动选窗解释，并展示实际返回的窗口。
+- Use hourly references with less than a day remaining and show the remaining quota directly below one hour; clarify the current cycle's daily observations.
+- 剩余不足一天改用每小时参考，不足一小时直接显示重置前余量，并明确本轮每日观测的周期范围。
+- Identify date and reset time zones, and label consumption shares as local tokens within the selected period.
+- 标明日期及重置时区，明确消耗占比对应所选时段的本机 Token。
+
+[完整中英说明 / Full release notes](docs/releases/v0.7.4.md)
+
 ## [0.7.3] - 2026-11-10
 
 ### Fixed / 修复

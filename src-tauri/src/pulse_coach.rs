@@ -107,6 +107,7 @@ pub struct ResetNotice {
 #[serde(rename_all = "camelCase")]
 pub struct CoachExtras {
     observed_window: Option<ObservedWindow>,
+    observation_timezone: Option<String>,
     daily_observations: Vec<DailyObservation>,
     reset_notice: Option<ResetNotice>,
 }
@@ -644,6 +645,7 @@ pub fn extras(
         .filter(|notice| notice_current(notice, now.timestamp()));
     let mut output = CoachExtras {
         observed_window: None,
+        observation_timezone: None,
         daily_observations: vec![],
         reset_notice: notice,
     };
@@ -689,6 +691,7 @@ pub fn extras(
         window_minutes: minutes,
         resets_at: iso(reset),
     });
+    output.observation_timezone = Some(cycle.timezone.clone());
     output.daily_observations = daily(cycle, now.timestamp());
     output
 }
@@ -1092,8 +1095,9 @@ mod tests {
     fn presentation_requires_the_same_identity_and_exact_current_window() {
         let path = folder();
         let mut ledger = empty_ledger();
-        add(&mut ledger, t(), 20.0);
-        add(&mut ledger, t() + 60, 21.0);
+        let zone = chrono_tz::America::New_York;
+        observe_into(&mut ledger, &identity(), &quota(t(), 20.0), t(), zone);
+        observe_into(&mut ledger, &identity(), &quota(t() + 60, 21.0), t() + 60, zone);
         atomic_write(&path, LEDGER_FILE, &ledger).unwrap();
         let quota = serde_json::json!({"schemaVersion":1,"identityHash":identity(),"updatedAt":t()+60,"failed":false,"reason":null,
             "windows":[{"kind":"weekly","windowMinutes":10080,"resetsAt":t()+7*86400,
@@ -1107,6 +1111,7 @@ mod tests {
         let pace = crate::pulse_pace::read_snapshot(&path, now);
         let output = extras(&path, &pace, now);
         assert_eq!(output.observed_window.as_ref().unwrap().kind, "weekly");
+        assert_eq!(output.observation_timezone.as_deref(), Some("America/New_York"));
         assert_eq!(
             output
                 .daily_observations
@@ -1116,14 +1121,19 @@ mod tests {
             Some(1.0)
         );
         let serialized = serde_json::to_string(&output).unwrap();
+        assert!(serialized.contains("\"observationTimezone\":\"America/New_York\""));
         assert!(!serialized.contains("identityHash") && !serialized.contains(&identity()));
         ledger.identity_hash = Some("b".repeat(64));
         atomic_write(&path, LEDGER_FILE, &ledger).unwrap();
-        assert!(extras(&path, &pace, now).observed_window.is_none());
+        let other_identity = extras(&path, &pace, now);
+        assert!(other_identity.observed_window.is_none());
+        assert!(other_identity.observation_timezone.is_none());
         ledger.identity_hash = Some(identity());
         ledger.cycles[0].resets_at += 3600;
         atomic_write(&path, LEDGER_FILE, &ledger).unwrap();
-        assert!(extras(&path, &pace, now).daily_observations.is_empty());
+        let other_reset = extras(&path, &pace, now);
+        assert!(other_reset.daily_observations.is_empty());
+        assert!(other_reset.observation_timezone.is_none());
         clean(&path);
     }
 }

@@ -3,6 +3,7 @@ import { ChevronDown, ChevronUp, ExternalLink, RotateCcw, X } from "lucide-react
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { fetchCodexResetHistory, openUrl, type CodexResetAnnouncement } from "@/lib/api";
+import { localTimeZone } from "@/lib/time-context";
 
 const HISTORY_DAYS = 30;
 const DEFAULT_VISIBLE_RESETS = 5;
@@ -199,6 +200,7 @@ function ResetCalendar({ summary }: { summary: ResetHistorySummary }) {
           <p className="mt-0.5 text-[10px] tabular-nums text-muted-foreground">
             {firstDay?.format("YYYY-MM-DD")} – {lastDay?.format("YYYY-MM-DD")}
           </p>
+          <p className="pulse-time-context" data-testid="reset-calendar-timezone">{t("reading_context.calendar_local", { zone: localTimeZone() ?? t("reading_context.local_timezone") })}</p>
         </div>
         <div className="flex flex-wrap gap-3 text-[10px] text-muted-foreground" aria-label={t("limits.reset_calendar_legend")}>
           {(["regular", "banked", "none"] as const).map((type) => (

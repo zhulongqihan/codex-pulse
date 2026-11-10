@@ -1016,5 +1016,14 @@
     "update_step_download": "第 1 步：下载并校验更新包。完成后仍需点击“重启完成更新”。",
     "update_step_restart": "第 2 步：点击“重启完成更新”后才会应用更新，当前程序仍保持运行。",
     "no_short_window": "本账号未返回5小时窗口；此处只查询额度，不启动窗口。"
+  },
+  "reading_context": {
+    "statistics_short": "统计时区：{{zone}}",
+    "statistics_dates": "“今天”和统计日期按 {{zone}} 划分。",
+    "calendar_local": "公告日历按本地日期划分：{{zone}}。",
+    "reset_local": "重置时刻按本地时间显示：{{zone}}。",
+    "local_timezone": "本地时区",
+    "distribution_tokens": "占比以所选时段的本机 Token 总量为分母，与账号额度分开。",
+    "distribution_cost": "占比以所选时段的 API 估价总额为分母；缺价时保持未知，与账单和账号额度分开。"
   }
 }

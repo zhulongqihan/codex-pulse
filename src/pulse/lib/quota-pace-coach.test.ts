@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { buildQuotaPaceCoach, quotaCoachFromSnapshot } from "./quota-pace-coach";
-import { formatCoachCountdown, formatCoachNumber, quotaCoachCopy, quotaCoachFeedback } from "./quota-pace-coach-copy";
+import { buildQuotaPaceCoach, quotaCoachFromSnapshot, quotaWindowReadState } from "./quota-pace-coach";
+import { formatCoachCountdown, formatCoachNumber, quotaCoachClarity, quotaCoachCopy, quotaCoachFeedback } from "./quota-pace-coach-copy";
 import type { PaceCoachExtras, PaceResetNotice, PaceWindow } from "./pulse-pace";
 
 const now = Date.parse("2026-11-09T08:00:00Z");
@@ -63,6 +63,27 @@ describe("quota pace coach", () => {
     const result = build([window(40, 120, 300, "session")]);
     expect(result.reference).toEqual({ unit: "hour", percentPoints: 20 });
   });
+  it.each([
+    [59.9, "reset", 80], [60, "hour", 80], [60.1, "hour", 80 / (60.1 / 60)],
+    [1439.9, "hour", 80 / (1439.9 / 60)], [1440, "day", 80], [1440.1, "day", 80 / (1440.1 / 1440)],
+  ] as const)("uses the remaining horizon at %s minutes, without inflating a near-reset weekly reference", (minutes, unit, points) => {
+    const result = build([window(80, minutes)]);
+    expect(result.reference?.unit).toBe(unit);
+    expect(result.reference?.percentPoints).toBeCloseTo(points, 6);
+    expect(result.startAt).toBe(Date.parse(window(80, minutes).resetsAt!) - 10080 * 60_000);
+  });
+  it("never creates an allocation after exhaustion, expiry or loss of fresh evidence", () => {
+    for (const result of [build([window(0, 30)]), build([window(80, 0)]), build([window(80, 30)], { fresh: false }), build([window(80, 30)], { failed: true })]) {
+      expect(result.reference).toBeNull();
+    }
+  });
+  it("keeps window list states honest instead of making a viewed old reading current", () => {
+    expect(quotaWindowReadState(window(0, 120), now, true)).toBe("exhausted");
+    expect(quotaWindowReadState(window(80, -1), now, true)).toBe("expired");
+    expect(quotaWindowReadState(window(80), now, false)).toBe("stale");
+    expect(quotaWindowReadState({ ...window(), remainingPercent: null }, now, true)).toBe("unavailable");
+    expect(quotaWindowReadState(window(80, 20000), now, true)).toBe("unavailable");
+  });
   it("only adds the near-reset surplus hint when both time and remainder support it", () => {
     expect(build([window(60, 600)]).nearResetWithSurplus).toBe(true);
     expect(build([window(10, 600)]).nearResetWithSurplus).toBe(false);
@@ -75,15 +96,17 @@ describe("quota pace coach", () => {
   });
   it("requires the exact observed window before displaying daily coverage, preserving missing versus observed zero", () => {
     const item = window();
-    const extras: PaceCoachExtras = { observedWindow: { kind: "weekly", windowMinutes: 10080, resetsAt: item.resetsAt! }, dailyObservations: [
+    const extras: PaceCoachExtras = { observationTimezone: "America/New_York", observedWindow: { kind: "weekly", windowMinutes: 10080, resetsAt: item.resetsAt! }, dailyObservations: [
       { date: "2026-11-08", consumedPercentPoints: 0, coveredMinutes: 0, partial: true },
       { date: "2026-11-09", consumedPercentPoints: 0, coveredMinutes: 60, partial: true },
     ], resetNotice: null };
     const result = build([item], { coachExtras: extras });
     expect(result.dailyObservations.map(row => row.consumedPercentPoints)).toEqual([null, 0]);
     expect(result.dailyObservations[1].partial).toBe(true);
+    expect(result.observationTimezone).toBe("America/New_York");
     extras.observedWindow!.resetsAt = iso(9999);
     expect(build([item], { coachExtras: extras }).dailyObservations).toEqual([]);
+    expect(build([item], { coachExtras: extras }).observationTimezone).toBeNull();
   });
   it("accepts the 25-hour local DST day while rejecting malformed dates and implausible coverage", () => {
     const item = window(); const extras: PaceCoachExtras = { observedWindow: { kind: item.kind, windowMinutes: item.windowMinutes!, resetsAt: item.resetsAt! }, resetNotice: null, dailyObservations: [
@@ -92,6 +115,14 @@ describe("quota pace coach", () => {
       { date: "2026-11-02", consumedPercentPoints: 4, coveredMinutes: 99999, partial: true },
     ] };
     expect(build([item], { coachExtras: extras }).dailyObservations).toEqual([extras.dailyObservations[0]]);
+  });
+  it("retains matched cycle observations and their timezone after exhaustion without recommending more quota", () => {
+    const item = window(0);
+    const extras: PaceCoachExtras = { observationTimezone: "Asia/Shanghai", observedWindow: { kind: "weekly", windowMinutes: 10080, resetsAt: item.resetsAt! }, resetNotice: null,
+      dailyObservations: [{ date: "2026-11-09", consumedPercentPoints: 20, coveredMinutes: 60, partial: true }] };
+    const result = build([item], { coachExtras: extras });
+    expect(result.status).toBe("exhausted"); expect(result.reference).toBeNull(); expect(result.tone).toBeNull();
+    expect(result.dailyObservations).toHaveLength(1); expect(result.observationTimezone).toBe("Asia/Shanghai");
   });
   it("keeps reset notices third-party and global, drops stale/expired/unsafe notices, and preserves explicit read state", () => {
     const buildNotice = (value: PaceResetNotice) => build([window()], { coachExtras: { dailyObservations: [], resetNotice: value } }).resetNotice;
@@ -109,5 +140,7 @@ describe("quota pace coach", () => {
     expect(formatCoachCountdown(7260, language)).not.toMatch(/[{}]/);
     expect(quotaCoachCopy(language, "comparison", { used: 20, elapsed: 28 })).not.toMatch(/[{}]/);
     expect(quotaCoachCopy(language, "scope")).not.toBe("");
+    for (const key of ["explain", "timeMethod", "selection", "cycleNote", "untilNote"] as const) expect(quotaCoachClarity(language, key)).not.toBe("");
+    expect(quotaCoachClarity(language, "timeRange", { start: "A", end: "B" })).not.toMatch(/[{}]/);
   });
 });

@@ -5,10 +5,10 @@ export type QuotaCoachTone = "roomy" | "balanced" | "fast";
 export type QuotaPaceCoach = {
   status: QuotaCoachStatus; tone: QuotaCoachTone | null; window: PaceWindow | null;
   remainingPercent: number | null; usedPercent: number | null; elapsedPercent: number | null; remainingTimePercent: number | null;
-  resetAt: number | null; remainingMinutes: number | null; reference: { unit: "day" | "hour"; percentPoints: number } | null;
+  resetAt: number | null; startAt: number | null; remainingMinutes: number | null; reference: { unit: "day" | "hour" | "reset"; percentPoints: number } | null;
   hasUnknownWindows: boolean; nearResetWithSurplus: boolean;
   remainingAtReset: { lowerPercent: number; upperPercent: number } | null;
-  dailyObservations: PaceDailyObservation[]; resetNotice: PaceResetNotice | null;
+  dailyObservations: PaceDailyObservation[]; observationTimezone: string | null; resetNotice: PaceResetNotice | null;
 };
 export type QuotaPaceCoachInput = { windows: PaceWindow[]; now: number; fresh: boolean; failed?: boolean; coachExtras?: PaceCoachExtras };
 const clamp = (value: number) => Math.min(100, Math.max(0, value));
@@ -24,6 +24,16 @@ function candidate(window: PaceWindow, now: number) {
   if (minutes <= 0 || minutes > duration + 2 || ["unavailable", "stale", "expired"].includes(window.state)) return null;
   const remainingTime = clamp(minutes / duration * 100);
   return { window, reset, minutes, remainingTime, remaining: window.remainingPercent, used: 100 - window.remainingPercent, elapsed: 100 - remainingTime };
+}
+/** Reading state for the window list; inspecting a window never makes it current. */
+export function quotaWindowReadState(window: PaceWindow, now: number, fresh: boolean): "ready" | "unavailable" | "stale" | "expired" | "exhausted" {
+  const reset = at(window.resetsAt);
+  if (reset != null && reset <= now) return "expired";
+  if (!finite(window.remainingPercent) || window.remainingPercent < 0 || window.remainingPercent > 100 || window.state === "unavailable") return "unavailable";
+  if (!fresh || window.state === "stale") return "stale";
+  if (window.state === "expired") return "expired";
+  if (!candidate(window, now)) return "unavailable";
+  return window.remainingPercent === 0 ? "exhausted" : "ready";
 }
 function validNotice(notice: PaceResetNotice | null | undefined, now: number): PaceResetNotice | null {
   if (!notice || notice.verification !== "third_party" || notice.scope !== "global" || !notice.id?.trim() || !notice.summary?.trim() || !notice.sourceLabel?.trim()) return null;
@@ -46,14 +56,19 @@ function dailyForWindow(extras: PaceCoachExtras | undefined, window: PaceWindow,
   }
   return [...records.values()].sort((left, right) => left.date.localeCompare(right.date));
 }
+function observationZoneForWindow(extras: PaceCoachExtras | undefined, window: PaceWindow, reset: number): string | null {
+  const observed = extras?.observedWindow, zone = extras?.observationTimezone;
+  if (observed?.kind !== window.kind || observed.windowMinutes !== window.windowMinutes || at(observed.resetsAt) !== reset || !zone) return null;
+  try { new Intl.DateTimeFormat("en", { timeZone: zone }); return zone; } catch { return null; }
+}
 
 /** Remaining quota versus nominal window time, never tokens, request counts, or guaranteed work time. */
 export function buildQuotaPaceCoach(input: QuotaPaceCoachInput): QuotaPaceCoach {
   const { windows, now } = input;
   const result: QuotaPaceCoach = {
     status: "unavailable", tone: null, window: null, remainingPercent: null, usedPercent: null, elapsedPercent: null,
-    remainingTimePercent: null, resetAt: null, remainingMinutes: null, reference: null, hasUnknownWindows: false,
-    nearResetWithSurplus: false, remainingAtReset: null, dailyObservations: [], resetNotice: null,
+    remainingTimePercent: null, resetAt: null, startAt: null, remainingMinutes: null, reference: null, hasUnknownWindows: false,
+    nearResetWithSurplus: false, remainingAtReset: null, dailyObservations: [], observationTimezone: null, resetNotice: null,
   };
   if (!Number.isFinite(now)) return result;
   result.resetNotice = validNotice(input.coachExtras?.resetNotice, now);
@@ -72,15 +87,22 @@ export function buildQuotaPaceCoach(input: QuotaPaceCoachInput): QuotaPaceCoach 
   if (!input.fresh) { result.status = known ? "stale" : "unavailable"; return result; }
   if (!selected) { result.status = windows.some(window => window.state === "stale") ? "stale" : windows.some(window => window.state === "expired" || (at(window.resetsAt) ?? Infinity) <= now) ? "expired" : "unavailable"; return result; }
   result.resetAt = selected.reset; result.remainingMinutes = selected.minutes;
+  result.startAt = selected.reset - selected.window.windowMinutes! * 60_000;
   result.remainingTimePercent = selected.remainingTime; result.elapsedPercent = selected.elapsed;
-  if (selected.remaining === 0) { result.status = "exhausted"; return result; }
+  if (selected.remaining === 0) {
+    result.status = "exhausted";
+    result.dailyObservations = dailyForWindow(input.coachExtras, selected.window, selected.reset);
+    result.observationTimezone = observationZoneForWindow(input.coachExtras, selected.window, selected.reset);
+    return result;
+  }
   // A genuinely stale known alternative may be tighter; never let a fresh roomy window hide it.
   if (windows.some(window => window.state === "stale" && finite(window.remainingPercent))) { result.status = "stale"; return result; }
   result.status = "ready";
   const difference = selected.used - selected.elapsed;
   result.tone = difference > 5 ? "fast" : difference < -5 ? "roomy" : "balanced";
-  const unit = selected.window.windowMinutes! >= 1440 ? "day" : "hour";
-  result.reference = { unit, percentPoints: selected.remaining / (selected.minutes / (unit === "day" ? 1440 : 60)) };
+  // Match the unit to the time actually left, avoiding a huge day/hour extrapolation near reset.
+  const unit = selected.minutes < 60 ? "reset" : selected.window.windowMinutes! >= 1440 && selected.minutes >= 1440 ? "day" : "hour";
+  result.reference = { unit, percentPoints: unit === "reset" ? selected.remaining : selected.remaining / (selected.minutes / (unit === "day" ? 1440 : 60)) };
   result.nearResetWithSurplus = selected.remaining >= 25 && selected.minutes <= Math.min(1440, selected.window.windowMinutes! * .15);
   const window = selected.window;
   if (window.state === "forecast" && window.sampleCount >= 4 && window.sampleSpanMinutes >= 15 && finite(window.rateLowerPerHour) && window.rateLowerPerHour > 0 && finite(window.rateUpperPerHour) && window.rateUpperPerHour >= window.rateLowerPerHour) {
@@ -90,6 +112,7 @@ export function buildQuotaPaceCoach(input: QuotaPaceCoachInput): QuotaPaceCoach 
     }
   }
   result.dailyObservations = dailyForWindow(input.coachExtras, window, selected.reset);
+  result.observationTimezone = observationZoneForWindow(input.coachExtras, window, selected.reset);
   return result;
 }
 

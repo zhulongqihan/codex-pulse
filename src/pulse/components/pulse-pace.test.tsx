@@ -4,7 +4,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import i18n from "../i18n";
 import { paceCopy } from "@/lib/pulse-pace-copy";
 import { syntheticPaceSnapshot, type PaceResetNotice, type PaceSnapshot } from "@/lib/pulse-pace";
-import { formatCoachCountdown, quotaCoachBadgeCopy, quotaCoachCopy, quotaCoachFeedback } from "@/lib/quota-pace-coach-copy";
+import { formatCoachCountdown, quotaCoachBadgeCopy, quotaCoachClarity, quotaCoachCopy, quotaCoachFeedback } from "@/lib/quota-pace-coach-copy";
 import { PulsePaceBadgeView, PulsePaceCard } from "./pulse-pace";
 
 const now = Date.parse("2026-11-09T08:00:00Z");
@@ -27,6 +27,56 @@ function recentDepletion(remaining = 77): PaceSnapshot {
 }
 
 describe("shared cycle pace card", () => {
+  it.each(["en", "zh", "zh-Hant", "ja", "ko", "de"])("makes the nominal time basis and every returned window inspectable without refreshing in %s", async language => {
+    await i18n.changeLanguage(language);
+    const data = cycle(), handlers = actions();
+    const { rerender } = render(<PulsePaceCard data={data} {...handlers}/>);
+    const details = screen.getByTestId("coach-window-details");
+    const summary = within(details).getByText(quotaCoachClarity(language, "explain"));
+    expect(details.tagName).toBe("DETAILS");
+    expect(details).not.toHaveAttribute("open");
+    fireEvent.click(summary);
+    expect(details).toHaveAttribute("open");
+    expect(within(details).getByText(quotaCoachClarity(language, "timeMethod"))).toBeVisible();
+    expect(screen.getByTestId("coach-time-basis")).toHaveTextContent("→");
+    const rows = within(screen.getByTestId("coach-window-list")).getAllByRole("listitem");
+    expect(rows).toHaveLength(data.windows.length);
+    expect(rows[0]).toHaveAttribute("data-reading-state", "unavailable");
+    expect(rows[1]).toHaveAttribute("data-reading-state", "ready");
+    expect(within(rows[1]).getByText(quotaCoachClarity(language, "selected"))).toBeVisible();
+    expect(handlers.onRefresh).not.toHaveBeenCalled(); expect(handlers.onDetails).not.toHaveBeenCalled();
+    expect(screen.getByTestId("coach-remaining")).toHaveTextContent("80%");
+    const stale = cycle(); stale.updatedAt = iso(-7);
+    rerender(<PulsePaceCard data={stale} {...handlers}/>);
+    expect(within(details).getByText(quotaCoachClarity(language, "selectionPaused"))).toBeVisible();
+    expect(within(details).queryByText(quotaCoachClarity(language, "selected"))).not.toBeInTheDocument();
+    expect(screen.getByTestId("coach-window-list").querySelector('[data-window-kind="weekly"]')).toHaveAttribute("data-reading-state", "stale");
+  });
+  it("keeps the empty current-cycle explanation available after reset without showing another cycle's records", () => {
+    const data = cycle(); data.coachExtras = { observationTimezone: "America/New_York", observedWindow: { kind: "weekly", windowMinutes: 10080, resetsAt: iso(9999) }, dailyObservations: [{ date: "2026-11-08", consumedPercentPoints: 8, coveredMinutes: 60, partial: true }], resetNotice: null };
+    render(<PulsePaceCard data={data} {...actions()}/>);
+    const details = screen.getByTestId("coach-cycle-observations");
+    fireEvent.click(within(details).getByText(quotaCoachFeedback("en", "basis")));
+    expect(within(details).getByText(quotaCoachClarity("en", "cycleNote"))).toBeVisible();
+    expect(within(details).getByText(quotaCoachFeedback("en", "noDaily"))).toBeVisible();
+    expect(screen.getByTestId("coach-observation-timezone")).toHaveTextContent(quotaCoachClarity("en", "observationZoneUnknown"));
+    expect(within(details).queryByText("8 pp")).not.toBeInTheDocument();
+  });
+  it("labels daily observations with their actual cycle timezone, preserving the date-only key", () => {
+    const data = cycle(); data.coachExtras = { observationTimezone: "America/New_York", observedWindow: { kind: "weekly", windowMinutes: 10080, resetsAt: data.windows[1].resetsAt! }, dailyObservations: [{ date: "2026-11-08", consumedPercentPoints: 0, coveredMinutes: 60, partial: true }], resetNotice: null };
+    render(<PulsePaceCard data={data} observationsExpanded {...actions()}/>);
+    expect(screen.getByTestId("coach-observation-timezone")).toHaveTextContent("America/New_York");
+    expect(screen.getByTestId("coach-cycle-observations").querySelector('time[datetime="2026-11-08"]')).toBeVisible();
+    expect(screen.getByText("0 pp")).toBeVisible();
+  });
+  it.each([59, 60, 1439, 1440])("uses an understandable reference at %s minutes until a weekly reset", minutes => {
+    const data = cycle(); data.windows[1].resetsAt = iso(minutes);
+    render(<PulsePaceCard data={data} {...actions()}/>);
+    const title = minutes < 60 ? quotaCoachClarity("en", "untilReference") : quotaCoachCopy("en", minutes < 1440 ? "hourReference" : "dayReference");
+    expect(screen.getByRole("region", { name: title })).toBeVisible();
+    expect(screen.getByTestId("coach-reference")).not.toHaveTextContent("1920");
+    if (minutes < 60) expect(screen.getByTestId("coach-reference")).toHaveTextContent("80% remaining");
+  });
   it("prioritizes the empty compact state and account recovery, retaining genuine stale and zero readings", () => {
     const empty = { ...cycle(), windows: [], updatedAt: null, reason: "offline" };
     const onRecover = vi.fn();

@@ -82,6 +82,7 @@ describe("CodexResetHistoryModal", () => {
     expect(screen.getByText("Resets").nextElementSibling).toHaveTextContent("5");
     expect(screen.getByText("Average interval").nextElementSibling).toHaveTextContent("3.8d");
     expect(screen.getAllByTestId("reset-history-day")).toHaveLength(30);
+    expect(screen.getByTestId("reset-calendar-timezone")).toHaveTextContent(new Intl.DateTimeFormat().resolvedOptions().timeZone);
     expect(document.querySelectorAll('[data-reset-type="regular"]').length).toBeGreaterThan(0);
     expect(document.querySelectorAll('[data-reset-type="banked"]')).toHaveLength(1);
     expect(screen.getByText("Reset has been propagated.")).toBeInTheDocument();

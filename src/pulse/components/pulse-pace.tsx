@@ -5,8 +5,9 @@ import { ArrowUpRight, Bell, RefreshCw, X } from "lucide-react";
 import { PulseBrandMark } from "./pulse-brand-mark";
 import { titlebarAction, usePulsePace, type PaceSnapshot, type PaceResetNotice } from "@/lib/pulse-pace";
 import { paceCopy } from "@/lib/pulse-pace-copy";
-import { quotaCoachFromSnapshot, type QuotaPaceCoach } from "@/lib/quota-pace-coach";
-import { formatCoachCountdown, formatCoachNumber, formatCoachReset, formatCoachWindow, quotaCoachBadgeCopy, quotaCoachCopy, quotaCoachFeedback, quotaCoachReason, type QuotaCoachCopyKey } from "@/lib/quota-pace-coach-copy";
+import { quotaCoachFromSnapshot, quotaWindowReadState, type QuotaPaceCoach } from "@/lib/quota-pace-coach";
+import { formatCoachCountdown, formatCoachNumber, formatCoachReset, formatCoachWindow, quotaCoachBadgeCopy, quotaCoachClarity, quotaCoachCopy, quotaCoachFeedback, quotaCoachReason, type QuotaCoachCopyKey } from "@/lib/quota-pace-coach-copy";
+import { localTimeZone, timeZoneLabel } from "@/lib/time-context";
 import "./pulse-pace.css";
 
 type Copy = (key: QuotaCoachCopyKey, values?: Record<string, string | number>) => string;
@@ -61,6 +62,29 @@ function CoachReadings({ coach, language, copy }: { coach: QuotaPaceCoach; langu
   </div>;
 }
 
+function CoachWindowDetails({ coach, data, language, now, failed }: { coach: QuotaPaceCoach; data: PaceSnapshot | null; language: string; now: number; failed: boolean }) {
+  const updated = Date.parse(data?.updatedAt ?? "");
+  const fresh = !failed && !data?.refreshFailed && Number.isFinite(updated) && now - updated >= -120_000 && now - updated <= 360_000 && !["stale", "unavailable"].includes(data?.status ?? "unavailable");
+  const clarity = (key: Parameters<typeof quotaCoachClarity>[1], values?: Record<string, string | number>) => quotaCoachClarity(language, key, values);
+  return <details className="coach-explanation" data-testid="coach-window-details">
+    <summary>{clarity("explain")}</summary>
+    <p>{clarity("timeMethod")}</p>
+    <p data-testid="coach-time-basis">{coach.startAt != null && coach.resetAt != null ? clarity("timeRange", { start: formatCoachReset(coach.startAt, language), end: formatCoachReset(coach.resetAt, language) }) : clarity("timeMissing")}</p>
+    <p>{clarity(coach.status === "ready" ? "selection" : "selectionPaused")}</p>
+    {data?.windows.length ? <ul className="coach-window-list" data-testid="coach-window-list">{data.windows.map((window, index) => {
+      const state = quotaWindowReadState(window, now, fresh);
+      const remaining = window.remainingPercent;
+      const reset = Date.parse(window.resetsAt ?? "");
+      return <li key={`${window.kind}-${index}`} data-window-kind={window.kind} data-reading-state={state}>
+        <strong>{clarity("windowRow", { kind: clarity(window.kind === "session" ? "sessionKind" : "weeklyKind"), window: formatCoachWindow(window, language), status: clarity(state) })}</strong>
+        {coach.status === "ready" && coach.window === window ? <span className="coach-selected-window">{clarity("selected")}</span> : null}
+        {typeof remaining === "number" && Number.isFinite(remaining) && remaining >= 0 && remaining <= 100 ? <p>{clarity("windowRemaining", { label: state === "ready" || state === "exhausted" ? quotaCoachCopy(language, "remaining") : quotaCoachFeedback(language, "last"), percent: number(remaining, language, 1) })}</p> : null}
+        {Number.isFinite(reset) ? <p>{clarity("windowReset", { time: formatCoachReset(reset, language) })}</p> : null}
+      </li>;
+    })}</ul> : <p>{clarity("noWindows")}</p>}
+  </details>;
+}
+
 export type PulsePaceVariant = "popover" | "workspace" | "widget" | "compact";
 export function PulsePaceCard({ data, failed = false, refreshing = false, onRefresh, onClose, onDetails, onRecover, observationsExpanded, showCompactNotice = true, variant = "popover", onMarkNoticeRead, noticePending = false, noticeFailed = false }: {
   data: PaceSnapshot | null; failed?: boolean; refreshing?: boolean; onRefresh: () => void; onClose?: () => void; onDetails: () => void;
@@ -88,6 +112,7 @@ export function PulsePaceCard({ data, failed = false, refreshing = false, onRefr
   const notice = coach.resetNotice;
   const reference = coach.reference;
   const remainingRange = coach.remainingAtReset;
+  const resetTimezone = localTimeZone();
   const recentRisk = recentDepletionRisk(coach);
   const generated = Date.parse(data?.generatedAt ?? "");
   const wait = data?.refreshAfterSeconds && Number.isFinite(generated) ? Math.max(0, Math.ceil(data.refreshAfterSeconds - (now - generated) / 1000)) : 0;
@@ -106,12 +131,13 @@ export function PulsePaceCard({ data, failed = false, refreshing = false, onRefr
         {status === "unavailable" || reason ? <button type="button" className="coach-recover" onClick={onRecover ?? onDetails}>{quotaCoachFeedback(language, "recover")}<ArrowUpRight size={12}/></button> : null}
       </div>
       {!compact ? <>
-        {reference && status === "ready" ? <section className="coach-reference" aria-label={copy(reference.unit === "day" ? "dayReference" : "hourReference")}><h3>{copy(reference.unit === "day" ? "dayReference" : "hourReference")}</h3><strong data-testid="coach-reference">{copy(reference.unit === "day" ? "perDay" : "perHour", { points: number(reference.percentPoints, language, reference.percentPoints < 1 ? 1 : 0) })}</strong><p>{copy("referenceNote")}</p></section> : null}
+        {reference && status === "ready" ? <section className="coach-reference" aria-label={reference.unit === "reset" ? quotaCoachClarity(language, "untilReference") : copy(reference.unit === "day" ? "dayReference" : "hourReference")}><h3>{reference.unit === "reset" ? quotaCoachClarity(language, "untilReference") : copy(reference.unit === "day" ? "dayReference" : "hourReference")}</h3><strong data-testid="coach-reference">{reference.unit === "reset" ? quotaCoachClarity(language, "untilAmount", { points: number(reference.percentPoints, language, 1) }) : copy(reference.unit === "day" ? "perDay" : "perHour", { points: number(reference.percentPoints, language, reference.percentPoints < 1 ? 1 : 0) })}</strong><p>{reference.unit === "reset" ? quotaCoachClarity(language, "untilNote") : copy("referenceNote")}</p></section> : null}
+        <CoachWindowDetails coach={coach} data={data} language={language} now={now} failed={failed}/>
         {coach.nearResetWithSurplus && !recentRisk ? <p className="coach-surplus-note">{copy("nearReset")}</p> : null}
         {remainingRange ? <section className="coach-projection"><p>{remainingRange.upperPercent < 1 ? copy("projectedDepletion") : copy("projected", { lower: number(Math.floor(remainingRange.lowerPercent), language), upper: number(Math.ceil(remainingRange.upperPercent), language) })}</p><p>{copy("projectionNote")}</p></section> : null}
         {notice && !compact ? <NoticeBanner notice={notice} language={language} copy={copy} onRead={onMarkNoticeRead} pending={noticePending} failed={noticeFailed}/> : null}
-        {coach.dailyObservations.length || observationsExpanded ? <details className="coach-daily" open={observationsExpanded}><summary>{quotaCoachFeedback(language, "basis")}</summary><p>{copy("timeBasis")}</p>{coach.window ? <p>{paceCopy(language, "samples", { count: number(coach.window.sampleCount, language), minutes: number(coach.window.sampleSpanMinutes, language, 1) })}</p> : null}{!coach.dailyObservations.length ? <p>{quotaCoachFeedback(language, "noDaily")}</p> : <h3>{copy("observations")}</h3>}<p>{copy("dailyNote")} {quotaCoachFeedback(language, "dailySource")}</p><ul>{coach.dailyObservations.map(row => <li key={row.date}><time dateTime={row.date}>{new Intl.DateTimeFormat(language, { month: "numeric", day: "numeric", timeZone: "UTC" }).format(Date.parse(`${row.date}T00:00:00Z`))}</time><strong>{row.consumedPercentPoints == null ? copy("unobserved") : quotaCoachFeedback(language, "points", { points: number(row.consumedPercentPoints, language, 2) })}</strong><span>{row.partial ? `${copy("partial")} · ` : ""}{copy("coverage", { minutes: number(row.coveredMinutes, language, 1) })}</span></li>)}</ul></details> : null}
-        <p className="coach-scope">{copy("resetAt", { time: formatCoachReset(coach.resetAt, language) })} · {copy("scope")}</p>
+        <details className="coach-daily" data-testid="coach-cycle-observations" open={observationsExpanded}><summary>{quotaCoachFeedback(language, "basis")}</summary><p>{quotaCoachClarity(language, "cycleNote")}</p>{coach.startAt != null && coach.resetAt != null ? <p>{quotaCoachClarity(language, "cycleRange", { start: formatCoachReset(coach.startAt, language), end: formatCoachReset(coach.resetAt, language) })}</p> : null}<p data-testid="coach-observation-timezone">{coach.observationTimezone ? quotaCoachClarity(language, "observationZone", { timezone: coach.observationTimezone }) : quotaCoachClarity(language, "observationZoneUnknown")}</p>{coach.window ? <p>{paceCopy(language, "samples", { count: number(coach.window.sampleCount, language), minutes: number(coach.window.sampleSpanMinutes, language, 1) })}</p> : null}{!coach.dailyObservations.length ? <p>{quotaCoachFeedback(language, "noDaily")}</p> : <h3>{copy("observations")}</h3>}<p>{copy("dailyNote")} {quotaCoachFeedback(language, "dailySource")}</p><ul>{coach.dailyObservations.map(row => <li key={row.date}><time dateTime={row.date}>{new Intl.DateTimeFormat(language, { month: "numeric", day: "numeric", timeZone: "UTC" }).format(Date.parse(`${row.date}T00:00:00Z`))}</time><strong>{row.consumedPercentPoints == null ? copy("unobserved") : quotaCoachFeedback(language, "points", { points: number(row.consumedPercentPoints, language, 2) })}</strong><span>{row.partial ? `${copy("partial")} · ` : ""}{copy("coverage", { minutes: number(row.coveredMinutes, language, 1) })}</span></li>)}</ul></details>
+        <p className="coach-scope">{copy("resetAt", { time: formatCoachReset(coach.resetAt, language) })} · {copy("scope")}{resetTimezone ? <span className="coach-reset-timezone">{quotaCoachClarity(language, "resetZone", { timezone: timeZoneLabel(resetTimezone, language, coach.resetAt ?? now) })}</span> : null}</p>
       </> : null}
     </div>
     <footer className="pulse-pace-footer"><div><button type="button" onClick={onRefresh} disabled={refreshing || wait > 0} aria-busy={refreshing} aria-label={paceCopy(language, "refresh")} title={wait > 0 ? quotaCoachFeedback(language, "cooldown", { seconds: wait }) : paceCopy(language, "refresh")}><RefreshCw size={16} className={refreshing ? "is-refreshing" : ""}/></button><time dateTime={data?.updatedAt ?? undefined} title={data?.updatedAt ? new Date(data.updatedAt).toLocaleString(language) : undefined}>{compact || status !== "ready" ? ageLabel : data?.updatedAt ? paceCopy(language, "updated", { time: readingTime(data.updatedAt, language) }) : paceCopy(language, "never")}{compact && wait > 0 ? <span data-testid="coach-refresh-wait" title={quotaCoachFeedback(language, "cooldown", { seconds: wait })}> · {quotaCoachFeedback(language, "cooldownShort", { seconds: wait })}</span> : null}</time></div>{!compact ? <button type="button" className="pace-details" onClick={onDetails}>{paceCopy(language, "details")}<ArrowUpRight size={14}/></button> : null}{wait > 0 && !compact ? <p className="coach-refresh-wait" data-testid="coach-refresh-wait">{quotaCoachFeedback(language, "cooldown", { seconds: wait })}</p> : null}</footer>

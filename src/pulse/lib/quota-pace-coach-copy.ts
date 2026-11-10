@@ -133,6 +133,75 @@ export function formatCoachReset(resetAt: number | null, language: string): stri
   return resetAt == null || !Number.isFinite(resetAt) ? quotaCoachCopy(language, "unknown") : new Intl.DateTimeFormat(language, { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit", hour12: false }).format(resetAt);
 }
 
+const clarity = {
+  en: {
+    explain: "Time and window details", timeMethod: "The nominal start is the given reset time minus the official window duration. It is not when you installed Pulse or first used Codex.",
+    timeRange: "Inferred start {start} → given reset {end}", timeMissing: "The current reading does not provide a reliable window duration and reset time to infer its start.",
+    selection: "The main reading automatically highlights the usable window with less quota relative to its time left. Each window still imposes its own limit.", selectionPaused: "These are the last returned windows. No current pace recommendation is made while readings are missing, outdated or failed.",
+    windowRow: "{kind} · {window} · {status}", sessionKind: "Short window", weeklyKind: "Long window", selected: "Shown above", noWindows: "No quota windows were returned.",
+    ready: "Reading available", unavailable: "Data unavailable", stale: "Last reading", expired: "Reset time reached", exhausted: "Quota exhausted", windowRemaining: "{label}: {percent}%", windowReset: "Given reset: {time}",
+    cycleNote: "Only observations matching this window and reset are included. A new cycle starts a new observation record; earlier cycles are outside this view. Missing observations are not reconstructed.",
+    cycleRange: "Current nominal cycle: {start} → {end}", observationZone: "Observation dates use {timezone}.", observationZoneUnknown: "The timezone for the current observation dates is not confirmed.", resetZone: "Reset times shown in local time: {timezone}.",
+    untilReference: "Quota left before reset", untilAmount: "{points}% remaining", untilNote: "Less than an hour remains. The current window remainder is shown directly instead of extrapolating a full day or hour.",
+  },
+  zh: {
+    explain: "时间与窗口说明", timeMethod: "名义起点由给定重置时刻减去官方窗口时长推算，并非安装 Pulse 或首次使用 Codex 的时刻。",
+    timeRange: "推算起点 {start} → 给定重置 {end}", timeMissing: "当前读数缺少可靠的窗口时长或重置时刻，暂不能推算起点。",
+    selection: "主读数自动突出相对剩余时间更紧的可用额度窗口；每个窗口的限制仍分别生效。", selectionPaused: "以下是各窗口最近返回的读数；信息缺失、陈旧或刷新失败时，暂不给出当前配速建议。",
+    windowRow: "{kind} · {window} · {status}", sessionKind: "短周期", weeklyKind: "长周期", selected: "上方主读数", noWindows: "尚未返回任何额度窗口。",
+    ready: "读数可用", unavailable: "信息不足", stale: "上次读数", expired: "已到重置时间", exhausted: "额度已用尽", windowRemaining: "{label}：{percent}%", windowReset: "给定重置：{time}",
+    cycleNote: "这里只显示匹配当前窗口及重置时刻的观测。新周期会重新积累记录，之前周期不在本视图内；缺失观测不补造。",
+    cycleRange: "当前名义周期：{start} → {end}", observationZone: "观测日期按 {timezone} 分日。", observationZoneUnknown: "暂不能确认当前观测日期采用的时区。", resetZone: "重置时刻按本地时间显示：{timezone}。",
+    untilReference: "重置前剩余额度", untilAmount: "当前还剩{points}%", untilNote: "距重置不足1小时，直接显示本窗口当前余量，不再换算全天或整小时。",
+  },
+  "zh-Hant": {
+    explain: "時間與視窗說明", timeMethod: "名義起點由指定重置時刻減去官方視窗長度推算，並非安裝 Pulse 或首次使用 Codex 的時刻。",
+    timeRange: "推算起點 {start} → 指定重置 {end}", timeMissing: "目前讀數缺少可靠的視窗長度或重置時刻，暫時無法推算起點。",
+    selection: "主讀數自動突出相對剩餘時間更緊的可用額度視窗；各視窗的限制仍分別生效。", selectionPaused: "以下是各視窗最近回傳的讀數；資訊不足、過時或更新失敗時，暫不提供目前配速建議。",
+    windowRow: "{kind} · {window} · {status}", sessionKind: "短週期", weeklyKind: "長週期", selected: "上方主讀數", noWindows: "尚未回傳任何額度視窗。",
+    ready: "讀數可用", unavailable: "資訊不足", stale: "上次讀數", expired: "已到重置時間", exhausted: "額度已用盡", windowRemaining: "{label}：{percent}%", windowReset: "指定重置：{time}",
+    cycleNote: "此處只顯示符合目前視窗及重置時刻的觀測。新週期會重新累積記錄，先前週期不在本視圖內；缺失觀測不補造。",
+    cycleRange: "目前名義週期：{start} → {end}", observationZone: "觀測日期依 {timezone} 分日。", observationZoneUnknown: "暫時無法確認目前觀測日期採用的時區。", resetZone: "重置時刻依本地時間顯示：{timezone}。",
+    untilReference: "重置前剩餘額度", untilAmount: "目前還剩{points}%", untilNote: "距重置不足1小時，直接顯示本視窗目前餘量，不再換算全天或整小時。",
+  },
+  ja: {
+    explain: "時間と期間の説明", timeMethod: "名目上の開始は、指定リセット時刻から公式の期間長を引いた推定値です。Pulseのインストール時刻やCodexの初回使用時刻ではありません。",
+    timeRange: "推定開始 {start} → 指定リセット {end}", timeMissing: "開始の推定に必要な確かな期間長またはリセット時刻がありません。",
+    selection: "残り時間に対して残量が厳しい、有効な期間を自動的に強調します。各期間の制限は個別に適用されます。", selectionPaused: "各期間の最後の観測です。情報不足、古い観測、更新失敗時には現在のペースを提案しません。",
+    windowRow: "{kind} · {window} · {status}", sessionKind: "短い期間", weeklyKind: "長い期間", selected: "上部の値", noWindows: "上限期間がまだ返されていません。",
+    ready: "観測あり", unavailable: "情報不足", stale: "前回の値", expired: "リセット時刻に到達", exhausted: "残量なし", windowRemaining: "{label}: {percent}%", windowReset: "指定リセット: {time}",
+    cycleNote: "現在の期間とリセット時刻に一致する観測だけを表示します。新しい期間では記録を蓄積し直し、以前の期間はこの表示に含めません。欠けた観測は補いません。",
+    cycleRange: "現在の名目期間: {start} → {end}", observationZone: "観測日は{timezone}で区切ります。", observationZoneUnknown: "現在の観測日のタイムゾーンを確認できません。", resetZone: "リセット時刻は現地時間で表示: {timezone}。",
+    untilReference: "リセット前の残量", untilAmount: "残り{points}%", untilNote: "リセットまで1時間未満のため、1日や1時間あたりに換算せず現在の残量を表示します。",
+  },
+  ko: {
+    explain: "시간 및 기간 설명", timeMethod: "명목 시작은 지정 초기화 시각에서 공식 기간 길이를 뺀 추정값입니다. Pulse 설치 시각이나 Codex 최초 사용 시각이 아닙니다.",
+    timeRange: "추정 시작 {start} → 지정 초기화 {end}", timeMissing: "시작을 추정할 신뢰할 수 있는 기간 길이나 초기화 시각이 없습니다.",
+    selection: "남은 시간 대비 잔여 한도가 더 빠듯한 유효 기간을 자동으로 강조합니다. 각 기간의 제한은 별도로 적용됩니다.", selectionPaused: "각 기간의 마지막 관측입니다. 정보 부족, 오래된 관측 또는 갱신 실패 시 현재 페이스를 권하지 않습니다.",
+    windowRow: "{kind} · {window} · {status}", sessionKind: "짧은 기간", weeklyKind: "긴 기간", selected: "위의 대표 관측", noWindows: "반환된 한도 기간이 없습니다.",
+    ready: "관측 사용 가능", unavailable: "정보 부족", stale: "이전 관측", expired: "초기화 시각 도달", exhausted: "한도 소진", windowRemaining: "{label}: {percent}%", windowReset: "지정 초기화: {time}",
+    cycleNote: "현재 기간 및 초기화 시각과 일치하는 관측만 표시합니다. 새 기간은 기록을 새로 쌓으며 이전 기간은 이 보기에 포함되지 않습니다. 누락된 관측은 만들지 않습니다.",
+    cycleRange: "현재 명목 기간: {start} → {end}", observationZone: "관측 날짜는 {timezone} 기준으로 나눕니다.", observationZoneUnknown: "현재 관측 날짜의 시간대를 확인할 수 없습니다.", resetZone: "초기화 시각은 현지 시간으로 표시: {timezone}.",
+    untilReference: "초기화 전 잔여 한도", untilAmount: "현재 {points}% 남음", untilNote: "초기화까지 1시간 미만이므로 하루나 한 시간으로 환산하지 않고 현재 잔여량을 표시합니다.",
+  },
+  de: {
+    explain: "Zeit und Fenster erklärt", timeMethod: "Der rechnerische Beginn ist die angegebene Reset-Zeit minus der offiziellen Fensterdauer. Er ist nicht der Zeitpunkt der Installation oder ersten Codex-Nutzung.",
+    timeRange: "Rechnerischer Beginn {start} → angegebener Reset {end}", timeMissing: "Eine verlässliche Fensterdauer oder Reset-Zeit für die Berechnung des Beginns fehlt.",
+    selection: "Die Hauptanzeige betont automatisch das nutzbare Fenster mit weniger Kontingent im Verhältnis zur Restzeit. Jedes Fenster begrenzt die Nutzung weiterhin separat.", selectionPaused: "Letzte zurückgelieferte Fensterwerte. Bei fehlenden, alten oder fehlgeschlagenen Messungen gibt es keine aktuelle Tempoempfehlung.",
+    windowRow: "{kind} · {window} · {status}", sessionKind: "Kurzes Fenster", weeklyKind: "Langes Fenster", selected: "Oben angezeigt", noWindows: "Noch keine Kontingentfenster zurückgeliefert.",
+    ready: "Messung verfügbar", unavailable: "Daten fehlen", stale: "Letzte Messung", expired: "Reset-Zeit erreicht", exhausted: "Kontingent aufgebraucht", windowRemaining: "{label}: {percent}%", windowReset: "Angegebener Reset: {time}",
+    cycleNote: "Nur Messungen zum aktuellen Fenster und Reset werden gezeigt. Ein neuer Zyklus sammelt neue Messungen; frühere Zyklen liegen außerhalb dieser Ansicht. Fehlende Messungen werden nicht erfunden.",
+    cycleRange: "Aktueller rechnerischer Zyklus: {start} → {end}", observationZone: "Beobachtungstage werden nach {timezone} abgegrenzt.", observationZoneUnknown: "Die Zeitzone der aktuellen Beobachtungstage ist nicht bestätigt.", resetZone: "Reset-Zeiten in Ortszeit: {timezone}.",
+    untilReference: "Restkontingent vor dem Reset", untilAmount: "{points}% übrig", untilNote: "Weniger als eine Stunde bis zum Reset. Der aktuelle Rest wird direkt gezeigt, ohne Hochrechnung auf einen ganzen Tag oder eine Stunde.",
+  },
+} satisfies Record<Language, Record<string, string>>;
+export type QuotaCoachClarityKey = keyof typeof clarity.en;
+export function quotaCoachClarity(language: string, key: QuotaCoachClarityKey, values?: Record<string, string | number>): string {
+  let result = clarity[getLanguage(language)][key];
+  if (values) for (const [name, value] of Object.entries(values)) result = result.replaceAll(`{${name}}`, String(value));
+  return result;
+}
+
 const feedback = {
   en: { basis: "Observation basis this cycle", noDaily: "No daily observations match this window yet; missing history is not reconstructed.", last: "Last reading", unknownWindows: "Some quota windows were not returned; other limits may still apply.", points: "{points} pp", dailySource: "Changes in account quota readings; separate from local Tokens.", noticeCompact: "Third-party notice · unconfirmed", cooldownShort: "Retry in {seconds}s", ageNow: "Read just now", age: "Read {minutes} min ago", cooldown: "Recent reading retained · retry in {seconds}s", recover: "Check account and connection", login: "Sign in with the official Codex app, then refresh the reading.", apiKey: "The selected API-key environment does not provide subscription quota windows.", offline: "Offline mode: an online quota reading is unavailable.", identity: "Account identity is unavailable. Check the selected account and environment.", noObservations: "No account reading yet. Try the read-only refresh.", invalidTime: "The reading time is invalid. Refresh for a new reading." },
   zh: { basis: "本轮观测依据", noDaily: "暂无匹配当前窗口的每日观测；覆盖不足时不推算历史。", last: "上次读数", unknownWindows: "部分额度窗口未返回，其他限制仍可能生效。", points: "{points}个百分点", dailySource: "账号额度读数的变化，与本机 Token 分开统计。", noticeCompact: "第三方预告 · 待确认", cooldownShort: "{seconds}秒后可重试", ageNow: "刚刚读取", age: "{minutes}分钟前读数", cooldown: "保留最近读数，{seconds}秒后可重试", recover: "检查账号与连接", login: "请在官方 Codex 登录后，刷新额度读数。", apiKey: "当前选择的 API Key 环境不提供订阅额度窗口。", offline: "当前为离线模式，无法获取在线额度读数。", identity: "暂时无法确认账号身份，请检查所选账号与环境。", noObservations: "尚无账号额度读数，可尝试只读刷新。", invalidTime: "读数时间无效，请刷新获取新读数。" },

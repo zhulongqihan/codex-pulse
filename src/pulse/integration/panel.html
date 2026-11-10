@@ -32,6 +32,10 @@
   Object.assign(strings.en,{missingWindow:'Some quota windows were not returned; other limits may still apply.',loginRequired:'Sign in with official Codex, then query the latest reading in Pulse.',apiKeyReason:'The selected API-key environment does not provide subscription quota windows.',offlineReason:'Offline mode: online quota readings are unavailable.',identityReason:'Account identity is unavailable. Check the selected account and environment in Pulse.',noObservations:'No account reading yet. Open Pulse to query it.',invalidTime:'The reading time is invalid. Query a new reading in Pulse.'});
   strings.zh.coachRecentFast='近期消耗加快 · 持续此节奏可能在重置前用尽';
   strings.en.coachRecentFast='Recent usage is high · Continuing this pace may exhaust quota before reset';
+  strings.zh.coachUntil='重置前剩余额度';
+  strings.en.coachUntil='Quota left before reset';
+  strings.zh.paceNote='名义起点由给定重置时刻减去官方窗口时长推算，并非安装或首次使用时刻。主读数自动突出相对剩余时间更紧的可用窗口，各窗口限制分别生效。参考分配并非新增额度。';
+  strings.en.paceNote='The nominal start is the given reset time minus the official window duration, not installation or first use. The main reading highlights the usable window with less quota relative to time left; each window still limits usage. Reference allocation is not a refill.';
   let locale = /^zh\b/i.test(navigator.language) ? 'zh' : 'en';
   let connected=false, nextId=1, snapshot=null, loading=false, readFailed=false;
   const pending=new Map(), $=id=>document.getElementById(id), t=key=>strings[locale][key];
@@ -72,9 +76,9 @@
     $('coach-missing').hidden=state!=='ready'||['session','weekly'].every(kind=>candidates.some(item=>item.window.kind===kind));$('coach-missing').textContent=t('missingWindow');
     $('coach-comparison').hidden=state!=='ready';$('coach-reference').hidden=state!=='ready';
     if(state==='ready'){
-      const n=value=>formatted(value),unit=chosen.window.windowMinutes>=1440?'day':'hour',points=chosen.remaining/(chosen.minutes/(unit==='day'?1440:60));
+      const n=value=>formatted(value),unit=chosen.minutes<60?'reset':chosen.window.windowMinutes>=1440&&chosen.minutes>=1440?'day':'hour',points=unit==='reset'?chosen.remaining:chosen.remaining/(chosen.minutes/(unit==='day'?1440:60));
       $('coach-comparison').textContent=`${t('coachUsed')} ${n(100-chosen.remaining)}% · ${t('coachElapsed')} ${n(100-chosen.timeLeft)}%`;
-      $('coach-reference').textContent=`${t(unit==='day'?'coachDay':'coachHour')} · ${t('coachApprox')} ${formatted(points,points<1?1:0)} ${t(unit==='day'?'coachPerDay':'coachPerHour')}`;
+      $('coach-reference').textContent=unit==='reset'?`${t('coachUntil')} · ${formatted(points,1)}%`:`${t(unit==='day'?'coachDay':'coachHour')} · ${t('coachApprox')} ${formatted(points,points<1?1:0)} ${t(unit==='day'?'coachPerDay':'coachPerHour')}`;
     }else{$('coach-comparison').textContent='';$('coach-reference').textContent='';}
     $('coach-reset').hidden=!Number.isFinite(reset);$('coach-reset').textContent=Number.isFinite(reset)?`${t('reset')} ${time(new Date(reset).toISOString())}`:'';
   }

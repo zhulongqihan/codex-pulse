@@ -57,3 +57,13 @@ html[data-pace-surface=badge]{color-scheme:light}
 .quota-coach-card.variant-compact.without-reading .coach-state{margin-bottom:2px}
 .quota-coach-card.variant-compact.without-reading .coach-state>p{margin-top:2px!important}
 .quota-coach-card.variant-compact.without-reading .coach-recover{margin-bottom:0}
+.coach-explanation{font-size:12px;line-height:1.6;margin-top:10px;grid-column:1/-1}
+.coach-explanation summary{cursor:pointer;font-weight:550;min-height:28px;display:list-item;align-content:center}
+.coach-explanation>p{color:var(--pace-muted);margin-top:6px!important;overflow-wrap:anywhere}
+.coach-window-list{list-style:none;margin:8px 0 0;padding:0}
+.coach-window-list>li{border-top:1px solid var(--pace-line);padding:8px 0;overflow-wrap:anywhere}
+.coach-window-list>li>strong{font-size:12px;font-weight:600;line-height:1.6}
+.coach-window-list>li>p{color:var(--pace-muted);margin-top:3px!important}
+.coach-selected-window{display:inline-block;margin-left:6px;color:var(--pace-accent);font-size:12px}
+.coach-reset-timezone{display:block;margin-top:3px;overflow-wrap:anywhere}
+.coach-daily summary{min-height:28px;align-content:center}

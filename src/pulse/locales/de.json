@@ -1010,5 +1010,14 @@
     "update_step_download": "Schritt 1: Update-Paket herunterladen und prüfen. Anschließend mit Neustarten und Update abschließen anwenden.",
     "update_step_restart": "Schritt 2: Mit Neustarten und Update abschließen anwenden. Die aktuelle App läuft noch.",
     "no_short_window": "Für dieses Konto wurde kein 5-Stunden-Fenster gemeldet. Kontingentabfragen sind möglich; es wird kein Fenster gestartet."
+  },
+  "reading_context": {
+    "statistics_short": "Statistik-Zeitzone: {{zone}}",
+    "statistics_dates": "Heute und Statistikdaten richten sich nach {{zone}}.",
+    "calendar_local": "Der Ankündigungskalender nutzt lokale Kalendertage: {{zone}}.",
+    "reset_local": "Reset-Zeiten werden in Ortszeit angezeigt: {{zone}}.",
+    "local_timezone": "lokale Zeitzone",
+    "distribution_tokens": "Anteil an den lokalen Tokens im gewählten Zeitraum; getrennt vom Kontokontingent.",
+    "distribution_cost": "Anteil an der API-Schätzung des Zeitraums; bei unbekannten Preisen bleibt der Anteil unbekannt. Getrennt von Rechnung und Kontokontingent."
   }
 }

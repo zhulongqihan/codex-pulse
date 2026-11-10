@@ -9,6 +9,7 @@ import dayjs from "dayjs";
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { usePulseCopy } from "@/lib/pulse-copy";
+import { localTimeZone } from "@/lib/time-context";
 
 type CodexLimitsCardProps = {
   limits: CodexLimitsResponse | null;
@@ -157,6 +158,7 @@ export function CodexSidebarLimits({ compact = false, limits, error, isLimitsRef
           {limits?.session ? <LimitRow label={quotaWindowKind(limits.session) === "5h" ? "5 hour" : quotaWindowKind(limits.session)} window={limits.session} now={now} compact={compact}/> : null}
           {limits?.weekly ? <LimitRow label={quotaWindowKind(limits.weekly) === "weekly" ? "Weekly" : quotaWindowKind(limits.weekly)} window={limits.weekly} now={now} compact={compact}/> : null}
           {!limits?.session && !limits?.weekly ? <p className="text-[12px] leading-6 text-muted-foreground">{t("limits.no_window_returned")}</p> : null}
+          {!compact && (limits?.session || limits?.weekly) ? <p data-testid="limits-timezone" className="pulse-time-context">{t("reading_context.reset_local", { zone: localTimeZone() ?? t("reading_context.local_timezone") })}</p> : null}
         </div>
       ) : null}
     </section>

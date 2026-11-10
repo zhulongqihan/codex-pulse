@@ -15,11 +15,12 @@ const PAGE_SIZE = 50;
 type ModelsPageProps = {
   models: OverviewResponse["models"];
   range: RangeKey;
+  timezone?: string;
   onRangeChange: (range: RangeKey) => void;
   onPricingRefreshed?: () => void | Promise<void>;
 };
 
-export function ModelsPage({ models, range, onRangeChange, onPricingRefreshed }: ModelsPageProps) {
+export function ModelsPage({ models, range, timezone, onRangeChange, onPricingRefreshed }: ModelsPageProps) {
   const { t } = useTranslation();
   const [view, setView] = useState<"usage" | "catalog">("usage");
   const [catalog, setCatalog] = useState<ModelPricingCatalogResponse | null>(null);
@@ -86,7 +87,7 @@ export function ModelsPage({ models, range, onRangeChange, onPricingRefreshed }:
         <h2 className="text-xl font-bold tracking-tight text-foreground">{t("models.title")}</h2>
         <p className="text-sm text-muted-foreground">{view === "usage" ? t("models.subtitle") : t("models.catalog.subtitle")}</p>
       </div>
-      {view === "usage" ? <RangeSwitcher value={range} onChange={onRangeChange} /> : catalog ? <Button data-testid="refresh-pricing" variant="secondary" disabled={isRefreshing} onClick={refreshCatalog}>{isRefreshing ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}{t("models.catalog.refresh")}</Button> : null}
+      {view === "usage" ? <RangeSwitcher value={range} onChange={onRangeChange} timezone={timezone} /> : catalog ? <Button data-testid="refresh-pricing" variant="secondary" disabled={isRefreshing} onClick={refreshCatalog}>{isRefreshing ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}{t("models.catalog.refresh")}</Button> : null}
     </div>
 
     <div role="tablist" aria-label={t("models.views.label")} className="inline-flex rounded-lg border border-border bg-muted/50 p-1">

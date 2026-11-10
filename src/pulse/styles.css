@@ -961,3 +961,5 @@ a { text-underline-offset: 3px; }
 .pulse-fit-trends.is-overview .pulse-fit-plot::before { content: ""; position: absolute; inset: 0 0 20px; pointer-events: none; background-image: linear-gradient(to bottom,transparent calc(50% - .5px),rgb(var(--border) / .65) 50%,transparent calc(50% + .5px)); }
 .pulse-line-aggregate { stroke: rgb(var(--muted-foreground)); }
 .pulse-fit-trends.is-compact .pulse-chart-scroll { padding-left: 0; }
+.pulse-time-context { display: block; color: rgb(var(--muted-foreground)); font-size: 12px; line-height: 1.5; overflow-wrap: anywhere; }
+.pulse-distribution-scope { display: grid; gap: 3px; margin: 0 0 12px; color: rgb(var(--muted-foreground)); font-size: 12px; line-height: 1.5; overflow-wrap: anywhere; }

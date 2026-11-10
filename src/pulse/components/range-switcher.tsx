@@ -18,10 +18,13 @@ import dayjs from "dayjs";
 import type { DateRange } from "react-day-picker";
 import { useTranslation } from "react-i18next";
 import { getLanguage, languages } from "@/lib/languages";
+import { currentDateInTimezone } from "@/lib/trend-buckets";
+import { timeZoneLabel } from "@/lib/time-context";
 
 type RangeSwitcherProps = {
   value: RangeKey;
   onChange: (value: RangeKey) => void;
+  timezone?: string;
 };
 
 const ranges: Array<{ value: RangeKey; label: string }> = [
@@ -37,8 +40,12 @@ const ranges: Array<{ value: RangeKey; label: string }> = [
   { value: "all", label: "All retained history" },
 ];
 
-export function RangeSwitcher({ value, onChange }: RangeSwitcherProps) {
+export function RangeSwitcher({ value, onChange, timezone }: RangeSwitcherProps) {
   const { t, i18n } = useTranslation();
+  const sourceToday = currentDateInTimezone(timezone);
+  // Calendar cells are date-only source keys, represented in the browser's local calendar.
+  const sourceTodayDate = dayjs(sourceToday).toDate();
+  const timezoneText = timezone ? t("reading_context.statistics_short", { zone: timeZoneLabel(timezone, i18n.resolvedLanguage ?? i18n.language) }) : null;
   const currentLocale = languages[getLanguage(i18n.resolvedLanguage ?? i18n.language)].dateLocale;
   const selectedRange = ranges.find((range) => range.value === value);
   const displayLabel = selectedRange ? t(`ranges.${selectedRange.value}`, { defaultValue: selectedRange.label }) : getRangeLabel(value, t);
@@ -71,8 +78,8 @@ export function RangeSwitcher({ value, onChange }: RangeSwitcherProps) {
       };
     }
     return {
-      from: dayjs().subtract(29, "day").startOf("day").toDate(),
-      to: new Date(),
+      from: dayjs(sourceToday).subtract(29, "day").startOf("day").toDate(),
+      to: sourceTodayDate,
     };
   });
   const [error, setError] = useState<string | null>(null);
@@ -86,7 +93,7 @@ export function RangeSwitcher({ value, onChange }: RangeSwitcherProps) {
       setError(t("range_switcher.err_end_before_start"));
       return;
     }
-    if (dayjs(dateRange.to).isAfter(dayjs(), "day")) {
+    if (dayjs(dateRange.to).format("YYYY-MM-DD") > sourceToday) {
       setError(t("range_switcher.err_future"));
       return;
     }
@@ -125,6 +132,7 @@ export function RangeSwitcher({ value, onChange }: RangeSwitcherProps) {
           </button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" className="min-w-[11rem]">
+          {timezoneText ? <p className="max-w-72 break-words px-2 py-2 text-xs leading-normal text-muted-foreground">{timezoneText}</p> : null}
           <DropdownMenuRadioGroup value={value} onValueChange={(nextValue) => onChange(nextValue as RangeKey)}>
             {ranges.map((range) => (
               <DropdownMenuRadioItem key={range.value} value={range.value}>
@@ -174,6 +182,8 @@ export function RangeSwitcher({ value, onChange }: RangeSwitcherProps) {
                 </button>
               </div>
 
+              {timezoneText ? <p className="break-words text-xs leading-normal text-muted-foreground">{timezoneText}</p> : null}
+
               <div className="flex flex-col items-center py-2 space-y-3">
                 <div className="text-center text-xs text-muted-foreground min-h-[1.25rem]">
                   {dateRange?.from ? (
@@ -199,7 +209,7 @@ export function RangeSwitcher({ value, onChange }: RangeSwitcherProps) {
                   mode="range"
                   selected={dateRange}
                   onSelect={handleSelect}
-                  disabled={{ after: new Date() }}
+                  disabled={{ after: sourceTodayDate }}
                   className="rounded-md border bg-card border-border/60"
                   locale={currentLocale}
                 />
