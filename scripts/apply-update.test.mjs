@@ -153,6 +153,17 @@ for (const scenario of ['success', 'held-mcp', 'startup-failure', 'startup-failu
     if (other) assert(alive(other), 'A different image or non-MCP mode must remain running');
     if (otherPath) writeFileSync(join(otherPath, 'close-mcp'), 'exit');
     await until(() => existsSync(join(f.data, 'restarted.pid')), 'Updated or restored app did not restart');
+    if (scenario.startsWith('startup-failure') && process.env.PULSE_UPDATE_RESULT_FIXTURE_DIR) {
+      const saved = join(resolve(process.env.PULSE_UPDATE_RESULT_FIXTURE_DIR), scenario);
+      const savedData = join(saved, 'data'), savedUpdates = join(savedData, 'updates');
+      mkdirSync(savedUpdates, { recursive: true });
+      copyFileSync(f.executable, join(saved, 'CodexPulse.exe'));
+      copyFileSync(f.executable + '.previous', join(saved, 'CodexPulse.exe.previous'));
+      copyFileSync(join(f.updates, 'pending.failed.json'), join(savedUpdates, 'pending.failed.json'));
+      writeFileSync(join(savedUpdates, 'apply-update.json'), JSON.stringify({ dataDir: savedData, executable: join(saved, 'CodexPulse.exe'), version: '0.5.0' }));
+      // Copy the actual PowerShell output bytes last so the failed marker is not newer.
+      copyFileSync(join(f.updates, 'result.txt'), join(savedUpdates, 'result.txt'));
+    }
     if (scenario === 'startup-failure-with-mcp-reconnect') {
       const reconnectedId = Number(readFileSync(join(f.data, 'reconnected-mcp.pid'), 'utf8'));
       assert.throws(() => process.kill(reconnectedId, 0), { code: 'ESRCH' }, 'Reconnected MCP must release the image before rollback');
