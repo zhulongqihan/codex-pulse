@@ -40,6 +40,7 @@ export function DashboardHeader({
   const { t } = useTranslation();
 
   const isSynced = !!overview?.updatedAt && !syncFailed;
+  const syncLabel = isSynced ? t("hero.cache_synced", { defaultValue: "Cache Synced" }) : t("hero.out_of_sync", { defaultValue: "Out of Sync" });
   const isInstallingUpdate = updateInstallStatus === "downloading";
   const headerUpgradeLabel = updateInstallStatus === "installed"
     ? t("header.restart_update")
@@ -83,19 +84,19 @@ export function DashboardHeader({
           )}
         </div>
 
-        <div className="pb-2 shrink-0 flex items-center gap-3">
+        <div className="pb-2 min-w-0 flex flex-1 items-center justify-end gap-3">
           {overview && (
-            <div className="hidden sm:flex flex-col items-end text-right leading-tight select-none">
-              <div className="flex items-center gap-1.5 text-[11px] font-medium text-foreground">
+            <div data-testid="dashboard-sync-status" className="hidden min-w-0 sm:flex flex-col items-end text-right leading-tight select-none">
+              <div className="flex max-w-full min-w-0 items-center justify-end gap-1.5 text-[11px] font-medium text-foreground">
                 <span className="relative flex h-1.5 w-1.5 shrink-0">
                   <span className={`absolute inline-flex h-full w-full animate-ping rounded-full bg-success opacity-75 ${isSynced ? "" : "hidden"}`}></span>
                   <span className={`relative inline-flex h-1.5 w-1.5 rounded-full ${isSynced ? "bg-success" : "bg-warning"}`}></span>
                 </span>
-                <span className="truncate max-w-[280px]">{isSynced ? t("hero.cache_synced", { defaultValue: "Cache Synced" }) : t("hero.out_of_sync", { defaultValue: "Out of Sync" })}</span>
+                <span className="truncate max-w-[280px]" title={syncLabel}>{syncLabel}</span>
                 <span className="text-muted-foreground/30">·</span>
-                <span className="text-muted-foreground font-normal truncate max-w-[280px]">{scanMessage}</span>
+                <span className="text-muted-foreground font-normal truncate max-w-[280px]" title={scanMessage}>{scanMessage}</span>
               </div>
-              <div className="text-[10px] text-muted-foreground/75 mt-0.5">
+              <div className="max-w-full truncate text-[10px] text-muted-foreground/75 mt-0.5" title={updatedLabel}>
                 {updatedLabel}
               </div>
             </div>

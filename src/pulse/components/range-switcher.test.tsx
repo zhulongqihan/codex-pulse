@@ -17,6 +17,20 @@ describe("range selection", () => {
     expect(onChange).toHaveBeenCalledWith("all");
   });
 
+  it("keeps the first and last presets reachable by keyboard with the timezone explanation present", async () => {
+    const onChange = vi.fn();
+    const user = userEvent.setup();
+    render(<RangeSwitcher value="30d" onChange={onChange} timezone="America/New_York" />);
+    const trigger = screen.getByRole("button", { name: "Select time range" });
+    trigger.focus();
+    await user.keyboard("{ArrowDown}{Home}{Enter}");
+    expect(onChange).toHaveBeenLastCalledWith("1d");
+    await waitFor(() => expect(trigger).toHaveFocus());
+    await user.keyboard("{ArrowDown}{End}{ArrowUp}{Enter}");
+    expect(onChange).toHaveBeenLastCalledWith("all");
+    expect(onChange).toHaveBeenCalledTimes(2);
+  });
+
   it("closes the custom range with Escape and returns focus without changing the range", async () => {
     const onChange = vi.fn();
     const user = userEvent.setup();

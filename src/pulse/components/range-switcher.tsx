@@ -131,7 +131,7 @@ export function RangeSwitcher({ value, onChange, timezone }: RangeSwitcherProps)
             <ChevronDown className="h-4 w-4 text-muted-foreground" />
           </button>
         </DropdownMenuTrigger>
-        <DropdownMenuContent align="end" className="min-w-[11rem]">
+        <DropdownMenuContent align="end" className="min-w-[11rem] max-h-[var(--radix-dropdown-menu-content-available-height)] overflow-y-auto">
           {timezoneText ? <p className="max-w-72 break-words px-2 py-2 text-xs leading-normal text-muted-foreground">{timezoneText}</p> : null}
           <DropdownMenuRadioGroup value={value} onValueChange={(nextValue) => onChange(nextValue as RangeKey)}>
             {ranges.map((range) => (
@@ -166,7 +166,7 @@ export function RangeSwitcher({ value, onChange, timezone }: RangeSwitcherProps)
               role="dialog"
               aria-modal="true"
               aria-labelledby="pulse-range-title"
-              className="bg-surface border border-border rounded-2xl w-full max-w-sm p-6 shadow-2xl flex flex-col space-y-4 animate-in fade-in zoom-in-95 duration-200"
+              className="bg-surface border border-border rounded-2xl w-full max-w-sm max-h-full overflow-y-auto p-6 shadow-2xl flex flex-col space-y-4 animate-in fade-in zoom-in-95 duration-200"
               onClick={(e) => e.stopPropagation()}
             >
               <div className="flex items-center justify-between border-b border-border/60 pb-3">
