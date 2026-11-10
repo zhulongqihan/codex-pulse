@@ -4,6 +4,22 @@ User-facing changes are grouped by release, following [Keep a Changelog](https:/
 
 ## [Unreleased]
 
+## [0.8.0] - 2026-11-10
+
+### Added / 新增
+
+- Check portable installation bindings after relocation and choose repairs per entry in Maintenance settings, with previous targets and limits made explicit.
+- 搬迁后在维护设置中检查安装入口，查看旧目标与影响并按项修复。
+- Retry reset-service requests independently of local log scans, retaining available earlier readings when a request fails.
+- 重置服务独立重试，失败保留可用旧读数，无需重扫本地日志。
+
+### Improved / 改进
+
+- Explain close, hide and quit behavior; label the widget pin action dynamically and enlarge its click target.
+- 说明关闭、隐藏和退出的区别；浮窗置顶按钮使用动态动作名称并扩大点击区域。
+
+[完整中英说明 / Full release notes](docs/releases/v0.8.0.md)
+
 ## [0.7.4] - 2026-11-10
 
 ### Fixed / 修复
@@ -171,7 +187,13 @@ User-facing changes are grouped by release, following [Keep a Changelog](https:/
 
 Earlier releases remain available in [GitHub Releases](https://github.com/zhulongqihan/codex-pulse/releases). / 更早版本保留在 GitHub Releases。
 
-[Unreleased]: https://github.com/zhulongqihan/codex-pulse/compare/v0.6.0...HEAD
+[Unreleased]: https://github.com/zhulongqihan/codex-pulse/compare/v0.8.0...HEAD
+[0.8.0]: https://github.com/zhulongqihan/codex-pulse/releases/tag/v0.8.0
+[0.7.4]: https://github.com/zhulongqihan/codex-pulse/releases/tag/v0.7.4
+[0.7.3]: https://github.com/zhulongqihan/codex-pulse/releases/tag/v0.7.3
+[0.7.2]: https://github.com/zhulongqihan/codex-pulse/releases/tag/v0.7.2
+[0.7.1]: https://github.com/zhulongqihan/codex-pulse/releases/tag/v0.7.1
+[0.7.0]: https://github.com/zhulongqihan/codex-pulse/releases/tag/v0.7.0
 [0.6.0]: https://github.com/zhulongqihan/codex-pulse/releases/tag/v0.6.0
 [0.5.0]: https://github.com/zhulongqihan/codex-pulse/releases/tag/v0.5.0
 [0.4.0]: https://github.com/zhulongqihan/codex-pulse/releases/tag/v0.4.0

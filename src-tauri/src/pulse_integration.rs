@@ -120,7 +120,7 @@ fn executable_search_path(
         .map_err(|_| "The executable search path cannot be represented in the Codex plugin".into())
 }
 
-fn prepare(executable: &Path, data: &Path) -> Result<PreparedCodexIntegration, String> {
+pub(crate) fn prepare(executable: &Path, data: &Path) -> Result<PreparedCodexIntegration, String> {
     if !executable.is_absolute() || !data.is_absolute() {
         return Err("Codex integration requires absolute application and data paths".into());
     }
@@ -324,7 +324,7 @@ pub fn run_prepare_if_requested() -> bool {
     true
 }
 
-fn open_installation_link(deep_link: &str) -> Result<(), String> {
+pub(crate) fn open_installation_link(deep_link: &str) -> Result<(), String> {
     // This helper is private: callers cannot supply a scheme, tool, or arbitrary URL.
     #[cfg(windows)]
     {

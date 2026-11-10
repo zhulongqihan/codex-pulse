@@ -15,9 +15,11 @@ WebView2 下载：https://developer.microsoft.com/microsoft-edge/webview2/
 
 程序的偏好、数据库、日志、临时文件和 WebView 缓存均放在程序旁的 data 文件夹。
 可以把整个文件夹移动到其他可写位置。保留 data 即保留使用状态；原 Codex 日志只读。
+搬迁后在设置→维护检查快捷方式、登录启动与本地插件绑定，查看影响后按项修复；检测不改系统，未配置入口不会自动启用。宿主缓存的旧插件可能仍需从 Codex 插件页重新安装。
 自定义数据位置：启动前设置 PULSE_DATA_DIR 为绝对路径。
 查询额度需要已有 ChatGPT 登录；来源与账号数据不可用时仍可查看本地统计。
-再次启动会找回同一 data 目录的已有窗口。关闭主窗口会隐藏到托盘；使用托盘的“退出”才会完全结束程序。
+再次启动会找回同一 data 目录的已有窗口。关闭主窗口会隐藏到托盘；关闭桌面浮窗只隐藏浮窗，可从设置重新显示；右上角卡片的关闭只收起卡片；使用托盘的“退出”才会完全结束程序。浮窗图钉显示当前可执行的“置顶”或“取消置顶”。
+重置服务加载失败可单独重试，无需重新扫描日志。
 
 完整说明：https://github.com/zhulongqihan/codex-pulse
 
@@ -35,9 +37,11 @@ Runtime download: https://developer.microsoft.com/microsoft-edge/webview2/
 
 Preferences, database, logs, temporary files and WebView cache live in the adjacent data folder.
 Move the whole folder to relocate the portable app. Keep data to preserve settings and history.
+After relocation, check shortcut, sign-in startup and local plugin bindings in Settings → Maintenance. Inspect the impact and choose repairs individually. Checks do not change system settings or enable unconfigured entries. A cached plugin may still require reinstallation in Codex.
 Original Codex logs are read-only. Set PULSE_DATA_DIR to an absolute path to override data storage.
 Account queries require an existing ChatGPT sign-in. Local statistics work independently.
-Opening the app again restores the existing window for the same data folder. Closing the main window hides it to the tray. Choose Quit in the tray menu to exit.
+Opening the app again restores the existing window for the same data folder. Closing the main window hides it to the tray. Closing the desktop widget only hides it; show it again from settings. Closing the expanded corner card only collapses it. Choose Quit in the tray menu to exit completely. The widget pin names the current Pin or Unpin action.
+Retry a failed reset service directly without rescanning local logs.
 
 Full documentation: https://github.com/zhulongqihan/codex-pulse/blob/main/README.en.md
 

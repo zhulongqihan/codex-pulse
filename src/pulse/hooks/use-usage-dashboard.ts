@@ -1,22 +1,20 @@
 import { useCodexForecast } from "@/hooks/use-codex-forecast";
+import { useCodexResetOverview } from "@/hooks/use-codex-reset-overview";
 import { open, save } from "@tauri-apps/plugin-dialog";
 import { disable as disableAutostart, enable as enableAutostart, isEnabled as isAutostartEnabled } from "@tauri-apps/plugin-autostart";
 import { buildPulseIntegration } from "@/lib/pulse-integration";
 import { buildLocalUsageSummary } from "@/lib/local-usage-summary";
 import { listen } from "@tauri-apps/api/event";
-import { useEffect, useEffectEvent, useRef, useState } from "react";
+import { useCallback, useEffect, useEffectEvent, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
   activateCodexWindow,
   exportUsage,
   fetchCodexLimits,
-  fetchLatestCodexReset,
-  fetchCodexResetHistory,
   fetchMonthlyUsage,
   fetchOverview,
   resetUsageState,
   type CodexLimitsResponse,
-  type CodexResetAnnouncement,
   type ExportFormat,
   type MonthlyUsageResponse,
   type OverviewResponse,
@@ -152,10 +150,8 @@ export function useUsageDashboard() {
   const [diagnostics, setDiagnostics] = useState<UsageDiagnostics | null>(null);
   const [diagnosticsError, setDiagnosticsError] = useState<string | null>(null);
   const [isLimitsLoading, setIsLimitsLoading] = useState(true);
-  const [isResetLoading, setIsResetLoading] = useState(true);
-  const [resetError, setResetError] = useState<string | null>(null);
-  const [latestCodexReset, setLatestCodexReset] = useState<CodexResetAnnouncement | null>(null);
-  const [recentCodexResets, setRecentCodexResets] = useState<CodexResetAnnouncement[] | null>(null);
+  const { latest: latestCodexReset, history: recentCodexResets, isLoading: isResetLoading,
+    error: resetError, refresh: handleResetHistoryRefresh } = useCodexResetOverview(RECENT_RESET_OVERVIEW_DAYS);
   const [scanMessage, setScanMessage] = useState<ScanMessage>({ key: "hero.sync_logs_to_cache_desc" });
   const [error, setError] = useState<string | null>(null);
   const [bootstrapped, setBootstrapped] = useState(false);
@@ -172,6 +168,7 @@ export function useUsageDashboard() {
   const [launchAtLogin, setLaunchAtLogin] = useState(false);
   const [launchAtLoginKnown, setLaunchAtLoginKnown] = useState(false);
   const [launchAtLoginError, setLaunchAtLoginError] = useState<string | null>(null);
+  const launchAtLoginReadGeneration = useRef(0);
   const [isLaunchAtLoginUpdating, setIsLaunchAtLoginUpdating] = useState(false);
 
   const [updateInfo, setUpdateInfo] = useState<UpdateCheckResponse | null>(null);
@@ -323,25 +320,25 @@ export function useUsageDashboard() {
     };
   }, []);
 
-  useEffect(() => {
-    let isMounted = true;
-
-    void isAutostartEnabled()
-      .then((enabled) => {
-        if (!isMounted) return;
-        setLaunchAtLogin(enabled);
-        setLaunchAtLoginKnown(true);
-        setLaunchAtLoginError(null);
-      })
-      .catch((err) => {
-        if (!isMounted) return;
-        setLaunchAtLoginError(errorMessage(err, "Failed to read login item setting."));
-      });
-
-    return () => {
-      isMounted = false;
-    };
+  const handleLaunchAtLoginRefresh = useCallback(async () => {
+    const generation = ++launchAtLoginReadGeneration.current;
+    try {
+      const enabled = await isAutostartEnabled();
+      if (generation !== launchAtLoginReadGeneration.current) return;
+      setLaunchAtLogin(enabled);
+      setLaunchAtLoginKnown(true);
+      setLaunchAtLoginError(null);
+    } catch (err) {
+      if (generation !== launchAtLoginReadGeneration.current) return;
+      setLaunchAtLoginKnown(false);
+      setLaunchAtLoginError(errorMessage(err, "Failed to read login item setting."));
+    }
   }, []);
+
+  useEffect(() => {
+    void handleLaunchAtLoginRefresh();
+    return () => { launchAtLoginReadGeneration.current++; };
+  }, [handleLaunchAtLoginRefresh]);
 
   const hasBootstrappedRef = useRef(false);
   const lastLimitsFetchTimeRef = useRef<number>(0);
@@ -468,29 +465,6 @@ export function useUsageDashboard() {
     }));
     return () => { cancelled = true; stops.forEach(stop => stop()); };
   }, []);
-
-  const loadLatestCodexReset = useEffectEvent(async () => {
-    setIsResetLoading(true);
-    try {
-      const data = await fetchLatestCodexReset();
-      setLatestCodexReset(data);
-      setResetError(null);
-    } catch (error) {
-      setResetError(errorMessage(error, "Failed to load reset history."));
-    } finally {
-      setIsResetLoading(false);
-    }
-  });
-
-  const loadRecentCodexResets = useEffectEvent(async () => {
-    try {
-      const data = await fetchCodexResetHistory(RECENT_RESET_OVERVIEW_DAYS);
-      setRecentCodexResets(data);
-    } catch (error) {
-      // A failed refresh must not erase the last successful calendar/history.
-      setResetError(errorMessage(error, "Failed to load reset history."));
-    }
-  });
 
   const loadDiagnostics = useEffectEvent(async () => {
     try {
@@ -695,8 +669,7 @@ export function useUsageDashboard() {
     try {
       // Do not block initial render on limits fetch
       void loadCodexLimits();
-      void loadLatestCodexReset();
-      void loadRecentCodexResets();
+      void handleResetHistoryRefresh();
       await loadOverview(range);
     } catch (loadError) {
       setError(errorMessage(loadError, "Failed to load overview."));
@@ -1114,7 +1087,7 @@ export function useUsageDashboard() {
 
     try {
       await scanAndReloadOverview(startedAt, { force: true });
-      await Promise.all([loadLatestCodexReset(), loadRecentCodexResets()]);
+      await handleResetHistoryRefresh();
     } catch (refreshError) {
       setError(errorMessage(refreshError, "Refresh failed."));
     } finally {
@@ -1247,6 +1220,8 @@ export function useUsageDashboard() {
   }
 
   async function handleLaunchAtLoginChange(enabled: boolean) {
+    // An earlier read must not undo an explicit setting change.
+    launchAtLoginReadGeneration.current++;
     const previous = launchAtLogin;
     setLaunchAtLogin(enabled);
     setLaunchAtLoginError(null);
@@ -1409,6 +1384,7 @@ export function useUsageDashboard() {
     handleLocalScanComplete,
     handleRefresh,
     handleLimitsRefresh,
+    handleResetHistoryRefresh,
     handleActivateCodexWindow,
     handleReset,
     handleExport,
@@ -1418,6 +1394,7 @@ export function useUsageDashboard() {
     handleOpenUpdateRelease,
     handleOpenResetCredits,
     handleLaunchAtLoginChange,
+    handleLaunchAtLoginRefresh,
     trayTitleShow,
     handleTrayTitleShowChange,
     trayMenuShow,

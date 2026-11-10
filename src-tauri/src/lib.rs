@@ -13,6 +13,7 @@ mod pricing;
 mod project_sessions;
 mod pulse_desktop;
 mod pulse_instance;
+mod pulse_installation;
 mod pulse_integration;
 mod pulse_mcp;
 mod pulse_pace;
@@ -1170,6 +1171,8 @@ pub fn run() {
             pulse_desktop::widget_action,
             pulse_desktop::get_pulse_paths,
             pulse_shortcuts::create_pulse_shortcuts,
+            pulse_installation::inspect_pulse_installation,
+            pulse_installation::repair_pulse_installation,
             pulse_integration::prepare_codex_integration,
             pulse_desktop::open_pulse_data_dir,
             pulse_desktop::get_widget_snapshot,

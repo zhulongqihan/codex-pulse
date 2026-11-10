@@ -1,6 +1,6 @@
 {
   "name": "codex-pulse",
-  "version": "0.7.4",
+  "version": "0.8.0",
   "private": true,
   "type": "module",
   "description": "Local Codex usage, complete session replay and account capacity in Clear and Meter styles.",
@@ -37,7 +37,7 @@
     "version:bump": "node scripts/version.mjs bump",
     "source:check": "node scripts/check-public-files.mjs",
     "source:check:staged": "node scripts/check-public-files.mjs --staged",
-    "test:tooling": "node --test scripts/version.test.mjs scripts/check-public-files.test.mjs scripts/sign-update.test.mjs scripts/install-codex-plugin.test.mjs scripts/apply-update.test.mjs"
+    "test:tooling": "node --test scripts/version.test.mjs scripts/check-public-files.test.mjs scripts/sign-update.test.mjs scripts/install-codex-plugin.test.mjs scripts/apply-update.test.mjs scripts/pulse-installation.test.mjs"
   },
   "dependencies": {
     "@radix-ui/react-dropdown-menu": "^2.2.1",

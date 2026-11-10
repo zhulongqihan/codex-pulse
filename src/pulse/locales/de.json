@@ -963,7 +963,7 @@
     "copied": "Diagnose kopiert",
     "copy_failed": "Kopieren fehlgeschlagen. Sie können die technischen Details oben markieren und kopieren.",
     "local_only": "Lokale Nutzung wird aus Sitzungsprotokollen gelesen. Fehler bei Online-Kontingenten verhindern keine lokalen Statistiken. Die Diagnose enthält Pfade und Fehlerdetails, aber keine Zugangsdaten oder Gesprächsinhalte.",
-    "reset_failed": "Der Reset-Verlauf konnte nicht geladen werden. Wiederholen Sie den Scan der lokalen Protokolle.",
+    "reset_failed": "Der Reset-Dienst ist nicht verfügbar. Bitte erneut versuchen.",
     "reset_empty": "Keine Reset-Ankündigungen verfügbar.",
     "credits_failed": "Reset-Guthaben ist nicht verfügbar. Fragen Sie die Limits in der Seitenleiste erneut ab.",
     "credits_empty": "Dieses Konto hat keine Informationen zum Reset-Guthaben geliefert.",

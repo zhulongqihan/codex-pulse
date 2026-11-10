@@ -1,6 +1,8 @@
 import { PulseAppearanceSettings, PulseWidgetSettings } from "./pulse-appearance-controls";
 import { PulseSourceSettings } from "./pulse-source-settings";
 import { PulseCodexIntegration } from "./pulse-codex-integration";
+import { CloseBehaviorNote } from "./close-behavior";
+import { PulseInstallationSettings } from "./pulse-installation-settings";
 import { PulsePaceSettings } from "./pulse-pace-settings";
 import { usePulseCopy } from "@/lib/pulse-copy";
 import { useShellCopy } from "@/lib/shell-copy";
@@ -49,6 +51,7 @@ type SettingsPageProps = {
   launchAtLoginError: string | null;
   isLaunchAtLoginUpdating: boolean;
   onLaunchAtLoginChange: (enabled: boolean) => void;
+  onBindingsChanged?: () => void;
   showSessionCredits?: boolean;
   onShowSessionCreditsChange?: (show: boolean) => void;
   showLogsTab: boolean;
@@ -98,6 +101,7 @@ export function SettingsPage({
   launchAtLoginError,
   isLaunchAtLoginUpdating,
   onLaunchAtLoginChange,
+  onBindingsChanged,
   showSessionCredits = false,
   onShowSessionCreditsChange,
   showLogsTab,
@@ -202,6 +206,7 @@ export function SettingsPage({
     <>
       <PulsePaceSettings onManageStartup={focusLoginStartup} manageStartupDisabled={isDisabled || isLoginStartupChecking || isLaunchAtLoginUpdating}/>
       <PulseCodexIntegration />
+      <CloseBehaviorNote />
       <Card>
         <CardHeader>
           <CardTitle>{t("settings.updates_title")}</CardTitle>
@@ -549,6 +554,7 @@ export function SettingsPage({
 
   const maintenanceContent = (
     <>
+      <PulseInstallationSettings onBindingsChanged={onBindingsChanged} />
       <Card>
         <CardHeader>
           <CardTitle>{t("settings.cache_title")}</CardTitle>

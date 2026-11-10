@@ -165,6 +165,7 @@ export default function App() {
     handleLocalScanComplete,
     handleRefresh,
     handleLimitsRefresh,
+    handleResetHistoryRefresh,
     handleActivateCodexWindow,
     handleReset,
     handleExport,
@@ -174,6 +175,7 @@ export default function App() {
     handleOpenUpdateRelease,
     handleOpenResetCredits,
     handleLaunchAtLoginChange,
+    handleLaunchAtLoginRefresh,
     trayTitleShow,
     handleTrayTitleShowChange,
     trayMenuShow,
@@ -601,6 +603,7 @@ export default function App() {
                   limitsError={codexLimitsError}
                   isResetLoading={isResetLoading}
                   resetError={resetError}
+                  onRetryReset={() => void handleResetHistoryRefresh()}
                   latestReset={latestCodexReset}
                   recentResets={recentCodexResets}
                   onOpenResetHistory={() => setIsResetHistoryOpen(true)}
@@ -712,6 +715,7 @@ export default function App() {
               launchAtLoginError={launchAtLoginError}
               isLaunchAtLoginUpdating={isLaunchAtLoginUpdating}
               onLaunchAtLoginChange={(enabled) => void handleLaunchAtLoginChange(enabled)}
+              onBindingsChanged={() => void handleLaunchAtLoginRefresh()}
               showSessionCredits={showSessionCredits}
               onShowSessionCreditsChange={setShowSessionCredits}
               showLogsTab={showLogsTab}

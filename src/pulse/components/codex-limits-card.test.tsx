@@ -4,6 +4,27 @@ import { formatResetTime, CodexLimitsCard, CodexSidebarLimits, formatSidebarCoun
 import dayjs from "dayjs";
 import { act, fireEvent, render, screen } from "@testing-library/react";
 import i18n from "../i18n";
+import { resetRecoveryCopy } from "@/lib/reset-recovery-copy";
+
+describe("targeted reset-service recovery", () => {
+  it.each(["en", "zh", "zh-Hant", "ja", "ko", "de"])("offers a separate localized retry in %s without invoking another action", async language => {
+    await i18n.changeLanguage(language);
+    const retry = vi.fn(), credits = vi.fn(), history = vi.fn();
+    const props = { limits: null, isResetLoading: false, resetError: "offline", onRetryReset: retry, onOpenResetCredits: credits, onOpenResetHistory: history };
+    const { rerender } = render(<CodexLimitsCard {...props} />);
+    const button = screen.getByRole("button", { name: resetRecoveryCopy(language, "retry") });
+    expect(screen.getByTestId("reset-service-recovery")).toHaveTextContent(resetRecoveryCopy(language, "scope"));
+    expect(screen.getByTestId("reset-service-recovery")).toHaveTextContent(resetRecoveryCopy(language, "cooldown"));
+    fireEvent.click(button); expect(retry).toHaveBeenCalledTimes(1); expect(credits).not.toHaveBeenCalled(); expect(history).not.toHaveBeenCalled();
+    rerender(<CodexLimitsCard {...props} isResetLoading />);
+    const pending = screen.getByRole("button", { name: resetRecoveryCopy(language, "retrying") });
+    expect(pending).toBeDisabled(); expect(pending).toHaveAttribute("aria-busy", "true");
+    fireEvent.click(pending); expect(retry).toHaveBeenCalledTimes(1);
+    rerender(<CodexLimitsCard {...props} resetError={null} />);
+    expect(screen.queryByTestId("reset-service-recovery")).not.toBeInTheDocument();
+    await i18n.changeLanguage("en");
+  });
+});
 
 describe("formatResetTime", () => {
   beforeEach(() => {

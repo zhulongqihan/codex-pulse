@@ -1,6 +1,6 @@
 [package]
 name = "codex-pulse"
-version = "0.7.4"
+version = "0.8.0"
 description = "Local-first desktop dashboard for Codex CLI token usage and cost estimates."
 authors = ["zhulongqihan", "vincent (upstream)"]
 license = "MIT"
@@ -38,6 +38,7 @@ tauri-plugin-dialog = "2.8.4"
 tauri-plugin-log = "2.10.1"
 tauri-plugin-wdio = { version = "1.5.1", optional = true }
 tauri-plugin-wdio-webdriver = { version = "1.5.1", optional = true }
+toml = "1.1.8"
 walkdir = "2"
 uuid = { version = "1.29.0", features = ["v4"] }
 zstd = { version = "0.14.3", default-features = false }

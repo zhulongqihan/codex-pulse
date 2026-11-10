@@ -5,6 +5,7 @@ import dayjs from "dayjs";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { buildResetHistorySummary, CodexResetHistoryModal } from "./codex-reset-history";
 import { fetchCodexResetHistory, openUrl } from "@/lib/api";
+import i18n from "@/i18n";
 
 vi.mock("@/lib/api", () => ({
   fetchCodexResetHistory: vi.fn(),
@@ -70,6 +71,34 @@ describe("CodexResetHistoryModal", () => {
 
   afterEach(() => {
     vi.useRealTimers();
+  });
+
+  it("retries a failed initial request without reopening the modal or duplicating in-flight work", async () => {
+    await i18n.changeLanguage("en");
+    vi.mocked(fetchCodexResetHistory).mockRejectedValueOnce(new Error("offline"));
+    render(<StrictMode><CodexResetHistoryModal onClose={() => {}} /></StrictMode>);
+    const retry = await screen.findByRole("button", { name: "Retry reset history" });
+    expect(fetchCodexResetHistory).toHaveBeenCalledTimes(1);
+    expect(screen.getByRole("alert")).toHaveTextContent("local logs are not rescanned");
+    fireEvent.click(retry); fireEvent.click(retry);
+    expect(await screen.findByText("Reset has been propagated.")).toBeInTheDocument();
+    expect(fetchCodexResetHistory).toHaveBeenCalledTimes(2);
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+  });
+
+  it("keeps successful records after a refresh failure and can recover to a confirmed empty history", async () => {
+    await i18n.changeLanguage("en");
+    render(<CodexResetHistoryModal onClose={() => {}} />);
+    expect(await screen.findByText("Reset has been propagated.")).toBeInTheDocument();
+    vi.mocked(fetchCodexResetHistory).mockRejectedValueOnce(new Error("rate limited"));
+    fireEvent.click(screen.getByRole("button", { name: "Refresh reset history" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent("Showing the last successfully loaded reset history");
+    expect(screen.getByText("Reset has been propagated.")).toBeInTheDocument();
+    vi.mocked(fetchCodexResetHistory).mockResolvedValueOnce([]);
+    fireEvent.click(screen.getByRole("button", { name: "Retry reset history" }));
+    expect(await screen.findByText(i18n.t("limits.reset_history_empty"))).toBeInTheDocument();
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+    expect(screen.queryByText("Reset has been propagated.")).not.toBeInTheDocument();
   });
 
   it("loads and summarizes the last 30 days", async () => {

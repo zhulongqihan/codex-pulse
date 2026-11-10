@@ -1,9 +1,11 @@
 import dayjs, { type Dayjs } from "dayjs";
 import { ChevronDown, ChevronUp, ExternalLink, RotateCcw, X } from "lucide-react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { fetchCodexResetHistory, openUrl, type CodexResetAnnouncement } from "@/lib/api";
 import { localTimeZone } from "@/lib/time-context";
+import { resetRecoveryCopy } from "@/lib/reset-recovery-copy";
+import { Button } from "@/components/ui/button";
 
 const HISTORY_DAYS = 30;
 const DEFAULT_VISIBLE_RESETS = 5;
@@ -368,11 +370,30 @@ function ResetHistoryContent({ resets }: { resets: CodexResetAnnouncement[] }) {
 }
 
 export function CodexResetHistoryModal({ onClose, isActive = true }: { onClose: () => void; isActive?: boolean }) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const [resets, setResets] = useState<CodexResetAnnouncement[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(false);
-  const requestRef = useRef<Promise<CodexResetAnnouncement[]> | null>(null);
+  const requestRef = useRef<Promise<void> | null>(null);
+  const mounted = useRef(false);
+  const recovery = (key: Parameters<typeof resetRecoveryCopy>[1]) => resetRecoveryCopy(i18n.resolvedLanguage ?? i18n.language, key);
+
+  const refresh = useCallback((): Promise<void> => {
+    if (requestRef.current) return requestRef.current;
+    setIsLoading(true);
+    const request = fetchCodexResetHistory(HISTORY_DAYS).then(data => {
+      if (mounted.current) { setResets(data); setError(false); }
+    }).catch(() => {
+      if (mounted.current) setError(true);
+    }).finally(() => {
+      if (requestRef.current === request) {
+        requestRef.current = null;
+        if (mounted.current) setIsLoading(false);
+      }
+    });
+    requestRef.current = request;
+    return request;
+  }, []);
 
   useEffect(() => {
     if (!isActive) return;
@@ -384,25 +405,10 @@ export function CodexResetHistoryModal({ onClose, isActive = true }: { onClose: 
   }, [onClose, isActive]);
 
   useEffect(() => {
-    let active = true;
-    const request = requestRef.current ?? fetchCodexResetHistory(HISTORY_DAYS);
-    requestRef.current = request;
-
-    void request
-      .then((data) => {
-        if (active) setResets(data);
-      })
-      .catch(() => {
-        if (active) setError(true);
-      })
-      .finally(() => {
-        if (active) setIsLoading(false);
-      });
-
-    return () => {
-      active = false;
-    };
-  }, []);
+    mounted.current = true;
+    void refresh();
+    return () => { mounted.current = false; };
+  }, [refresh]);
 
   return (
     <div
@@ -413,32 +419,31 @@ export function CodexResetHistoryModal({ onClose, isActive = true }: { onClose: 
         if (event.target === event.currentTarget) onClose();
       }}
     >
-      <div className="flex max-h-[88vh] w-full max-w-3xl flex-col overflow-hidden rounded-2xl border border-border/80 bg-surface/95 shadow-2xl">
-        <div className="flex items-start justify-between gap-4 border-b border-border/60 bg-muted/20 px-5 py-4">
-          <div>
-            <h3 id="codex-reset-history-title" className="text-lg font-bold text-foreground">{t("limits.reset_history_title")}</h3>
+      <div className="flex max-h-[min(88vh,100%)] w-full max-w-3xl flex-col overflow-hidden rounded-2xl border border-border/80 bg-surface/95 shadow-2xl">
+        <div className="flex flex-wrap items-start justify-between gap-3 border-b border-border/60 bg-muted/20 px-5 py-4">
+          <div className="min-w-0 flex-1 basis-48">
+            <h3 id="codex-reset-history-title" className="break-words text-lg font-bold text-foreground">{t("limits.reset_history_title")}</h3>
             <p className="mt-1 text-xs text-muted-foreground">{t("limits.reset_history_description")}</p>
           </div>
-          <button
+          <div data-testid="reset-history-actions" className="flex max-w-full flex-wrap items-start justify-end gap-2"><Button type="button" variant="secondary" size="sm" className="h-auto min-h-8 max-w-full whitespace-normal" onClick={() => { void refresh(); }} disabled={isLoading} aria-busy={isLoading}>{recovery(isLoading ? "loading" : error ? "retryHistory" : "refreshHistory")}</Button><button
             type="button"
             onClick={onClose}
             className="rounded-lg p-2 text-muted-foreground hover:bg-muted hover:text-foreground focus:outline-none focus:ring-2 focus:ring-primary/40"
             aria-label={t("common.close")}
           >
             <X className="h-5 w-5" />
-          </button>
+          </button></div>
         </div>
 
         <div className="flex-1 overflow-y-auto p-5">
-          {isLoading ? (
+          {error ? <div role="alert" className="mb-3 space-y-2 rounded-xl border border-error/20 bg-error/5 p-4 text-sm text-error"><p>{resets.length ? recovery("staleHistory") : t("limits.reset_history_error")}</p><p className="text-[12px] leading-normal text-muted-foreground">{recovery("scope")}</p><p className="text-[12px] leading-normal text-muted-foreground">{recovery("cooldown")}</p></div> : null}
+          {isLoading && resets.length === 0 ? (
             <p className="py-12 text-center text-sm text-muted-foreground">{t("limits.reset_history_loading")}</p>
-          ) : error ? (
-            <p className="rounded-xl border border-error/20 bg-error/5 p-4 text-sm text-error">{t("limits.reset_history_error")}</p>
-          ) : resets.length === 0 ? (
+          ) : resets.length === 0 && !error ? (
             <p className="rounded-xl border border-dashed border-border p-8 text-center text-sm text-muted-foreground">{t("limits.reset_history_empty")}</p>
-          ) : (
+          ) : resets.length > 0 ? (
             <ResetHistoryContent resets={resets} />
-          )}
+          ) : null}
         </div>
       </div>
     </div>

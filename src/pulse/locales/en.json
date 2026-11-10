@@ -963,7 +963,7 @@
     "copied": "Diagnostics copied",
     "copy_failed": "Copy failed. You can select and copy the technical details above.",
     "local_only": "Local usage is read from session logs. Online quota errors do not prevent local usage statistics. Diagnostics contain paths and error details, without credentials or conversation content.",
-    "reset_failed": "Reset history could not be loaded. Retry with Rescan local logs.",
+    "reset_failed": "The reset service is unavailable. Please try again.",
     "reset_empty": "No reset announcements are available.",
     "credits_failed": "Reset credits are unavailable. Retry using Check quota in the sidebar.",
     "credits_empty": "This account did not return reset credit information.",

@@ -1,8 +1,13 @@
 .pulse-widget-coach{display:flex;flex-direction:column;padding:8px 10px;overflow:hidden}
 .pulse-widget-coach .pulse-widget-header{flex-shrink:0;padding-bottom:7px;border-bottom:1px solid rgb(var(--border));gap:6px}
 .pulse-widget-coach .pulse-widget-header>strong{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:12px}
-.pulse-widget-coach .pulse-widget-header>button{display:grid;place-items:center;min-height:26px;min-width:22px;border-radius:4px}
+.pulse-widget-coach .pulse-widget-header>button{display:grid;place-items:center;min-height:32px;min-width:32px;border-radius:4px}
+.pulse-widget-coach .pulse-widget-header>button:not(.pulse-widget-notice){width:32px;height:32px;flex:0 0 32px}
 .pulse-widget-coach .pulse-widget-header>button:hover{background:rgb(var(--muted))}
+.pulse-widget-coach .pulse-widget-header>button:focus-visible{outline:2px solid rgb(var(--primary));outline-offset:1px}
+.pulse-widget-coach .pulse-widget-header>.pulse-widget-pin[aria-pressed=true]{color:rgb(var(--primary));background:rgb(var(--primary)/.1)}
+.pulse-widget-coach .pulse-widget-header>button:disabled{cursor:wait;opacity:.65}
+.pulse-widget-close-hint{flex-shrink:0;font-size:12px;line-height:1.5;color:rgb(var(--muted-foreground));margin:6px 0;overflow-wrap:anywhere}
 .pulse-widget-coach .pulse-widget-grip{flex:0 0 15px}
 .pulse-widget-coach-content{display:flex;flex:1;min-height:0;overflow:hidden;overscroll-behavior:contain}
 .pulse-widget-coach-content>.quota-coach-card{height:100%;min-height:0}

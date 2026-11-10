@@ -8,8 +8,8 @@ import { cn } from "@/lib/utils";
 import dayjs from "dayjs";
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { usePulseCopy } from "@/lib/pulse-copy";
 import { localTimeZone } from "@/lib/time-context";
+import { resetRecoveryCopy } from "@/lib/reset-recovery-copy";
 
 type CodexLimitsCardProps = {
   limits: CodexLimitsResponse | null;
@@ -20,6 +20,7 @@ type CodexLimitsCardProps = {
   latestReset?: CodexResetAnnouncement | null;
   recentResets?: CodexResetAnnouncement[] | null;
   onOpenResetHistory?: () => void;
+  onRetryReset?: () => void | Promise<void>;
   onOpenResetCredits: () => void;
 };
 
@@ -73,7 +74,7 @@ export function hasSubscription(limits: CodexLimitsResponse | null | undefined):
   return ["plus", "pro", "prolite", "team", "business", "enterprise"].includes(level);
 }
 
-export function CodexLimitsCard({ limits, isLimitsLoading = false, limitsError = null, isResetLoading = false, resetError = null, latestReset, recentResets, onOpenResetHistory, onOpenResetCredits }: CodexLimitsCardProps) {
+export function CodexLimitsCard({ limits, isLimitsLoading = false, limitsError = null, isResetLoading = false, resetError = null, latestReset, recentResets, onOpenResetHistory, onRetryReset, onOpenResetCredits }: CodexLimitsCardProps) {
   return (
     <Card className="h-full flex flex-col rounded-lg">
       <CardContent className="p-3 sm:p-4">
@@ -87,6 +88,7 @@ export function CodexLimitsCard({ limits, isLimitsLoading = false, limitsError =
           resetCreditsAvailableCount={limits?.resetCreditsAvailableCount}
           resetCredits={limits?.resetCredits}
           onOpenResetHistory={onOpenResetHistory}
+          onRetryReset={onRetryReset}
           onOpenResetCredits={onOpenResetCredits}
         />
       </CardContent>
@@ -223,6 +225,7 @@ function ResetArea({
   resetCreditsAvailableCount,
   resetCredits,
   onOpenResetHistory,
+  onRetryReset,
   onOpenResetCredits,
 }: {
   isLimitsLoading: boolean;
@@ -234,10 +237,11 @@ function ResetArea({
   resetCreditsAvailableCount?: number | null;
   resetCredits?: CodexResetCredit[] | null;
   onOpenResetHistory?: () => void;
+  onRetryReset?: () => void | Promise<void>;
   onOpenResetCredits: () => void;
 }) {
-  const { t } = useTranslation();
-  const copy = usePulseCopy();
+  const { t, i18n } = useTranslation();
+  const recovery = (key: Parameters<typeof resetRecoveryCopy>[1]) => resetRecoveryCopy(i18n.resolvedLanguage ?? i18n.language, key);
   const showResetCredits = resetCreditsAvailableCount !== null && resetCreditsAvailableCount !== undefined;
 
   return (
@@ -246,7 +250,7 @@ function ResetArea({
       className="grid grid-cols-1 gap-3 rounded-xl border border-border bg-surface p-2.5 sm:p-3 content-md:grid-cols-2"
     >
       <div className="grid grid-cols-1 gap-2">
-        {resetError && latestReset ? <p role="status" className="text-[12px] text-warning">{copy("stale")}</p> : null}
+        {resetError && latestReset ? <p role="status" className="text-[12px] text-warning">{recovery("partialFailure")}</p> : null}
         {latestReset ? (
           <LatestResetButton
             reset={latestReset}
@@ -257,7 +261,7 @@ function ResetArea({
         ) : !isResetLoading ? (
           <div data-testid="latest-reset-empty" className="space-y-2 rounded-lg border border-border px-2.5 py-3 text-[12px]">
             <p className="font-semibold text-muted-foreground">{t("limits.latest_reset")}</p>
-            <p className="leading-5 text-muted-foreground">{t(resetError ? "recovery.reset_failed" : "recovery.reset_empty")}</p>
+            <p className="leading-5 text-muted-foreground">{resetError ? recovery("unavailable") : t("recovery.reset_empty")}</p>
           </div>
         ) : (
           <div data-testid="latest-reset-skeleton" role="status" aria-label={t("limits.latest_reset")} className="space-y-3 rounded-lg border border-border px-2.5 py-3">
@@ -272,6 +276,7 @@ function ResetArea({
           </div>
         )}
         {!latestReset && onOpenResetHistory ? <Button type="button" variant="secondary" size="sm" onClick={onOpenResetHistory}>{t("limits.reset_calendar_title")}</Button> : null}
+        {resetError && onRetryReset ? <div className="space-y-2" data-testid="reset-service-recovery"><Button type="button" variant="secondary" size="sm" className="h-auto min-h-8 max-w-full whitespace-normal" disabled={isResetLoading} aria-busy={isResetLoading} onClick={() => { void onRetryReset(); }}>{recovery(isResetLoading ? "retrying" : "retry")}</Button><p className="text-[12px] leading-normal text-muted-foreground">{recovery("scope")}</p><p className="text-[12px] leading-normal text-muted-foreground">{recovery("cooldown")}</p></div> : null}
       </div>
       {showResetCredits ? (
         <ResetCreditsPanel

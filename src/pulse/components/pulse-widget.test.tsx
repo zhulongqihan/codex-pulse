@@ -1,17 +1,20 @@
 // @vitest-environment jsdom
-import { fireEvent, render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import i18n from "@/i18n";
 import type { PaceSnapshot } from "@/lib/pulse-pace";
 import { syntheticPaceSnapshot } from "@/lib/pulse-pace";
+import { pulseCopy } from "@/lib/pulse-copy";
+import { paceCopy } from "@/lib/pulse-pace-copy";
+import { closeBehaviorCopy } from "@/lib/close-behavior-copy";
 import { PulseWidget } from "./pulse-widget";
 
 const state = vi.hoisted(() => ({
-  data: null as PaceSnapshot | null, expanded: false,
+  data: null as PaceSnapshot | null, expanded: false, pinned: false,
   action: vi.fn().mockResolvedValue(undefined), details: vi.fn().mockResolvedValue(undefined),
 }));
 vi.mock("@/lib/pulse-appearance", () => ({
-  usePulsePreferences: () => ({ widgetExpanded: state.expanded, widgetAlwaysOnTop: false }),
+  usePulsePreferences: () => ({ widgetExpanded: state.expanded, widgetAlwaysOnTop: state.pinned }),
   pulseWidgetAction: state.action,
 }));
 vi.mock("@/lib/pulse-pace", async importOriginal => ({
@@ -24,7 +27,8 @@ describe("desktop widget quota pacing", () => {
   beforeEach(async () => {
     await i18n.changeLanguage("en");
     state.expanded = false;
-    state.action.mockClear();
+    state.pinned = false;
+    state.action.mockReset().mockResolvedValue(undefined);
     state.details.mockClear();
     const now = new Date();
     const data = syntheticPaceSnapshot("idle", now);
@@ -42,17 +46,61 @@ describe("desktop widget quota pacing", () => {
     expect(document.querySelector("[data-tauri-drag-region]")).toBeInTheDocument();
   });
 
-  it("shares the expanded allocation and preserves explicit native widget controls", () => {
+  it("shares the expanded allocation and preserves explicit native widget controls", async () => {
     state.expanded = true;
     render(<PulseWidget/>);
     expect(screen.getByText(/16 percentage points/)).toBeVisible();
     fireEvent.click(screen.getByRole("button", { name: "Open workspace" }));
-    fireEvent.click(screen.getByRole("button", { name: "Always on top" }));
+    await act(async () => { fireEvent.click(screen.getByRole("button", { name: "Pin on top" })); });
     fireEvent.click(screen.getByRole("button", { name: "Collapse" }));
     fireEvent.click(screen.getByRole("button", { name: "Hide widget" }));
     expect(state.action.mock.calls.map(call => call[0])).toEqual(["showMain", "pin", "collapse", "hide"]);
     fireEvent.click(screen.getByRole("button", { name: "View usage details" }));
     expect(state.details).toHaveBeenCalledWith("details");
+  });
+
+  it.each(["zh", "zh-Hant", "en", "ja", "ko", "de"])("names the next pin action while retaining the actual state and close consequence in %s", async language => {
+    await i18n.changeLanguage(language);
+    const { rerender } = render(<PulseWidget/>);
+    const pin = screen.getByTestId("widget-pin");
+    expect(pin).toHaveAccessibleName(pulseCopy(language, "pinAction"));
+    expect(pin).toHaveAttribute("title", pulseCopy(language, "pinAction"));
+    expect(pin).toHaveAttribute("aria-pressed", "false");
+    await act(async () => { fireEvent.click(pin); });
+    expect(state.action).toHaveBeenLastCalledWith("pin");
+    state.pinned = true; rerender(<PulseWidget/>);
+    expect(pin).toHaveAccessibleName(pulseCopy(language, "unpinAction"));
+    expect(pin).toHaveAttribute("title", pulseCopy(language, "unpinAction"));
+    expect(pin).toHaveAttribute("aria-pressed", "true");
+    await act(async () => { fireEvent.click(pin); });
+    expect(state.action).toHaveBeenLastCalledWith("unpin");
+    const hide = screen.getByTestId("widget-hide");
+    expect(hide).toHaveAccessibleDescription(closeBehaviorCopy(language, "hideOnly"));
+    expect(hide).toHaveAttribute("title", closeBehaviorCopy(language, "hideOnly"));
+    await act(async () => { fireEvent.click(hide); });
+    expect(state.action).toHaveBeenLastCalledWith("hide");
+    expect(state.action).not.toHaveBeenCalledWith("quit");
+    expect(screen.queryByTestId("widget-close-hint")).not.toBeInTheDocument();
+    state.expanded = true; rerender(<PulseWidget/>);
+    expect(screen.getByTestId("widget-close-hint")).toHaveTextContent(closeBehaviorCopy(language, "widgetHint", { quit: i18n.t("settings.menu_bar_quit") }));
+  });
+
+  it("prevents duplicate pin actions while pending and preserves the real state on failure before retry", async () => {
+    let reject: (error: Error) => void = () => {};
+    state.action.mockImplementationOnce(() => new Promise((_resolve, fail) => { reject = fail; }));
+    render(<PulseWidget/>);
+    const pin = screen.getByTestId("widget-pin");
+    fireEvent.click(pin); fireEvent.click(pin);
+    expect(state.action).toHaveBeenCalledExactlyOnceWith("pin");
+    expect(pin).toBeDisabled(); expect(pin).toHaveAttribute("aria-busy", "true");
+    expect(pin).toHaveAttribute("aria-pressed", "false");
+    await act(async () => { reject(new Error("Synthetic native window failure")); });
+    await waitFor(() => expect(pin).toBeEnabled());
+    expect(pin).toHaveAttribute("aria-busy", "false"); expect(pin).toHaveAttribute("aria-pressed", "false");
+    expect(screen.getByRole("alert")).toHaveTextContent(paceCopy("en", "actionFailed"));
+    await act(async () => { fireEvent.click(pin); });
+    expect(state.action).toHaveBeenCalledTimes(2);
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
   });
 
   it("makes a new reset notice discoverable while collapsed and removes expired attention", () => {

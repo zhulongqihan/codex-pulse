@@ -145,6 +145,13 @@ async function verifyTodayAndRange(skin: string) {
 describe('Pulse native parity', () => {
   it('runs the real Rust scanner with full project identities and cross-day threads', async () => {
     expect(await browser.execute(() => '__TAURI_INTERNALS__' in window)).toBe(true);
+    const installation = await invoke<any>('inspect_pulse_installation');
+    expect(installation.supported).toBe(true);
+    expect(installation.entries.map((entry: any) => entry.id).sort()).toEqual(['codexPlugin', 'desktop', 'startMenu', 'startup']);
+    expect(typeof installation.snapshotId).toBe('string');
+    expect(installation.snapshotId.length).toBeGreaterThan(0);
+    expect(installation.entries.every((entry: any) => ['current', 'notConfigured', 'stale', 'otherInstallation', 'unavailable'].includes(entry.status))).toBe(true);
+    evidence('installation-read-only-inspection', { ...installation, repairsRequested: false });
     await invoke('scan_usage');
     const overview = await invoke<any>('fetch_overview', { range: '30d' });
     const sessions = await invoke<any[]>('fetch_session_details');
@@ -461,6 +468,7 @@ describe('Pulse native parity', () => {
           readings: readings.length, readingsHit: readings.length === 2 && readings.every(hit),
           recoveryHit: state !== null && recover !== null && hit(state) && hit(recover),
           headerActions: actions.length, headerActionsHit: actions.length >= 4 && actions.every(hit),
+          pinTarget: (() => { const button = document.querySelector('[data-testid="widget-pin"]')!; const rect = button.getBoundingClientRect(); return { width: rect.width, height: rect.height, label: button.getAttribute('aria-label'), pressed: button.getAttribute('aria-pressed') }; })(),
           footerExists: footer !== null, footerHit: footer !== null && hit(footer),
           footerActionsHit: footer !== null && [...footer.querySelectorAll('button')].every(hit) };
       });
@@ -476,6 +484,8 @@ describe('Pulse native parity', () => {
       if (content.readings === 2) expect(content.readingsHit).toBe(true);
       else expect(content.recoveryHit).toBe(true);
       expect(content.headerActionsHit).toBe(true);
+      expect(content.pinTarget.width).toBeGreaterThanOrEqual(32);
+      expect(content.pinTarget.height).toBeGreaterThanOrEqual(32);
       expect(content.footerExists).toBe(true);
       expect(content.footerHit).toBe(true); expect(content.footerActionsHit).toBe(true);
     }
@@ -501,6 +511,15 @@ describe('Pulse native parity', () => {
       await invoke('widget_action', { action: 'expand' });
       await $('.pulse-widget.is-expanded').waitForDisplayed();
       await verifyWidgetClient(`${skin}-expanded`, 480);
+      const pin = $('[data-testid="widget-pin"]');
+      expect(await pin.getAttribute('aria-label')).toBe('取消置顶');
+      await pin.click();
+      await browser.waitUntil(async () => (await invoke<any>('get_pulse_preferences')).widgetAlwaysOnTop === false);
+      await browser.waitUntil(async () => await pin.getAttribute('aria-label') === '置顶');
+      expect(await pin.getAttribute('aria-pressed')).toBe('false');
+      await pin.click();
+      await browser.waitUntil(async () => (await invoke<any>('get_pulse_preferences')).widgetAlwaysOnTop === true);
+      await browser.waitUntil(async () => await pin.getAttribute('aria-label') === '取消置顶');
       await shot(`${skin}-widget-expanded`);
       await invoke('widget_action', { action: 'collapse' });
       await browser.switchToWindow('main');

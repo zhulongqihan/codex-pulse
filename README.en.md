@@ -58,9 +58,11 @@ For automatic following after a restart, enable **Settings → General → Start
 
 The existing sidebar entry remains available: choose **Settings → General → Codex desktop shortcut → Add to Codex**, then install and pin it. The MCP panel only reads local snapshots, with no independent sign-in or quota request. Its bottom composer belongs to the Codex host and cannot be reliably hidden by Pulse. The new corner card has no input box.
 
-Starting with 0.7.1, normal startup prepares or repairs local plugin files from embedded templates, and portable upgrades no longer overwrite the prepared plugin directory. An existing Codex window retaining a failed old plugin cache may need the plugin added again before retrying. Add it again after moving the application directory as well.
+Starting with 0.7.1, normal startup prepares or repairs local plugin files from embedded templates, and portable upgrades no longer overwrite the prepared plugin directory. An existing Codex window retaining a failed old plugin cache may need the plugin added again before retrying. After moving the application directory, check entry bindings in **Settings → Maintenance** and repair them as needed. A cached plugin in the Codex host may still require reinstallation on its plugin page.
 
-Opening the app again restores the window for the same data folder. Closing the main window hides it to the tray. Choose **Quit** in the tray menu to exit completely. Check for updates in settings, or exit the app and replace program files with a newer release while keeping `data`.
+Opening the app again restores the window for the same data folder. Closing the main window hides it to the tray. Closing the desktop widget only hides that widget; show it again in settings. Closing the expanded corner card only collapses that card. Choose **Quit** in the tray menu to exit completely. The widget pin names the current action: **Pin on top** or **Unpin from top**. Check for updates in settings, or exit the app and replace program files with a newer release while keeping `data`.
+
+Retry a failed reset service directly from its error message without rescanning local logs. After relocating the complete portable folder, use **Settings → Maintenance** to check desktop, Start menu, sign-in startup and local plugin bindings, inspect the previous target and its impact, then choose repairs individually. Unconfigured entries stay unconfigured; checks do not change system settings.
 
 ## Understanding the data
 

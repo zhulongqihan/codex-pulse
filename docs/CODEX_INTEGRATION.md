@@ -90,7 +90,7 @@ Codex Pulse 提供两种入口：Windows 右上角伴随提示，以及本地 MC
 - 这是桌面本地 stdio 插件。Codex Web、手机端和普通 CLI 不能提供相同的客户端侧栏界面。
 - 客户端需要支持 MCP Apps 和 global/thread 入口；组织策略可能限制本地插件安装。缺少相应入口时，应先检查客户端版本与插件权限。
 - 通过客户端插件页安装后，支持热加载的客户端可直接发现工具。若仍未显示，先检查插件是否已启用，再尝试新会话；需要时正常退出并重新打开客户端。
-- 插件通过可执行文件名及绑定安装目录的 PATH 启动 Pulse。安装目录不能包含分号。移动便携目录后，请移除 Codex 中旧的 Pulse 插件，再从新位置重新添加。升级后若客户端仍使用旧插件缓存，也应在插件页重新安装。
+- 插件通过可执行文件名及绑定安装目录的 PATH 启动 Pulse。安装目录不能包含分号。移动便携目录后，先在 Pulse 设置→维护检查并按需修复本地入口绑定；Codex 若仍保留旧插件缓存，请移除旧的 Pulse 插件，再从新位置重新添加。升级后若客户端仍使用旧插件缓存，也应在插件页重新安装。
 - 在 Codex 插件页卸载 **Codex Pulse** 即可停用客户端入口，Pulse 本身和已有用量数据继续保留。
 
 插件的 stdio 配置、`${PLUGIN_ROOT}` 路径与本地安装方式见 [OpenAI 插件打包说明](https://developers.openai.com/plugins/build/plugins)和[桌面本地 MCP 说明](https://developers.openai.com/plugins/deploy/desktop-only)。
