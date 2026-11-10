@@ -7,6 +7,30 @@ async function invoke<T>(command: string, args: Record<string, unknown> = {}): P
   return browser.tauri.execute(({ core }, cmd, payload) => core.invoke(cmd, payload), command, args) as Promise<T>;
 }
 async function shot(name: string) { mkdirSync(output, { recursive: true }); await browser.saveScreenshot(join(output, `${name}.png`)); }
+async function narrowTodayGeometry() {
+  return browser.execute(() => {
+    const target = document.querySelector<HTMLElement>('[data-testid="today-tokens"]')!;
+    const main = document.querySelector<HTMLElement>('.pulse-main-scroll')!;
+    const box = target.getBoundingClientRect();
+    const mainBox = main.getBoundingClientRect();
+    const center = { x: box.x + box.width / 2, y: box.y + box.height / 2 };
+    const hit = document.elementFromPoint(center.x, center.y);
+    const brand = document.querySelector('.pulse-brand')!.getBoundingClientRect();
+    const actions = document.querySelector('.pulse-global-actions')!.getBoundingClientRect();
+    return {
+      width: innerWidth, height: innerHeight, outerWidth, outerHeight, dpr: devicePixelRatio,
+      availableScreen: { width: screen.availWidth, height: screen.availHeight },
+      documentFits: document.documentElement.scrollWidth <= innerWidth,
+      todayBox: box.toJSON(), todayCenter: center,
+      todayCenterInsideViewport: center.x >= 0 && center.x < innerWidth && center.y >= 0 && center.y < innerHeight,
+      todayCenterInsideMain: center.x >= mainBox.left && center.x < mainBox.right && center.y >= mainBox.top && center.y < mainBox.bottom,
+      todayUnobscured: hit === target || target.contains(hit),
+      hit: hit ? { tag: hit.tagName, id: hit.id, className: hit.getAttribute('class') } : null,
+      main: { box: mainBox.toJSON(), scrollTop: main.scrollTop, clientHeight: main.clientHeight, scrollHeight: main.scrollHeight },
+      headerOverlap: brand.right > actions.left + 1,
+    };
+  });
+}
 const uxEvidence: Record<string, unknown> = {};
 function evidence(name: string, value: unknown) {
   uxEvidence[name] = value;
@@ -318,14 +342,26 @@ describe('Pulse native parity', () => {
         expect(await accountToggle.getText()).toContain('账号额度');
         expect(await $('[data-testid="account-drawer"]').isExisting()).toBe(false);
         expect(await $('.pulse-account-rail').isExisting()).toBe(false);
-        const geometry = await browser.execute(() => {
-          const target = document.querySelector<HTMLElement>('[data-testid="today-tokens"]')!;
-          const box = target.getBoundingClientRect();
-          const hit = document.elementFromPoint(box.x + box.width / 2, box.y + box.height / 2);
-          const brand = document.querySelector('.pulse-brand')!.getBoundingClientRect();
-          const actions = document.querySelector('.pulse-global-actions')!.getBoundingClientRect();
-          return { width: innerWidth, documentFits: document.documentElement.scrollWidth <= innerWidth, todayUnobscured: hit === target || target.contains(hit), headerOverlap: brand.right > actions.left + 1 };
+        const geometryBefore = await narrowTodayGeometry();
+        const geometryKey = `${skinId}-narrow-${width}-geometry`;
+        evidence(geometryKey, { requestedWidth: width, requestedHeight: 780, beforeScroll: geometryBefore });
+        // Narrow windows prioritize pace. Bring today's reading into its real
+        // scroll viewport before testing occlusion, rather than requiring it above the fold.
+        await browser.execute(() => {
+          document.querySelector<HTMLElement>('[data-testid="today-tokens"]')!
+            .scrollIntoView({ block: 'center', inline: 'nearest', behavior: 'instant' });
         });
+        let geometry = await narrowTodayGeometry();
+        await browser.waitUntil(async () => {
+          const next = await narrowTodayGeometry();
+          const stable = Math.abs(next.todayCenter.x - geometry.todayCenter.x) < 0.5
+            && Math.abs(next.todayCenter.y - geometry.todayCenter.y) < 0.5
+            && Math.abs(next.main.scrollTop - geometry.main.scrollTop) < 0.5;
+          geometry = next;
+          evidence(geometryKey, { requestedWidth: width, requestedHeight: 780, beforeScroll: geometryBefore, afterScroll: geometry });
+          return stable;
+        }, { timeout: 5000, interval: 100, timeoutMsg: 'Today reading geometry did not settle after scrolling' });
+        expect(geometry.todayCenterInsideViewport).toBe(true); expect(geometry.todayCenterInsideMain).toBe(true);
         expect(geometry.documentFits).toBe(true); expect(geometry.todayUnobscured).toBe(true); expect(geometry.headerOverlap).toBe(false);
         await overviewFits();
         await shot(`${skinId}-narrow-${width}-overview`);
@@ -340,7 +376,7 @@ describe('Pulse native parity', () => {
         await $('[data-testid="account-drawer"]').waitForDisplayed();
         await $('[data-testid="account-backdrop"]').click();
         await $('[data-testid="account-drawer"]').waitForExist({ reverse: true });
-        narrowEvidence.push({ skinId, requestedWidth: width, ...geometry, initiallyClosed: true, escapeClosed: true, focusRestored: true, backdropClosed: true });
+        narrowEvidence.push({ skinId, requestedWidth: width, requestedHeight: 780, beforeScroll: geometryBefore, ...geometry, initiallyClosed: true, escapeClosed: true, focusRestored: true, backdropClosed: true });
       }
       await $('[data-testid="daily-nav-tab"]').click();
       expect(await browser.execute(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
