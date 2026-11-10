@@ -26,10 +26,15 @@ static SCOPE: Mutex<Scope> = Mutex::new(Scope {
 
 pub(crate) fn reconcile_with<T>(identity: Option<String>, apply: impl FnOnce(u64) -> T) -> T {
     let mut scope = SCOPE.lock().unwrap_or_else(|error| error.into_inner());
-    if scope.reconcile(identity) {
+    let changed = scope.reconcile(identity);
+    // Process-local initialization is not proof of a persisted account change.
+    // Let the stable identity reconcile its store first; only then invalidate
+    // transient presentation state and publish the new epoch under this lock.
+    let result = apply(scope.revision);
+    if changed {
         crate::codex_limits::invalidate_scope(scope.revision);
     }
-    apply(scope.revision)
+    result
 }
 
 pub(crate) fn with_current<T>(revision: u64, apply: impl FnOnce() -> T) -> Option<T> {

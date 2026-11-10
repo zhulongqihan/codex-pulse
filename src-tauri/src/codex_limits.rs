@@ -165,7 +165,6 @@ pub(crate) fn invalidate_scope(revision: u64) {
         *cached = None;
     }
     crate::pulse_pace_view::invalidate_scope();
-    crate::pulse_pace::invalidate_observations();
     if let Some(app) = LIMITS_PUBLISHER.get() {
         use tauri::Emitter;
         crate::pulse_desktop::invalidate_account_snapshot(app, revision);

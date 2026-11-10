@@ -4,6 +4,15 @@ User-facing changes are grouped by release, following [Keep a Changelog](https:/
 
 ## [Unreleased]
 
+## [0.7.3] - 2026-11-10
+
+### Fixed / 修复
+
+- Preserve existing quota observations when initializing the same account after a restart. Changing accounts still clears old account projections and rejects late responses.
+- 修复重启时首次初始化账号范围意外清空同账号配速样本的问题；真实切换账号仍会清除旧账号投影并拒绝迟到结果。
+
+[完整中英说明 / Full release notes](docs/releases/v0.7.3.md)
+
 ## [0.7.2] - 2026-11-10
 
 ### Fixed / 修复

@@ -25,7 +25,7 @@ A quiet quota-pacing companion for Codex on Windows: view remaining quota and re
 - **Two styles and six languages:** Clear/Meter, light/dark/system, density and motion are independent preferences that preserve your working state. Supports Simplified Chinese, Traditional Chinese, English, Japanese, Korean and German.
 - **Exports and updates:** XLSX/Markdown contain range summary, daily, model and project statistics. Pulse updates verify the release signature, product, platform and package digest, preserving data and restoring the previous executable if startup fails.
 
-0.7.2 improves compact-window pacing priority, cycle observations, synchronized readings and stale-data labels. Charts distinguish dates before retained records from zero usage, with fixes for previous-account state and update recovery notices. Read the [release notes](docs/releases/v0.7.2.md#english).
+0.7.3 preserves quota observations for the same account after restart and includes improvements to compact-window pacing priority, cycle observations, synchronized readings and stale-data labels. Charts distinguish dates before retained records from zero usage, with fixes for previous-account state and update recovery notices. Read the [release notes](docs/releases/v0.7.3.md#english).
 
 ## Interactive pace preview
 

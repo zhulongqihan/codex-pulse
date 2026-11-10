@@ -407,12 +407,6 @@ pub(crate) fn unavailable(reason: &str) {
     });
 }
 
-pub(crate) fn invalidate_observations() {
-    with_store(|store| {
-        *store = Store::default();
-    });
-}
-
 pub(crate) fn failed(identity: Option<&str>) {
     with_store(|store| {
         if store.identity_hash.as_deref() == identity && identity.is_some() {
@@ -796,6 +790,165 @@ mod tests {
             sample(&mut data, t + step * 300, 66.0 + step as f64, t + 6 * 3600);
         }
         (data, t + 1800)
+    }
+
+    fn persistence_auth(claims_only: bool, signature: &str) -> CodexAuth {
+        let claims =
+            URL_SAFE_NO_PAD.encode(serde_json::json!({"sub":"synthetic-user-a"}).to_string());
+        CodexAuth {
+            access_token: format!("e30.{claims}.{signature}"),
+            account_id: Some("synthetic-workspace-a".into()),
+            user_id: if claims_only {
+                None
+            } else {
+                Some("synthetic-user-a".into())
+            },
+            is_chatgpt: true,
+        }
+    }
+
+    fn persistence_child(directory: &Path, mode: &str) {
+        let output = std::process::Command::new(std::env::current_exe().unwrap())
+            .args([
+                "--exact",
+                "pulse_pace::tests::persistent_account_process_worker",
+                "--ignored",
+                "--nocapture",
+            ])
+            .env("PULSE_PACE_PERSISTENCE_DIR", directory)
+            .env("PULSE_PACE_PERSISTENCE_MODE", mode)
+            .env("PULSE_CODEX_HOME", directory.join("synthetic-home"))
+            .env("CODEX_HOME", directory.join("synthetic-home"))
+            .env_remove("PULSE_OFFLINE")
+            .output()
+            .unwrap();
+        assert!(
+            output.status.success(),
+            "isolated {mode} worker failed: {} {}",
+            String::from_utf8_lossy(&output.stdout),
+            String::from_utf8_lossy(&output.stderr)
+        );
+    }
+
+    #[test]
+    fn durable_samples_survive_fresh_process_start_and_token_rotation() {
+        for mode in ["begin", "watch", "rotate-direct", "rotate-claims"] {
+            let directory =
+                std::env::temp_dir().join(format!("pulse-persistence-{}", uuid::Uuid::new_v4()));
+            fs::create_dir_all(directory.join("synthetic-home")).unwrap();
+            let environment = CodexEnvironment {
+                home: directory.join("synthetic-home"),
+                runtime: CodexRuntime::Native,
+            };
+            let auth = persistence_auth(mode == "rotate-claims", "synthetic-signature-a");
+            let (mut data, at) = steady();
+            data.identity_hash = stable_identity(&auth, &environment);
+            write_store(&directory, &data).unwrap();
+            let before = fs::read(directory.join(FILE_NAME)).unwrap();
+            for _restart in 0..2 {
+                persistence_child(&directory, mode);
+                let after = read_store(&directory);
+                assert_eq!(after.windows.iter().map(|window| window.points.len()).sum::<usize>(), 7, "{mode}: restarting the same account must retain all seven durable observations");
+                assert_eq!(project(&after, now(at)).status, "forecast", "{mode}");
+                assert_eq!(
+                    fs::read(directory.join(FILE_NAME)).unwrap(),
+                    before,
+                    "{mode}: credentials/epoch initialization must not rewrite observation content"
+                );
+            }
+            fs::remove_dir_all(directory).unwrap();
+        }
+    }
+
+    #[test]
+    fn real_identity_changes_clear_durable_samples_and_reject_the_previous_epoch() {
+        for mode in [
+            "switch-user",
+            "switch-workspace",
+            "switch-source",
+            "cold-user",
+            "cold-workspace",
+            "cold-source",
+        ] {
+            let directory =
+                std::env::temp_dir().join(format!("pulse-persistence-{}", uuid::Uuid::new_v4()));
+            fs::create_dir_all(directory.join("synthetic-home")).unwrap();
+            let environment = CodexEnvironment {
+                home: directory.join("synthetic-home"),
+                runtime: CodexRuntime::Native,
+            };
+            let auth = persistence_auth(false, "synthetic-signature-a");
+            let (mut data, _) = steady();
+            data.identity_hash = stable_identity(&auth, &environment);
+            write_store(&directory, &data).unwrap();
+            persistence_child(&directory, mode);
+            assert!(
+                read_store(&directory).windows.is_empty(),
+                "{mode}: old identity observations must be cleared"
+            );
+            fs::remove_dir_all(directory).unwrap();
+        }
+    }
+
+    #[test]
+    #[ignore = "Subprocess fixture driven by the durable persistence tests; uses synthetic credentials only"]
+    fn persistent_account_process_worker() {
+        let directory = PathBuf::from(std::env::var_os("PULSE_PACE_PERSISTENCE_DIR").unwrap());
+        let mode = std::env::var("PULSE_PACE_PERSISTENCE_MODE").unwrap();
+        let mut environment = CodexEnvironment {
+            home: directory.join("synthetic-home"),
+            runtime: CodexRuntime::Native,
+        };
+        let mut auth = persistence_auth(mode == "rotate-claims", "synthetic-signature-a");
+        configure(&directory);
+        if mode.starts_with("cold-") {
+            match mode.as_str() {
+                "cold-user" => auth.user_id = Some("synthetic-user-b".into()),
+                "cold-workspace" => auth.account_id = Some("synthetic-workspace-b".into()),
+                _ => environment.home = directory.join("synthetic-source-b"),
+            }
+            let (identity, revision) = begin_account(&auth, &environment);
+            assert!(read_store(&directory).windows.is_empty(), "A cold process with a different owner must not inherit the persisted seven observations");
+            assert_eq!(read_store(&directory).identity_hash, identity);
+            assert!(crate::quota_scope::with_current(revision - 1, || panic!(
+                "Pre-initialization epoch cannot publish"
+            ))
+            .is_none());
+            return;
+        }
+        if mode == "watch" {
+            fs::write(environment.home.join("auth.json"), serde_json::to_vec(&serde_json::json!({"tokens":{"access_token":auth.access_token,"account_id":auth.account_id}})).unwrap()).unwrap();
+            reconcile_current_identity();
+            return;
+        }
+        let (_, first_revision) = begin_account(&auth, &environment);
+        match mode.as_str() {
+            "rotate-direct" | "rotate-claims" => {
+                auth.access_token =
+                    persistence_auth(mode == "rotate-claims", "synthetic-signature-b").access_token;
+                let (_, revision) = begin_account(&auth, &environment);
+                assert_eq!(
+                    revision, first_revision,
+                    "stable user claims survive token rotation"
+                );
+            }
+            "switch-user" | "switch-workspace" | "switch-source" => {
+                match mode.as_str() {
+                    "switch-user" => auth.user_id = Some("synthetic-user-b".into()),
+                    "switch-workspace" => auth.account_id = Some("synthetic-workspace-b".into()),
+                    _ => environment.home = directory.join("synthetic-source-b"),
+                }
+                let (identity, revision) = begin_account(&auth, &environment);
+                assert!(revision > first_revision);
+                assert!(read_store(&directory).windows.is_empty());
+                assert_eq!(read_store(&directory).identity_hash, identity);
+                assert!(crate::quota_scope::with_current(first_revision, || panic!(
+                    "Old epoch cannot publish after a true identity switch"
+                ))
+                .is_none());
+            }
+            _ => {}
+        }
     }
     fn sample_long(data: &mut Store, at: i64, used: f64, reset: i64) {
         let mut response = limits(at, used, reset);
