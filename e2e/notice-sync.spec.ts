@@ -39,6 +39,9 @@ async function all(unread: number) {
 describe('Notice read state across real native WebViews', () => {
   it('retains unread after a real I/O failure, then broadcasts a durable retry and survives reopen/reload', async () => {
     await browser.switchToWindow('main');
+    const paths = await invoke<{ data: string }>('get_pulse_paths');
+    record('fixtureBinding', { backendData: paths.data, specData: data });
+    expect(resolve(paths.data)).toBe(data);
     await invoke('widget_action', { action: 'details' });
     await invoke('widget_action', { action: 'show' });
     await invoke('widget_action', { action: 'expand' });

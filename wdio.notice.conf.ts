@@ -6,9 +6,13 @@ import { writeNoticeFixture } from './e2e/fixtures/notice';
 
 const output = resolve('.local/native-notice-sync');
 mkdirSync(output, { recursive: true });
-const root = join(output, `run-${Date.now()}`);
-const fixture = createPulseHome(root);
-writeNoticeFixture(fixture.data);
+// WDIO evaluates this module in both launcher and worker processes. The worker
+// must reuse the launched app's directory without reseeding its active files.
+const inheritedRoot = process.env.PULSE_NOTICE_TEST_FIXTURE_ROOT;
+const root = inheritedRoot || join(output, `run-${Date.now()}`);
+process.env.PULSE_NOTICE_TEST_FIXTURE_ROOT = root;
+const fixture = inheritedRoot ? { home: join(root, 'codex-home'), data: join(root, 'data') } : createPulseHome(root);
+if (!inheritedRoot) writeNoticeFixture(fixture.data);
 Object.assign(process.env, {
   PULSE_CODEX_HOME: fixture.home, CODEX_HOME: fixture.home,
   PULSE_DATA_DIR: fixture.data, PULSE_OFFLINE: '1',
