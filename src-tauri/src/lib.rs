@@ -1040,6 +1040,9 @@ pub fn run() {
             let app_data_dir = paths.data.clone();
             pulse_pace::configure(&app_data_dir);
             pulse_coach::configure(&app_data_dir);
+            #[cfg(feature = "e2e")]
+            pulse_coach::configure_e2e_notice_fixture(&app_data_dir)
+                .map_err(std::io::Error::other)?;
             codex_limits::configure_publisher(app.handle().clone());
             let store = pulse_desktop::PreferenceStore::load(&app_data_dir);
             let preferences = store.value.lock().unwrap().clone();

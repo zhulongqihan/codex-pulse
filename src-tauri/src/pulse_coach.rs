@@ -23,7 +23,13 @@ const MAX_AGE: i64 = 360;
 const NOTICE_AGE: i64 = 300;
 static DIRECTORY: OnceLock<PathBuf> = OnceLock::new();
 static IO_LOCK: Mutex<()> = Mutex::new(());
-static ACTIVE_NOTICE: Mutex<Option<ResetNotice>> = Mutex::new(None);
+static NOTICE_RUNTIME: Mutex<NoticeRuntime> = Mutex::new(NoticeRuntime {
+    notice: None,
+    status: NoticeStatus::Unknown,
+    checked_at: None,
+    valid_until: None,
+    source_updated_at: None,
+});
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 #[serde(default, rename_all = "camelCase")]
@@ -103,6 +109,63 @@ pub struct ResetNotice {
     verification: String,
     scope: String,
 }
+#[derive(Clone, Copy, Debug, Default, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum NoticeStatus {
+    Active,
+    Expired,
+    Stale,
+    Unavailable,
+    None,
+    #[default]
+    Unknown,
+}
+#[derive(Clone, Debug, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct NoticeState {
+    status: NoticeStatus,
+    /// Completion time of the latest accepted check, including failures.
+    checked_at: Option<String>,
+    /// Last verified notice's end, or publication + 24h when no end was supplied.
+    /// It is not the source's five-minute freshness deadline.
+    valid_until: Option<String>,
+}
+#[derive(Clone, Debug, Default, PartialEq)]
+struct NoticeRuntime {
+    notice: Option<ResetNotice>,
+    status: NoticeStatus,
+    checked_at: Option<i64>,
+    valid_until: Option<i64>,
+    source_updated_at: Option<i64>,
+}
+impl NoticeRuntime {
+    fn state(&self, now: i64) -> NoticeState {
+        let status = match self.status {
+            NoticeStatus::Active if self.valid_until.is_some_and(|end| end <= now) => {
+                NoticeStatus::Expired
+            }
+            NoticeStatus::Active
+                if !self
+                    .notice
+                    .as_ref()
+                    .is_some_and(|notice| notice_current(notice, now)) =>
+            {
+                NoticeStatus::Stale
+            }
+            NoticeStatus::None | NoticeStatus::Unavailable
+                if !self.checked_at.is_some_and(|at| fresh(at, now, NOTICE_AGE)) =>
+            {
+                NoticeStatus::Stale
+            }
+            status => status,
+        };
+        NoticeState {
+            status,
+            checked_at: self.checked_at.map(iso),
+            valid_until: self.valid_until.map(iso),
+        }
+    }
+}
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CoachExtras {
@@ -110,6 +173,7 @@ pub struct CoachExtras {
     observation_timezone: Option<String>,
     daily_observations: Vec<DailyObservation>,
     reset_notice: Option<ResetNotice>,
+    notice_state: NoticeState,
 }
 
 fn timestamp(text: &str) -> Option<i64> {
@@ -234,6 +298,63 @@ fn read_notice_ledger(directory: &Path) -> NoticeLedger {
 }
 pub fn configure(directory: &Path) {
     let _ = DIRECTORY.set(directory.to_path_buf());
+}
+
+/// An explicit, bounded offline source for native event tests. This entry point
+/// and its input parser do not exist in production builds.
+#[cfg(feature = "e2e")]
+pub fn configure_e2e_notice_fixture(directory: &Path) -> Result<(), String> {
+    #[derive(Deserialize)]
+    struct Fixture {
+        updated_at: String,
+        last_reset_at: Option<String>,
+        has_official_signal: bool,
+        latest_alert: Option<crate::types::CodexForecastAlert>,
+        recent_posts: Option<Vec<crate::types::CodexForecastPost>>,
+        evidence_posts: Option<Vec<crate::types::CodexForecastPost>>,
+        evidence_stale: bool,
+        evidence_updated_at: Option<String>,
+    }
+    let path = directory.join("pulse-notice-e2e.json");
+    let metadata = match fs::symlink_metadata(&path) {
+        Ok(metadata) => metadata,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(()),
+        Err(_) => return Err("Cannot inspect the e2e notice fixture".into()),
+    };
+    if !offline()
+        || !metadata.is_file()
+        || metadata.file_type().is_symlink()
+        || metadata.len() > 64 * 1024
+    {
+        return Err("E2e notice fixtures require an offline, regular bounded input".into());
+    }
+    let mut bytes = Vec::new();
+    fs::File::open(&path)
+        .map_err(|_| "Cannot read the e2e notice fixture")?
+        .take(64 * 1024 + 1)
+        .read_to_end(&mut bytes)
+        .map_err(|_| "Cannot read the e2e notice fixture")?;
+    if bytes.len() > 64 * 1024 {
+        return Err("E2e notice fixture exceeds its limit".into());
+    }
+    let value: Fixture =
+        serde_json::from_slice(&bytes).map_err(|_| "Invalid e2e notice fixture")?;
+    let response = CodexQuotaForecastResponse {
+        updated_at: value.updated_at,
+        last_reset_at: value.last_reset_at,
+        has_official_signal: value.has_official_signal,
+        latest_alert: value.latest_alert,
+        recent_posts: value.recent_posts,
+        evidence_posts: value.evidence_posts,
+        evidence_stale: value.evidence_stale,
+        evidence_updated_at: value.evidence_updated_at,
+    };
+    let now = Utc::now().timestamp();
+    if eligible_notice(&response, now).is_none() {
+        return Err("The e2e notice fixture must be a currently valid synthetic notice".into());
+    }
+    refresh_notice(directory, Ok(response), now);
+    Ok(())
 }
 
 fn add_pair(cycle: &mut Cycle, previous: &Sample, next: &Sample, zone: chrono_tz::Tz) {
@@ -617,37 +738,120 @@ fn refresh_notice(
     result: Result<CodexQuotaForecastResponse, String>,
     now: i64,
 ) -> bool {
-    let mut notice = result.ok().and_then(|data| eligible_notice(&data, now));
     let Ok(_guard) = IO_LOCK.lock() else {
         return false;
     };
-    let mut ledger = read_notice_ledger(directory);
-    apply_notice(&mut ledger, &mut notice, now);
-    if let Err(error) = atomic_write(directory, NOTICE_FILE, &ledger) {
-        log::warn!("{error}");
-    }
-    let mut active = ACTIVE_NOTICE
+    let mut runtime = NOTICE_RUNTIME
         .lock()
         .unwrap_or_else(|error| error.into_inner());
-    let changed = *active != notice;
-    *active = notice;
+    refresh_notice_into(directory, &mut runtime, result, now)
+}
+
+fn refresh_notice_into(
+    directory: &Path,
+    runtime: &mut NoticeRuntime,
+    result: Result<CodexQuotaForecastResponse, String>,
+    now: i64,
+) -> bool {
+    let mut ledger = read_notice_ledger(directory);
+    let changed = update_notice_runtime(runtime, result, now, &mut ledger);
+    // Failed/empty checks must not overwrite the existing read-state ledger.
+    if changed && runtime.notice.is_some() {
+        if let Err(error) = atomic_write(directory, NOTICE_FILE, &ledger) {
+            log::warn!("{error}");
+        }
+    }
     changed
+}
+
+fn update_notice_runtime(
+    runtime: &mut NoticeRuntime,
+    result: Result<CodexQuotaForecastResponse, String>,
+    now: i64,
+    ledger: &mut NoticeLedger,
+) -> bool {
+    if runtime.checked_at.is_some_and(|at| now < at) {
+        return false;
+    }
+    let previous = runtime.clone();
+    match result {
+        Err(_) => {
+            runtime.notice = None;
+            runtime.status = NoticeStatus::Unavailable;
+        }
+        Ok(data) => {
+            let source_at = timestamp(&data.updated_at);
+            if source_at
+                .zip(runtime.source_updated_at)
+                .is_some_and(|(incoming, accepted)| incoming < accepted)
+            {
+                return false;
+            }
+            let mut notice = eligible_notice(&data, now);
+            if let Some(notice) = notice.as_ref() {
+                runtime.valid_until = notice
+                    .end_at
+                    .as_deref()
+                    .and_then(timestamp)
+                    .or_else(|| timestamp(&notice.published_at).map(|at| at + 86400));
+                runtime.status = NoticeStatus::Active;
+            } else if runtime
+                .valid_until
+                .is_some_and(|end| (0..=86400).contains(&(now - end)))
+            {
+                runtime.status = NoticeStatus::Expired;
+            } else if !source_at.is_some_and(|at| fresh(at, now, NOTICE_AGE))
+                || data.evidence_stale
+                || (data.has_official_signal
+                    && data.latest_alert.is_some()
+                    && !data
+                        .evidence_updated_at
+                        .as_deref()
+                        .and_then(timestamp)
+                        .is_some_and(|at| fresh(at, now, NOTICE_AGE)))
+            {
+                runtime.status = NoticeStatus::Stale;
+            } else {
+                runtime.status = NoticeStatus::None;
+                if runtime.valid_until.is_some_and(|end| now - end > 86400) {
+                    runtime.valid_until = None;
+                }
+            }
+            if notice.is_some() {
+                apply_notice(ledger, &mut notice, now);
+            }
+            runtime.notice = notice;
+            if source_at.is_some_and(|at| at >= 0 && at <= now + 120) {
+                runtime.source_updated_at = source_at;
+            }
+        }
+    }
+    runtime.checked_at = Some(now);
+    *runtime != previous
 }
 pub fn extras(
     directory: &Path,
     pace: &crate::pulse_pace::PaceSnapshot,
     now: DateTime<Utc>,
 ) -> CoachExtras {
-    let notice = ACTIVE_NOTICE
-        .lock()
-        .unwrap_or_else(|error| error.into_inner())
-        .clone()
-        .filter(|notice| notice_current(notice, now.timestamp()));
+    let (notice, notice_state) = {
+        let runtime = NOTICE_RUNTIME
+            .lock()
+            .unwrap_or_else(|error| error.into_inner());
+        let state = runtime.state(now.timestamp());
+        let notice = if state.status == NoticeStatus::Active {
+            runtime.notice.clone()
+        } else {
+            None
+        };
+        (notice, state)
+    };
     let mut output = CoachExtras {
         observed_window: None,
         observation_timezone: None,
         daily_observations: vec![],
         reset_notice: notice,
+        notice_state,
     };
     let Some(identity) = scope_identity(directory) else {
         return output;
@@ -703,15 +907,15 @@ pub fn mark_pulse_notice_read(
     app: tauri::AppHandle,
 ) -> Result<(), String> {
     let _guard = IO_LOCK.lock().map_err(|_| "Coach state is unavailable")?;
-    let mut active = ACTIVE_NOTICE
+    let mut runtime = NOTICE_RUNTIME
         .lock()
         .map_err(|_| "Coach state is unavailable")?;
     let mut ledger = read_notice_ledger(&paths.data);
-    let mut candidate = active.clone();
+    let mut candidate = runtime.notice.clone();
     acknowledge(&mut candidate, &mut ledger, &id, Utc::now().timestamp())?;
     atomic_write(&paths.data, NOTICE_FILE, &ledger)?;
-    *active = candidate;
-    drop(active);
+    runtime.notice = candidate;
+    drop(runtime);
     drop(_guard);
     let _ = app.emit("pulse-pace-updated", ());
     Ok(())
@@ -739,9 +943,12 @@ fn acknowledge(
 pub fn start_worker(app: tauri::AppHandle) {
     std::thread::spawn(move || loop {
         if let Some(directory) = DIRECTORY.get() {
-            if poll_notice_with(directory, offline(), Utc::now().timestamp(), || {
-                crate::codex_forecast::fetch("en")
-            }) {
+            if poll_notice_with(
+                directory,
+                offline(),
+                || Utc::now().timestamp(),
+                || crate::codex_forecast::fetch("en"),
+            ) {
                 let _ = app.emit("pulse-pace-updated", ());
             }
         }
@@ -752,13 +959,14 @@ pub fn start_worker(app: tauri::AppHandle) {
 fn poll_notice_with(
     directory: &Path,
     is_offline: bool,
-    now: i64,
+    completed_at: impl FnOnce() -> i64,
     fetch: impl FnOnce() -> Result<CodexQuotaForecastResponse, String>,
 ) -> bool {
     if is_offline {
         return false;
     }
-    refresh_notice(directory, fetch(), now)
+    let result = fetch();
+    refresh_notice(directory, result, completed_at())
 }
 
 #[cfg(test)]
@@ -1085,9 +1293,172 @@ mod tests {
     #[test]
     fn offline_poll_does_not_fetch_create_files_or_reclassify_an_old_message() {
         let path = folder();
-        assert!(!poll_notice_with(&path, true, t(), || panic!(
-            "Offline must never request the network"
-        )));
+        assert!(!poll_notice_with(
+            &path,
+            true,
+            || t(),
+            || panic!("Offline must never request the network")
+        ));
+        assert_eq!(fs::read_dir(&path).unwrap().count(), 0);
+        clean(&path);
+    }
+    #[test]
+    fn notice_state_distinguishes_unknown_failed_empty_active_expired_and_old_results() {
+        let path = folder();
+        let mut runtime = NoticeRuntime::default();
+        assert_eq!(runtime.state(t()).status, NoticeStatus::Unknown);
+        refresh_notice_into(
+            &path,
+            &mut runtime,
+            Err("Private upstream error must not cross the API".into()),
+            t(),
+        );
+        assert_eq!(runtime.state(t()).status, NoticeStatus::Unavailable);
+        assert_eq!(runtime.state(t() + 301).status, NoticeStatus::Stale);
+        assert!(!serde_json::to_string(&runtime.state(t()))
+            .unwrap()
+            .contains("Private"));
+        let mut empty = forecast(t() + 1);
+        empty.latest_alert = None;
+        empty.has_official_signal = false;
+        empty.evidence_posts = None;
+        empty.evidence_updated_at = None;
+        refresh_notice_into(&path, &mut runtime, Ok(empty), t() + 1);
+        assert_eq!(runtime.state(t() + 1).status, NoticeStatus::None);
+        assert_eq!(runtime.state(t() + 302).status, NoticeStatus::Stale);
+        refresh_notice_into(&path, &mut runtime, Ok(forecast(t() + 2)), t() + 2);
+        assert_eq!(runtime.state(t() + 2).status, NoticeStatus::Active);
+        assert_eq!(runtime.state(t() + 303).status, NoticeStatus::Stale);
+        assert_eq!(runtime.state(t() + 3602).status, NoticeStatus::Expired);
+        assert_eq!(runtime.state(t() + 3602).valid_until, Some(iso(t() + 3602)));
+        // Runtime diagnostics are not a new persistent notification history.
+        assert_eq!(
+            NoticeRuntime::default().state(t() + 3602).status,
+            NoticeStatus::Unknown
+        );
+        let text = fs::read_to_string(path.join(NOTICE_FILE)).unwrap();
+        assert!(
+            !text.contains("noticeState")
+                && !text.contains("summary")
+                && !text.contains("validUntil")
+        );
+        clean(&path);
+    }
+    #[test]
+    fn source_freshness_and_untimed_validity_are_separate_from_check_completion_time() {
+        let mut runtime = NoticeRuntime::default();
+        let mut ledger = NoticeLedger {
+            schema_version: 1,
+            seen: vec![],
+        };
+        let mut timed = forecast(t());
+        timed.updated_at = iso(t() - 301);
+        update_notice_runtime(&mut runtime, Ok(timed), t(), &mut ledger);
+        assert_eq!(runtime.state(t()).status, NoticeStatus::Stale);
+        let mut untimed = forecast(t() + 1);
+        untimed.latest_alert.as_mut().unwrap().window = None;
+        untimed.latest_alert.as_mut().unwrap().score = Some(83);
+        let expires = t() + 1 - 60 + 86400;
+        update_notice_runtime(&mut runtime, Ok(untimed), t() + 1, &mut ledger);
+        assert_eq!(runtime.state(t() + 1).status, NoticeStatus::Active);
+        assert_eq!(runtime.state(t() + 1).checked_at, Some(iso(t() + 1)));
+        assert_eq!(runtime.state(t() + 1).valid_until, Some(iso(expires)));
+        assert_eq!(runtime.state(expires).status, NoticeStatus::Expired);
+    }
+    #[test]
+    fn delayed_or_future_dated_source_data_cannot_revive_a_read_notice_or_poison_recovery() {
+        let mut runtime = NoticeRuntime::default();
+        let mut ledger = NoticeLedger {
+            schema_version: 1,
+            seen: vec![],
+        };
+        update_notice_runtime(&mut runtime, Ok(forecast(t())), t(), &mut ledger);
+        let id = runtime.notice.as_ref().unwrap().id.clone();
+        acknowledge(&mut runtime.notice, &mut ledger, &id, t()).unwrap();
+        let read = runtime.clone();
+        assert!(!update_notice_runtime(
+            &mut runtime,
+            Ok(forecast(t() - 1)),
+            t() + 1,
+            &mut ledger
+        ));
+        assert_eq!(runtime, read);
+        assert!(!update_notice_runtime(
+            &mut runtime,
+            Err("late failure".into()),
+            t() - 1,
+            &mut ledger
+        ));
+        assert_eq!(runtime, read);
+        let mut future = forecast(t() + 86400);
+        future.latest_alert = None;
+        update_notice_runtime(&mut runtime, Ok(future), t() + 2, &mut ledger);
+        assert_eq!(runtime.state(t() + 2).status, NoticeStatus::Stale);
+        assert_eq!(runtime.source_updated_at, Some(t()));
+        let mut recovered = forecast(t());
+        recovered.updated_at = iso(t() + 3);
+        recovered.evidence_updated_at = Some(iso(t() + 3));
+        update_notice_runtime(&mut runtime, Ok(recovered), t() + 3, &mut ledger);
+        assert_eq!(runtime.state(t() + 3).status, NoticeStatus::Active);
+        assert!(!runtime.notice.as_ref().unwrap().is_unread);
+    }
+    #[test]
+    fn disappearance_is_not_claimed_as_withdrawal_and_errors_do_not_destroy_old_read_storage() {
+        let path = folder();
+        let mut runtime = NoticeRuntime::default();
+        refresh_notice_into(&path, &mut runtime, Ok(forecast(t())), t());
+        let id = runtime.notice.as_ref().unwrap().id.clone();
+        let mut ledger = read_notice_ledger(&path);
+        acknowledge(&mut runtime.notice, &mut ledger, &id, t()).unwrap();
+        atomic_write(&path, NOTICE_FILE, &ledger).unwrap();
+        let bytes = fs::read(path.join(NOTICE_FILE)).unwrap();
+        refresh_notice_into(&path, &mut runtime, Err("private error".into()), t() + 1);
+        assert_eq!(runtime.state(t() + 1).status, NoticeStatus::Unavailable);
+        assert_eq!(fs::read(path.join(NOTICE_FILE)).unwrap(), bytes);
+        let mut absent = forecast(t() + 2);
+        absent.latest_alert = None;
+        absent.has_official_signal = false;
+        refresh_notice_into(&path, &mut runtime, Ok(absent), t() + 2);
+        assert_eq!(runtime.state(t() + 2).status, NoticeStatus::None);
+        assert_eq!(fs::read(path.join(NOTICE_FILE)).unwrap(), bytes);
+        // A known prior expiry may be explained, without claiming the personal quota reset.
+        let mut past = forecast(t() + 3601);
+        past.latest_alert = None;
+        past.has_official_signal = false;
+        refresh_notice_into(&path, &mut runtime, Ok(past), t() + 3601);
+        assert_eq!(runtime.state(t() + 3601).status, NoticeStatus::Expired);
+        // No failed fetch repairs/truncates an unreadable old ledger.
+        fs::write(path.join(NOTICE_FILE), b"bad old JSON").unwrap();
+        refresh_notice_into(
+            &path,
+            &mut runtime,
+            Err("network failed".into()),
+            t() + 3602,
+        );
+        assert_eq!(fs::read(path.join(NOTICE_FILE)).unwrap(), b"bad old JSON");
+        refresh_notice_into(&path, &mut runtime, Ok(forecast(t() + 3603)), t() + 3603);
+        assert_eq!(read_notice_ledger(&path).seen.len(), 1);
+        assert_eq!(read_notice_ledger(&path).schema_version, 1);
+        clean(&path);
+    }
+    #[test]
+    fn notice_poll_dates_the_result_after_fetch_and_failed_reads_create_no_ledger() {
+        use std::cell::RefCell;
+        let path = folder();
+        let calls = RefCell::new(Vec::new());
+        poll_notice_with(
+            &path,
+            false,
+            || {
+                calls.borrow_mut().push("clock");
+                t() + 10
+            },
+            || {
+                calls.borrow_mut().push("fetch");
+                Err("unavailable".into())
+            },
+        );
+        assert_eq!(*calls.borrow(), ["fetch", "clock"]);
         assert_eq!(fs::read_dir(&path).unwrap().count(), 0);
         clean(&path);
     }
@@ -1097,7 +1468,13 @@ mod tests {
         let mut ledger = empty_ledger();
         let zone = chrono_tz::America::New_York;
         observe_into(&mut ledger, &identity(), &quota(t(), 20.0), t(), zone);
-        observe_into(&mut ledger, &identity(), &quota(t() + 60, 21.0), t() + 60, zone);
+        observe_into(
+            &mut ledger,
+            &identity(),
+            &quota(t() + 60, 21.0),
+            t() + 60,
+            zone,
+        );
         atomic_write(&path, LEDGER_FILE, &ledger).unwrap();
         let quota = serde_json::json!({"schemaVersion":1,"identityHash":identity(),"updatedAt":t()+60,"failed":false,"reason":null,
             "windows":[{"kind":"weekly","windowMinutes":10080,"resetsAt":t()+7*86400,
@@ -1111,7 +1488,10 @@ mod tests {
         let pace = crate::pulse_pace::read_snapshot(&path, now);
         let output = extras(&path, &pace, now);
         assert_eq!(output.observed_window.as_ref().unwrap().kind, "weekly");
-        assert_eq!(output.observation_timezone.as_deref(), Some("America/New_York"));
+        assert_eq!(
+            output.observation_timezone.as_deref(),
+            Some("America/New_York")
+        );
         assert_eq!(
             output
                 .daily_observations

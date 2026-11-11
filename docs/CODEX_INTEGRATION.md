@@ -98,3 +98,5 @@ Codex Pulse 提供两种入口：Windows 右上角伴随提示，以及本地 MC
 - 在 Codex 插件页卸载 **Codex Pulse** 即可停用客户端入口，Pulse 本身和已有用量数据继续保留。
 
 插件的 stdio 配置、`${PLUGIN_ROOT}` 路径与本地安装方式见 [OpenAI 插件打包说明](https://developers.openai.com/plugins/build/plugins)和[桌面本地 MCP 说明](https://developers.openai.com/plugins/deploy/desktop-only)。
+
+展开预告状态可查看上次检查时间、已知有效期和到期／过旧／暂不可用等说明。没有返回有效消息不表示上游已撤回；预告检查时间也不代表账号额度已经更新。插件继续只读，标记已读可在 Pulse 主窗或伴随窗口完成，其他窗口通过本地更新事件同步。

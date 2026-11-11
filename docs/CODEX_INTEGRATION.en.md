@@ -98,3 +98,5 @@ To test marketplace registration against a separate Codex configuration folder w
 - Uninstall **Codex Pulse** in the Codex plugin page to remove its client entry. Pulse itself and existing usage data remain available.
 
 See [OpenAI plugin packaging](https://developers.openai.com/plugins/build/plugins) and [desktop local MCP configuration](https://developers.openai.com/plugins/deploy/desktop-only) for stdio configuration, `${PLUGIN_ROOT}` paths, and local installation.
+
+Expand notice status to inspect the last check time, known validity period, and expired, stale or unavailable states. No current message does not establish withdrawal, and a notice check does not imply an account-quota refresh. The plugin remains read-only; mark notices read in Pulse or its companions, whose read state synchronizes through local update events.

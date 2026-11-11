@@ -191,6 +191,52 @@ fn project_notice(value: &Value, now: DateTime<Utc>, captured: Option<DateTime<U
     json!({"summary":summary,"sourceUrl":url.to_string(),"sourceLabel":"codex-reset.com","startAt":start.map(|value| value.to_rfc3339()),"endAt":end.map(|value| value.to_rfc3339()),"publishedAt":published.to_rfc3339(),"updatedAt":updated.to_rfc3339(),"verification":"third_party","scope":"global"})
 }
 
+/// Status is an independently bounded public projection. A missing legacy field
+/// is unknown, never a successful empty result or a claim of withdrawal.
+fn project_notice_state(
+    value: &Value,
+    notice: &Value,
+    now: DateTime<Utc>,
+    captured: Option<DateTime<Utc>>,
+) -> Value {
+    let unknown = || json!({"status":"unknown","checkedAt":null,"validUntil":null});
+    let Some(status) = value["status"].as_str().filter(|status| {
+        [
+            "active",
+            "expired",
+            "stale",
+            "unavailable",
+            "none",
+            "unknown",
+        ]
+        .contains(status)
+    }) else {
+        return unknown();
+    };
+    if status == "unknown" {
+        return unknown();
+    }
+    let Some(checked) = timestamp(value.get("checkedAt")).filter(|checked| {
+        *checked <= now + chrono::Duration::seconds(120)
+            && *checked >= now - chrono::Duration::days(31)
+    }) else {
+        return unknown();
+    };
+    let valid_until = timestamp(value.get("validUntil")).filter(|end| {
+        *end <= now + chrono::Duration::days(7) && *end >= now - chrono::Duration::days(31)
+    });
+    let current = !stale_at(captured, now)
+        && (-120..=300).contains(&now.signed_duration_since(checked).num_seconds());
+    let status = match status {
+        "active" if valid_until.is_some_and(|end| end <= now) => "expired",
+        "active" if !current || project_notice(notice, now, captured).is_null() => "stale",
+        "expired" if valid_until.is_none_or(|end| end > now) => "unknown",
+        "none" | "unavailable" if !current => "stale",
+        status => status,
+    };
+    json!({"status":status,"checkedAt":checked.to_rfc3339(),"validUntil":valid_until.map(|end| end.to_rfc3339())})
+}
+
 fn project_observations(value: &Value, pace: &Value, now: DateTime<Utc>) -> Value {
     let empty = json!({"observedWindow":null,"observationTimezone":null,"dailyObservations":[]});
     if stale_at(timestamp(pace.get("updatedAt")), now)
@@ -384,7 +430,7 @@ fn project(
         quota_updated_at: quota_updated.map(|date| date.to_rfc3339()),
         quota_stale,
         presentation: project_presentation(&value["presentation"]),
-        coach: json!({"observedWindow":null,"observationTimezone":null,"dailyObservations":[],"resetNotice":null}),
+        coach: json!({"observedWindow":null,"observationTimezone":null,"dailyObservations":[],"resetNotice":null,"noticeState":{"status":"unknown","checkedAt":null,"validUntil":null}}),
     }
 }
 
@@ -402,6 +448,12 @@ pub fn publish_widget_snapshot(data: &Value, directory: &Path) {
     let extras = serde_json::to_value(crate::pulse_coach::extras(directory, &pace, now))
         .unwrap_or(Value::Null);
     snapshot.coach["resetNotice"] = project_notice(&extras["resetNotice"], now, Some(now));
+    snapshot.coach["noticeState"] = project_notice_state(
+        &extras["noticeState"],
+        &extras["resetNotice"],
+        now,
+        Some(now),
+    );
     let Ok(bytes) = serde_json::to_vec(&snapshot) else {
         return;
     };
@@ -457,6 +509,20 @@ pub fn read_snapshot(directory: &Path) -> IntegrationSnapshot {
         now,
     );
     snapshot.coach["resetNotice"] = project_notice(
+        if value["schemaVersion"] == 1 {
+            &value["coach"]["resetNotice"]
+        } else {
+            &Value::Null
+        },
+        now,
+        captured,
+    );
+    snapshot.coach["noticeState"] = project_notice_state(
+        if value["schemaVersion"] == 1 {
+            &value["coach"]["noticeState"]
+        } else {
+            &Value::Null
+        },
         if value["schemaVersion"] == 1 {
             &value["coach"]["resetNotice"]
         } else {
@@ -925,6 +991,141 @@ mod tests {
             Some(time() - chrono::Duration::minutes(7))
         )
         .is_null());
+    }
+    #[test]
+    fn notice_status_projection_keeps_legacy_unknown_and_strips_untrusted_fields() {
+        let now = time();
+        assert_eq!(
+            project_notice_state(&Value::Null, &notice(now), now, Some(now)),
+            json!({"status":"unknown","checkedAt":null,"validUntil":null})
+        );
+        let diagnostic = json!({"status":"unavailable","checkedAt":now.to_rfc3339(),"validUntil":null,"error":"must-not-export","identityHash":"must-not-export","path":"must-not-export"});
+        let projected = project_notice_state(&diagnostic, &Value::Null, now, Some(now));
+        assert_eq!(projected["status"], "unavailable");
+        assert_eq!(projected.as_object().unwrap().len(), 3);
+        assert!(!projected.to_string().contains("must-not-export"));
+        for invalid in ["withdrawn", "private-error", "", "loading-forever"] {
+            let mut value = diagnostic.clone();
+            value["status"] = json!(invalid);
+            assert_eq!(
+                project_notice_state(&value, &Value::Null, now, Some(now))["status"],
+                "unknown"
+            );
+        }
+    }
+    #[test]
+    fn notice_status_does_not_confuse_source_age_expiry_or_a_failed_check() {
+        let now = time();
+        let raw = notice(now);
+        let diagnostic =
+            json!({"status":"active","checkedAt":now.to_rfc3339(),"validUntil":raw["endAt"]});
+        assert_eq!(
+            project_notice_state(&diagnostic, &raw, now, Some(now))["status"],
+            "active"
+        );
+        let mut old_source = raw.clone();
+        old_source["updatedAt"] = json!((now - chrono::Duration::seconds(301)).to_rfc3339());
+        assert_eq!(
+            project_notice_state(&diagnostic, &old_source, now, Some(now))["status"],
+            "stale"
+        );
+        assert_eq!(
+            project_notice_state(
+                &diagnostic,
+                &raw,
+                now + chrono::Duration::hours(2),
+                Some(now)
+            )["status"],
+            "expired"
+        );
+        for status in ["none", "unavailable"] {
+            let value =
+                json!({"status":status,"checkedAt":now.to_rfc3339(),"validUntil":raw["endAt"]});
+            assert_eq!(
+                project_notice_state(&value, &Value::Null, now, Some(now))["status"],
+                status
+            );
+            assert_eq!(
+                project_notice_state(
+                    &value,
+                    &Value::Null,
+                    now + chrono::Duration::seconds(301),
+                    Some(now)
+                )["status"],
+                "stale"
+            );
+            assert_eq!(
+                project_notice_state(
+                    &value,
+                    &Value::Null,
+                    now,
+                    Some(now - chrono::Duration::minutes(7))
+                )["status"],
+                "stale"
+            );
+        }
+        let unproven =
+            json!({"status":"expired","checkedAt":now.to_rfc3339(),"validUntil":raw["endAt"]});
+        assert_eq!(
+            project_notice_state(&unproven, &Value::Null, now, Some(now))["status"],
+            "unknown"
+        );
+    }
+    #[test]
+    fn malformed_or_future_status_times_do_not_become_confirmed_empty_checks() {
+        let now = time();
+        for at in [
+            Value::Null,
+            json!("not-a-date"),
+            json!((now + chrono::Duration::seconds(121)).to_rfc3339()),
+            json!("a".repeat(100)),
+        ] {
+            let diagnostic = json!({"status":"none","checkedAt":at,"validUntil":null});
+            assert_eq!(
+                project_notice_state(&diagnostic, &Value::Null, now, Some(now))["status"],
+                "unknown"
+            );
+        }
+        let diagnostic =
+            json!({"status":"expired","checkedAt":now.to_rfc3339(),"validUntil":"bad-time"});
+        assert_eq!(
+            project_notice_state(&diagnostic, &Value::Null, now, Some(now))["status"],
+            "unknown"
+        );
+    }
+    #[test]
+    fn status_reads_are_compatible_with_old_snapshots_and_obey_the_schema_gate() {
+        let path = folder();
+        let now = Utc::now();
+        let mut value = source();
+        value["capturedAt"] = json!(now.to_rfc3339());
+        fs::write(
+            path.join(SNAPSHOT_NAME),
+            serde_json::to_vec(&value).unwrap(),
+        )
+        .unwrap();
+        let legacy = read_snapshot(&path);
+        assert_eq!(legacy.coach["noticeState"]["status"], "unknown");
+        value["coach"] = json!({"noticeState":{"status":"none","checkedAt":now.to_rfc3339(),"validUntil":null,"credentials":"must-not-export"}});
+        fs::write(
+            path.join(SNAPSHOT_NAME),
+            serde_json::to_vec(&value).unwrap(),
+        )
+        .unwrap();
+        let current = read_snapshot(&path);
+        assert_eq!(current.coach["noticeState"]["status"], "none");
+        assert!(!serde_json::to_string(&current)
+            .unwrap()
+            .contains("must-not-export"));
+        value["schemaVersion"] = json!(2);
+        let bytes = serde_json::to_vec(&value).unwrap();
+        fs::write(path.join(SNAPSHOT_NAME), &bytes).unwrap();
+        assert_eq!(
+            read_snapshot(&path).coach["noticeState"]["status"],
+            "unknown"
+        );
+        assert_eq!(fs::read(path.join(SNAPSHOT_NAME)).unwrap(), bytes);
+        fs::remove_dir_all(path).unwrap();
     }
     #[test]
     fn presentation_is_canonical_and_invalid_preferences_do_not_reuse_an_old_followed_style() {

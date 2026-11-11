@@ -70,6 +70,51 @@ function companionSnapshot(now: number, language = "en") {
 }
 
 describe("the shipped MCP panel script", () => {
+  it.each(["zh", "zh-Hant", "en", "ja", "ko", "de"])("explains non-active notice states without claiming withdrawal in %s", async language => {
+    const now = Date.parse("2026-11-11T10:00:00Z"), p = panel(); vi.spyOn(p.child.Date, "now").mockReturnValue(now);
+    const usage = await p.connect(), data = companionSnapshot(now, language), checkedAt = new Date(now - 30_000).toISOString(), validUntil = new Date(now - 60_000).toISOString();
+    await p.respond(usage, { structuredContent: { ...data, coach: { ...data.coach, resetNotice: null, noticeState: { status: "unavailable", checkedAt, validUntil } } } });
+    expect(p.get("notice-content").hidden).toBe(true); expect(p.get("notice-section").dataset.noticeState).toBe("unavailable");
+    expect(p.get("notice-empty")).toHaveTextContent(panelCopy[language].noticeStateUnavailable);
+    expect((p.get("notice-state") as HTMLDetailsElement).open).toBe(false);
+    p.get("notice-empty").click(); expect((p.get("notice-state") as HTMLDetailsElement).open).toBe(true);
+    expect(p.get("notice-state-detail")).toHaveTextContent(panelCopy[language].noticeStateUnavailableDetail);
+    expect(p.get("notice-state-checked").hidden).toBe(false); expect(p.get("notice-state-until").hidden).toBe(false);
+    expect(p.get("notice-state")).not.toHaveTextContent("undefined"); expect(p.get("notice-state")).not.toHaveTextContent("Invalid Date");
+    for (const status of ["expired", "stale", "none", "unknown"]) {
+      p.receive({ jsonrpc: "2.0", method: "ui/notifications/tool-result", params: { structuredContent: { ...data, coach: { ...data.coach, resetNotice: null, noticeState: { status, checkedAt: status === "unknown" ? null : checkedAt, validUntil } } } } });
+      expect(p.get("notice-section").dataset.noticeState).toBe(status);
+      expect(p.get("notice-empty")).toHaveTextContent(panelCopy[language]['noticeState' + status[0].toUpperCase() + status.slice(1)]);
+      expect(p.get("notice-state-checked").hidden).toBe(status === "unknown");
+    }
+  });
+  it("independently downgrades expired or old active notices and old successful checks", async () => {
+    const now = Date.parse("2026-11-11T10:00:00Z"), p = panel(); vi.spyOn(p.child.Date, "now").mockReturnValue(now);
+    const usage = await p.connect(), data = companionSnapshot(now), checkedAt = new Date(now).toISOString(), validUntil = new Date(now + 7200_000).toISOString();
+    const deliver = (coach: unknown) => p.receive({ jsonrpc: "2.0", method: "ui/notifications/tool-result", params: { structuredContent: { ...data, coach } } });
+    await p.respond(usage, { structuredContent: data });
+    deliver({ ...data.coach, noticeState: { status: "active", checkedAt, validUntil }, resetNotice: { ...data.coach.resetNotice, startAt: null, endAt: new Date(now - 1).toISOString() } });
+    expect(p.get("notice-section").dataset.noticeState).toBe("expired"); expect(p.get("notice-content").hidden).toBe(true);
+    deliver({ ...data.coach, noticeState: { status: "active", checkedAt, validUntil }, resetNotice: { ...data.coach.resetNotice, updatedAt: new Date(now - 300_001).toISOString() } });
+    expect(p.get("notice-section").dataset.noticeState).toBe("stale");
+    for (const status of ["none", "unavailable"]) {
+      deliver({ ...data.coach, resetNotice: null, noticeState: { status, checkedAt: new Date(now - 300_001).toISOString(), validUntil } });
+      expect(p.get("notice-section").dataset.noticeState).toBe("stale");
+    }
+    deliver({ ...data.coach, resetNotice: null });
+    expect(p.get("notice-section").dataset.noticeState).toBe("unknown"); expect(p.get("notice-state-checked").hidden).toBe(true);
+    deliver({ ...data.coach, resetNotice: null, noticeState: { status: "none", checkedAt: "invalid", validUntil: null } });
+    expect(p.get("notice-section").dataset.noticeState).toBe("unknown"); expect(p.get("notice-state-checked").hidden).toBe(true);
+  });
+  it.each([{ sourceUrl: "javascript:alert(1)" }, { verification: "official" }, { scope: "personal" }, { updatedAt: "invalid" }, { endAt: "invalid" }])("does not use malformed raw notice dates as an explanation: %j", async invalid => {
+    const now = Date.parse("2026-11-11T10:00:00Z"), p = panel(); vi.spyOn(p.child.Date, "now").mockReturnValue(now);
+    const usage = await p.connect(), data = companionSnapshot(now);
+    Object.assign(data.coach.resetNotice, { startAt: null, endAt: new Date(now - 60_000).toISOString(), updatedAt: new Date(now - 360_000).toISOString() }, invalid);
+    await p.respond(usage, { structuredContent: data });
+    expect(p.get("notice-section").dataset.noticeState).toBe("unknown"); expect(p.get("notice-state-until").hidden).toBe(true); expect(p.get("notice-content").hidden).toBe(true);
+    p.receive({ jsonrpc: "2.0", method: "ui/notifications/tool-result", params: { structuredContent: { ...data, coach: { ...data.coach, noticeState: { status: "expired", checkedAt: new Date(now).toISOString(), validUntil: new Date(now - 60_000).toISOString() } } } } });
+    expect(p.get("notice-section").dataset.noticeState).toBe("expired"); expect(p.get("notice-state-until").hidden).toBe(false);
+  });
   it.each(["zh", "zh-Hant", "en", "ja", "ko", "de"])("follows Pulse language/appearance and preserves an explicit panel-only style override in %s", async language => {
     const now = Date.parse("2026-11-02T18:00:00Z"), p = panel(); vi.spyOn(p.child.Date, "now").mockReturnValue(now);
     const usage = await p.connect(), data = companionSnapshot(now, language); await p.respond(usage, { structuredContent: data });

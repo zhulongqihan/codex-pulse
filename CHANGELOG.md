@@ -4,6 +4,19 @@ User-facing changes are grouped by release, following [Keep a Changelog](https:/
 
 ## [Unreleased]
 
+## [0.9.1] - 2026-11-11
+
+### Fixed / 修复
+
+- Explain notice expiry, stale sources, unavailable checks and missing current notices without inferring withdrawal.
+- 解释预告到期、来源过旧、检查不可用与暂无有效消息，不将未返回推断为撤回。
+- Preserve cross-window read updates during refreshes and reject stale snapshots or errors that belong to an older notice.
+- 刷新期间保留跨窗口已读更新，防止旧快照复活未读或旧消息错误影响新预告。
+- Distinguish a successfully saved read mark from a subsequent snapshot-read failure, and clear save errors after another window marks the notice successfully.
+- 区分已读保存成功与随后快照读取失败，并在其他窗口成功标记后清除旧保存错误。
+
+[完整中英说明 / Full release notes](docs/releases/v0.9.1.md)
+
 ## [0.9.0] - 2026-11-11
 
 ### Added / 新增
@@ -205,7 +218,8 @@ User-facing changes are grouped by release, following [Keep a Changelog](https:/
 
 Earlier releases remain available in [GitHub Releases](https://github.com/zhulongqihan/codex-pulse/releases). / 更早版本保留在 GitHub Releases。
 
-[Unreleased]: https://github.com/zhulongqihan/codex-pulse/compare/v0.9.0...HEAD
+[Unreleased]: https://github.com/zhulongqihan/codex-pulse/compare/v0.9.1...HEAD
+[0.9.1]: https://github.com/zhulongqihan/codex-pulse/releases/tag/v0.9.1
 [0.9.0]: https://github.com/zhulongqihan/codex-pulse/releases/tag/v0.9.0
 [0.8.0]: https://github.com/zhulongqihan/codex-pulse/releases/tag/v0.8.0
 [0.7.4]: https://github.com/zhulongqihan/codex-pulse/releases/tag/v0.7.4

@@ -1,4 +1,5 @@
-import type { PaceCoachExtras, PaceDailyObservation, PaceResetNotice, PaceSnapshot, PaceWindow } from "./pulse-pace";
+import type { PaceCoachExtras, PaceDailyObservation, PaceNoticeState, PaceResetNotice, PaceSnapshot, PaceWindow } from "./pulse-pace";
+import { noticeAllowsActive, noticeHasValidBasis, resolveNoticeState } from "./notice-state";
 
 export type QuotaCoachStatus = "ready" | "unavailable" | "stale" | "failed" | "exhausted" | "expired";
 export type QuotaCoachTone = "roomy" | "balanced" | "fast";
@@ -9,6 +10,7 @@ export type QuotaPaceCoach = {
   hasUnknownWindows: boolean; nearResetWithSurplus: boolean;
   remainingAtReset: { lowerPercent: number; upperPercent: number } | null;
   dailyObservations: PaceDailyObservation[]; observationTimezone: string | null; resetNotice: PaceResetNotice | null;
+  noticeState: PaceNoticeState;
 };
 export type QuotaPaceCoachInput = { windows: PaceWindow[]; now: number; fresh: boolean; failed?: boolean; coachExtras?: PaceCoachExtras };
 const clamp = (value: number) => Math.min(100, Math.max(0, value));
@@ -36,12 +38,12 @@ export function quotaWindowReadState(window: PaceWindow, now: number, fresh: boo
   return window.remainingPercent === 0 ? "exhausted" : "ready";
 }
 function validNotice(notice: PaceResetNotice | null | undefined, now: number): PaceResetNotice | null {
-  if (!notice || notice.verification !== "third_party" || notice.scope !== "global" || !notice.id?.trim() || !notice.summary?.trim() || !notice.sourceLabel?.trim()) return null;
-  try { const url = new URL(notice.sourceUrl); if (url.protocol !== "https:" || url.username || url.password) return null; } catch { return null; }
+  if (!noticeHasValidBasis(notice, now)) return null;
   const updated = at(notice.updatedAt), published = at(notice.publishedAt), start = at(notice.startAt), end = at(notice.endAt);
   // Same five-minute source freshness contract as the backend; no invented announcement timestamp.
   if (updated == null || published == null || now - updated > 300_000 || now - updated < -120_000 || published > now + 120_000) return null;
   if ((notice.startAt != null && start == null) || (notice.endAt != null && end == null) || (end != null && end <= now) || (start != null && end != null && end < start)) return null;
+  if (end == null && published + 86_400_000 <= now) return null;
   return notice;
 }
 function dailyForWindow(extras: PaceCoachExtras | undefined, window: PaceWindow, reset: number): PaceDailyObservation[] {
@@ -69,9 +71,11 @@ export function buildQuotaPaceCoach(input: QuotaPaceCoachInput): QuotaPaceCoach 
     status: "unavailable", tone: null, window: null, remainingPercent: null, usedPercent: null, elapsedPercent: null,
     remainingTimePercent: null, resetAt: null, startAt: null, remainingMinutes: null, reference: null, hasUnknownWindows: false,
     nearResetWithSurplus: false, remainingAtReset: null, dailyObservations: [], observationTimezone: null, resetNotice: null,
+    noticeState: { status: "unknown", checkedAt: null, validUntil: null },
   };
   if (!Number.isFinite(now)) return result;
-  result.resetNotice = validNotice(input.coachExtras?.resetNotice, now);
+  result.resetNotice = noticeAllowsActive(input.coachExtras?.noticeState) ? validNotice(input.coachExtras?.resetNotice, now) : null;
+  result.noticeState = resolveNoticeState(input.coachExtras?.noticeState, input.coachExtras?.resetNotice, result.resetNotice != null, now);
   const candidates = windows.map(window => candidate(window, now)).filter((value): value is NonNullable<typeof value> => value != null);
   const known = windows.find(window => finite(window.remainingPercent) && window.remainingPercent >= 0 && window.remainingPercent <= 100);
   const selected = candidates.sort((left, right) => left.remaining / left.remainingTime - right.remaining / right.remainingTime || left.minutes - right.minutes)[0];

@@ -35,11 +35,17 @@ export type PaceResetNotice = {
   id: string; summary: string; sourceUrl: string; sourceLabel: string; startAt: string | null; endAt: string | null;
   publishedAt: string; updatedAt: string; isUnread: boolean; verification: "third_party"; scope: "global";
 };
+export type PaceNoticeState = {
+  status: "active" | "expired" | "stale" | "unavailable" | "none" | "unknown";
+  checkedAt: string | null;
+  validUntil: string | null;
+};
 export type PaceCoachExtras = {
   observedWindow?: { kind: PaceWindow["kind"]; windowMinutes: number; resetsAt: string } | null;
   observationTimezone?: string | null;
   dailyObservations: PaceDailyObservation[];
   resetNotice: PaceResetNotice | null;
+  noticeState?: PaceNoticeState;
 };
 export type PaceSnapshot = {
   schemaVersion: 1;
@@ -104,7 +110,7 @@ const demo = () => new URLSearchParams(location.search).get("demo") === "1";
 export type SyntheticCoachScenario = "roomy" | "balanced" | "fast" | "notice" | "stale";
 const coachScenarios: SyntheticCoachScenario[] = ["roomy", "balanced", "fast", "notice", "stale"];
 const demoReadNotices = new Set<string>();
-export function syntheticCoachSnapshot(scenario: SyntheticCoachScenario = "roomy", now = new Date()): PaceSnapshot {
+export function syntheticCoachSnapshot(scenario: SyntheticCoachScenario = "roomy", now = new Date(), noticeStatus?: PaceNoticeState["status"]): PaceSnapshot {
   const data = syntheticPaceSnapshot("idle", now), at = now.getTime();
   const remaining = scenario === "fast" ? 20 : scenario === "balanced" ? 71.4 : 80;
   const reset = new Date(at + 5 * 86_400_000).toISOString();
@@ -121,16 +127,23 @@ export function syntheticCoachSnapshot(scenario: SyntheticCoachScenario = "roomy
       { date: now.toISOString().slice(0, 10), consumedPercentPoints: 0, coveredMinutes: 15, partial: true },
     ],
     resetNotice: scenario === "notice" ? { id: "synthetic-reset-notice-v3", summary: "Synthetic reset-notice example — not a real announcement.", sourceUrl: "https://example.org/", sourceLabel: "Synthetic third-party example", startAt: new Date(at + 7_200_000).toISOString(), endAt: new Date(at + 10_800_000).toISOString(), publishedAt: new Date(at - 1_200_000).toISOString(), updatedAt: now.toISOString(), isUnread: true, verification: "third_party", scope: "global" } : null,
+    noticeState: { status: scenario === "notice" ? "active" : "none", checkedAt: now.toISOString(), validUntil: scenario === "notice" ? new Date(at + 10_800_000).toISOString() : null },
   };
+  if (noticeStatus && ["expired", "stale", "unavailable", "none", "unknown"].includes(noticeStatus)) {
+    data.coachExtras.resetNotice = null;
+    data.coachExtras.noticeState = { status: noticeStatus, checkedAt: noticeStatus === "unknown" ? null : new Date(at - (noticeStatus === "stale" ? 360_000 : 0)).toISOString(), validUntil: ["expired", "unavailable"].includes(noticeStatus) ? new Date(at - 60_000).toISOString() : null };
+  }
   return data;
 }
 let pendingRead: Promise<PaceSnapshot> | null = null;
+// An update means a response captured before it can no longer satisfy a local read.
+const invalidatePaceRead = () => { pendingRead = null; };
 export function fetchPulsePace(refresh = false): Promise<PaceSnapshot> {
   if (demo()) {
     const query = new URLSearchParams(location.search);
     const coachScenario = query.get("coachScenario") as SyntheticCoachScenario;
     if (coachScenarios.includes(coachScenario)) {
-      const value = syntheticCoachSnapshot(coachScenario);
+      const value = syntheticCoachSnapshot(coachScenario, new Date(), query.get("noticeScenario") as PaceNoticeState["status"]);
       if (value.coachExtras?.resetNotice && demoReadNotices.has(value.coachExtras.resetNotice.id)) value.coachExtras.resetNotice.isUnread = false;
       return Promise.resolve(value);
     }
@@ -138,7 +151,13 @@ export function fetchPulsePace(refresh = false): Promise<PaceSnapshot> {
     return Promise.resolve(paceStates.includes(state) ? syntheticPaceSnapshot(state) : syntheticCoachSnapshot("roomy"));
   }
   if (refresh) return invoke<PaceSnapshot>("refresh_pulse_pace");
-  if (!pendingRead) pendingRead = invoke<PaceSnapshot>("fetch_pulse_pace").finally(() => { pendingRead = null; });
+  if (!pendingRead) {
+    const request = invoke<PaceSnapshot>("fetch_pulse_pace").finally(() => {
+      // An older request may finish after an update has already started a new one.
+      if (pendingRead === request) pendingRead = null;
+    });
+    pendingRead = request;
+  }
   return pendingRead;
 }
 export async function titlebarAction(action: "toggle" | "close" | "showMain" | "details" | "account") {
@@ -166,9 +185,11 @@ export function usePulsePace() {
   const failedAt = useRef<{ updatedAt: string | null } | null>(null);
   const requestRevision = useRef(0);
   const manualPending = useRef(false);
+  const queuedRead = useRef(false);
+  const localRead = useRef<(() => Promise<void>) | null>(null);
   const mounted = useRef(false);
   const accept = useCallback((value: PaceSnapshot) => {
-    if (current.current?.coachExtras?.resetNotice?.id !== value.coachExtras?.resetNotice?.id) setNoticeError(false);
+    if (current.current?.coachExtras?.resetNotice?.id !== value.coachExtras?.resetNotice?.id || !value.coachExtras?.resetNotice?.isUnread) setNoticeError(false);
     if (value.refreshFailed) failedAt.current = { updatedAt: value.updatedAt };
     else if (failedAt.current && value.updatedAt !== failedAt.current.updatedAt) failedAt.current = null;
     current.current = value;
@@ -179,22 +200,27 @@ export function usePulsePace() {
     mounted.current = true;
     let active = true;
     const read = async () => {
-      if (manualPending.current) return;
+      if (manualPending.current) { queuedRead.current = true; return; }
       const ownRevision = ++requestRevision.current;
       try { const value = await fetchPulsePace(); if (active && ownRevision === requestRevision.current) accept(value); }
       catch { if (active && ownRevision === requestRevision.current) { failedAt.current = { updatedAt: current.current?.updatedAt ?? null }; setError(true); } }
     };
-    void read();
+    localRead.current = read;
     let unlisten: UnlistenFn | undefined;
     // Successful account reads update all companions through a local snapshot read.
     // This event must never issue another account refresh.
-    void listen("pulse-pace-updated", () => { void read(); }).then(remove => {
-      if (active) unlisten = remove; else remove();
-    }).catch(() => { /* The background local poll remains available without native events. */ });
+    void listen("pulse-pace-updated", () => {
+      if (!active) return;
+      invalidatePaceRead();
+      ++requestRevision.current;
+      void read();
+    }).then(remove => {
+      if (active) { unlisten = remove; void read(); } else remove();
+    }).catch(() => { if (active) void read(); /* Polling remains available without native events. */ });
     const timer = window.setInterval(() => { if (!document.hidden) void read(); }, 20_000);
-    const visible = () => { if (!document.hidden) void read(); };
+    const visible = () => { if (!document.hidden) { invalidatePaceRead(); void read(); } };
     document.addEventListener("visibilitychange", visible);
-    return () => { active = false; mounted.current = false; unlisten?.(); clearInterval(timer); document.removeEventListener("visibilitychange", visible); };
+    return () => { active = false; mounted.current = false; localRead.current = null; queuedRead.current = false; unlisten?.(); clearInterval(timer); document.removeEventListener("visibilitychange", visible); };
   }, [accept]);
   const refresh = useCallback(async () => {
     if (manualPending.current) return;
@@ -203,7 +229,13 @@ export function usePulsePace() {
     setRefreshing(true);
     try { const value = await fetchPulsePace(true); if (mounted.current && ownRevision === requestRevision.current) accept(value); }
     catch { if (mounted.current) { failedAt.current = { updatedAt: current.current?.updatedAt ?? null }; setError(true); } }
-    finally { manualPending.current = false; if (mounted.current) setRefreshing(false); }
+    finally {
+      manualPending.current = false;
+      if (mounted.current) {
+        setRefreshing(false);
+        if (queuedRead.current) { queuedRead.current = false; await localRead.current?.(); }
+      }
+    }
   }, [accept]);
   const markNoticeRead = useCallback(async (id: string) => {
     const notice = current.current?.coachExtras?.resetNotice;
@@ -217,11 +249,23 @@ export function usePulsePace() {
         if (value?.coachExtras && mounted.current) accept({ ...value, coachExtras: { ...value.coachExtras, resetNotice: { ...notice, isUnread: false } } });
       } else {
         await invoke("mark_pulse_notice_read", { id });
+        invalidatePaceRead();
         const ownRevision = ++requestRevision.current;
-        const value = await invoke<PaceSnapshot>("fetch_pulse_pace");
-        if (mounted.current && ownRevision === requestRevision.current) accept(value);
+        const confirmed = current.current;
+        if (mounted.current && confirmed?.coachExtras?.resetNotice?.id === id) {
+          accept({ ...confirmed, coachExtras: { ...confirmed.coachExtras, resetNotice: { ...confirmed.coachExtras.resetNotice, isUnread: false } } });
+        }
+        try {
+          const value = await fetchPulsePace();
+          if (mounted.current && ownRevision === requestRevision.current) accept(value);
+        } catch {
+          // The write has succeeded: a failed snapshot reread is not an unread-write failure.
+          if (mounted.current && ownRevision === requestRevision.current) {
+            failedAt.current = { updatedAt: current.current?.updatedAt ?? null }; setError(true);
+          }
+        }
       }
-    } catch { if (mounted.current) setNoticeError(true); }
+    } catch { if (mounted.current && current.current?.coachExtras?.resetNotice?.id === id && current.current.coachExtras.resetNotice.isUnread) setNoticeError(true); }
     finally { noticeReadPending.current = false; if (mounted.current) setNoticePending(false); }
   }, [accept]);
   return { data, error, refreshing, refresh, markNoticeRead, noticePending, noticeError };

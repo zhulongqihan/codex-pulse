@@ -100,6 +100,7 @@ describe("quota forecast presentation", () => {
     let resolve!: (value: typeof initial) => void;
     vi.mocked(invoke).mockImplementationOnce(() => new Promise(done => { resolve = done; }));
     const { result } = renderHook(() => usePulsePace());
+    await act(async () => {});
     const fresh = syntheticPaceSnapshot("forecast", new Date("2026-11-08T06:01:00Z"));
     vi.mocked(invoke).mockResolvedValueOnce(fresh);
     await act(async () => { await result.current.refresh(); });
