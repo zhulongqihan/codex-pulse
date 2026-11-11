@@ -25,12 +25,18 @@ async function command(action: string, data: Record<string, number> = {}) {
   await browser.waitUntil(async () => {
     try { renameSync(temporary, join(directory, 'command.json')); return true; } catch { return false; }
   });
+  let acknowledged: ReturnType<typeof nativeState> = null;
   await browser.waitUntil(async () => {
     const state = nativeState();
-    return state?.commandId === id && !state.pendingPhysicalClick && !state.pendingMotion;
+    if (state?.commandId !== id || state.pendingPhysicalClick || state.pendingMotion) return false;
+    acknowledged = state;
+    return true;
   });
-  const commandError = nativeState()?.commandError;
+  // Publishing the next state briefly replaces the file. Keep the exact valid
+  // acknowledgement instead of rereading during that replacement window.
+  const commandError = acknowledged.commandError;
   if (commandError) throw new Error(`Owned native input was blocked: ${commandError}`);
+  return acknowledged;
 }
 async function visible(value: boolean) {
   try { await browser.waitUntil(async () => (await status()).badgeVisible === value); }
@@ -93,14 +99,19 @@ describe('Pulse attached titlebar in a real owned native host', () => {
     expect(initial.badgeRect!.x).toBeGreaterThan(initial.hostRect!.x);
     expect(initial.badgeRect!.x + initial.badgeRect!.width).toBeLessThan(initial.hostRect!.x + initial.hostRect!.width);
     // The watcher's actual native show operation must keep its owned host in the foreground.
-    await browser.waitUntil(() => nativeState()?.foreground === true);
-    const noFocusTheft = nativeState();
-    await command('captionless');
+    let noFocusTheft: ReturnType<typeof nativeState> = null;
+    await browser.waitUntil(() => {
+      const state = nativeState();
+      if (state?.foreground !== true) return false;
+      noFocusTheft = state;
+      return true;
+    });
+    const captionlessState = await command('captionless');
     await visible(true);
     const captionless = await synchronizedGeometry();
-    expect(nativeState().style & 0x00c00000).toBe(0);
-    expect(nativeState().style & 0x00070000).toBe(0x00070000);
-    record('captionless-main-frame', { nativeState: nativeState(), status: captionless });
+    expect(captionlessState.style & 0x00c00000).toBe(0);
+    expect(captionlessState.style & 0x00070000).toBe(0x00070000);
+    record('captionless-main-frame', { nativeState: captionlessState, status: captionless });
     const workArea = noFocusTheft.workArea;
     expect(workArea.width).toBeGreaterThan(0); expect(workArea.height).toBeGreaterThan(0);
     const width = Math.floor(Math.min(1200, workArea.width * 0.7));

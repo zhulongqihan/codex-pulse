@@ -58,8 +58,10 @@ jobs:
       - name: Build application
         run: pnpm exec tauri build --debug --no-bundle --features e2e --config src-tauri/tauri.e2e.conf.json
       - name: Verify native windows using synthetic sources
+        id: native_parity
         run: pnpm exec wdio run ./wdio.pulse.conf.ts
       - name: Verify notice read state across native windows
+        if: ${{ success() || steps.native_parity.outcome == 'failure' }}
         run: pnpm test:e2e:notice
       - name: Show synthetic native diagnostics on failure
         if: failure()
