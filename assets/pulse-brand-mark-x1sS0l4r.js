@@ -1,0 +1,1 @@
+import{n as e}from"./index-BOqwcIeM.js";var t=`/codex-pulse/assets/icon-B6NwOjr3.png`,n=e();function r({size:e=24,className:r=``}){return(0,n.jsx)(`img`,{src:t,width:e,height:e,className:`pulse-brand-image ${r}`,alt:``,"aria-hidden":`true`,draggable:!1,style:{width:e,height:e,flexShrink:0,objectFit:`contain`}})}export{r as t};
