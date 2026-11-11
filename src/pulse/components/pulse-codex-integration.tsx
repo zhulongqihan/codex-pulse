@@ -1,8 +1,9 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { invoke } from "@tauri-apps/api/core";
 import { ArrowUpRight } from "lucide-react";
 import { getLanguage } from "@/lib/languages";
+import { integrationSettingsCopy } from "@/lib/integration-settings-copy";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "./ui/card";
 import { Button } from "./ui/button";
 
@@ -18,20 +19,26 @@ const messages = {
 export function PulseCodexIntegration() {
   const { i18n } = useTranslation();
   const text = messages[getLanguage(i18n.resolvedLanguage ?? i18n.language)];
+  const copy = (key: Parameters<typeof integrationSettingsCopy>[1]) => integrationSettingsCopy(i18n.resolvedLanguage ?? i18n.language, key);
   const [state, setState] = useState<"idle" | "busy" | "opened" | "error" | "browser">("idle");
+  const pending = useRef(false);
   async function add() {
-    if (!("__TAURI_INTERNALS__" in window)) { setState("browser"); return; }
+    if (pending.current) return;
+    if (!("__TAURI_INTERNALS__" in window) || new URLSearchParams(location.search).get("demo") === "1") { setState("browser"); return; }
+    pending.current = true;
     setState("busy");
     try { await invoke("prepare_codex_integration"); setState("opened"); }
     catch { setState("error"); }
+    finally { pending.current = false; }
   }
   return <Card>
-    <CardHeader><CardTitle>{text.title}</CardTitle><CardDescription>{text.description}</CardDescription></CardHeader>
+    <CardHeader><CardTitle>{text.title}</CardTitle><CardDescription>{copy("description")}</CardDescription></CardHeader>
     <CardContent>
       <div className="flex flex-col gap-4 border-t border-border pt-5 sm:flex-row sm:items-start sm:justify-between">
         <div className="space-y-2 text-sm text-muted-foreground"><p>{text.detail}</p><p className="text-xs">{text.privacy}</p></div>
-        <Button size="sm" variant="secondary" className="shrink-0" disabled={state === "busy"} onClick={() => void add()} data-testid="add-to-codex"><ArrowUpRight size={15}/>{state === "busy" ? text.busy : text.action}</Button>
+        <Button size="sm" variant="secondary" className="h-auto min-h-8 max-w-full whitespace-normal sm:shrink-0" disabled={state === "busy"} onClick={() => void add()} data-testid="add-to-codex"><ArrowUpRight size={15}/>{state === "busy" ? text.busy : text.action}</Button>
       </div>
+      <div className="mt-4 space-y-2 text-xs leading-relaxed text-muted-foreground" data-testid="codex-panel-follow-rules"><p>{copy("following")}</p><p>{copy("refresh")}</p><p>{copy("host")}</p></div>
       {state !== "idle" && state !== "busy" ? <p role="status" className={`mt-3 text-sm ${state === "error" ? "text-error" : "text-muted-foreground"}`}>{text[state]}</p> : null}
     </CardContent>
   </Card>;

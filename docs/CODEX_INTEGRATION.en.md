@@ -36,13 +36,17 @@ Try the [pace card with synthetic data](https://zhulongqihan.github.io/codex-pul
 The local MCP plugin works with a Codex desktop client supporting MCP Apps; see the [official OpenAI documentation](https://developers.openai.com/plugins/build/extensions). Its bottom composer belongs to the Codex host and cannot be reliably hidden by Pulse. Use the corner card above for a view without an input box.
 
 1. Extract the complete portable package to a location you intend to keep. Start Codex Pulse and refresh its data once.
-2. In Pulse, go to **Settings → General → Codex desktop shortcut** and select **Add to Codex**.
+2. In Pulse, go to **Settings → Desktop & Codex → Codex desktop shortcut** and select **Add to Codex**.
 3. Review the plugin details opened in Codex and choose **Install**. Complete any additional confirmation shown by the client.
 4. Open **Codex Pulse** from the Codex sidebar. A supported client also exposes a chat panel entry. If the client offers pinning, pin the entry to the sidebar.
 
 Starting with 0.7.1, normal startup and the Add action idempotently prepare `integrations/codex` from embedded templates. The portable archive no longer carries placeholder templates that could overwrite prepared files. Add also opens the client plugin details, where Codex performs installation. No Node.js, API key, or extra background web service is needed. Normal startup retains a valid existing data binding; explicitly adding again can change it.
 
-The panel shows today's tokens, estimated cost, and the remaining quota and reset time for each available quota window. Window durations are labeled using the data obtained by Pulse. It includes Reread snapshot, open Pulse dashboard, and open desktop widget buttons. Unavailable data is shown as missing or stale.
+The panel shows today's tokens, estimated cost, and the remaining quota and reset time for each available quota window. Window durations are labeled using the data obtained by Pulse. It also shows the current cycle’s daily observations and sourced, time-qualified public reset notices. Actions reread the snapshot or open the Pulse dashboard, desktop widget and consumption details. Unavailable data is shown as missing or stale.
+
+## Language and appearance
+
+The panel supports Simplified Chinese, Traditional Chinese, English, Japanese, Korean and German. It follows Pulse’s language and appearance by default; rereading the snapshot picks up the latest local preferences. Choose Clear or Meter for this panel only, or Follow Pulse to resume following. This does not change global Pulse or Codex preferences. The host locale is only a fallback when Pulse provides no language; Codex still controls its container and composer.
 
 ## Data and refresh
 
@@ -90,7 +94,7 @@ To test marketplace registration against a separate Codex configuration folder w
 - This is a desktop local stdio plugin. Codex Web, mobile clients, and a regular CLI cannot provide the same desktop sidebar interface.
 - The client must support MCP Apps and global/thread entrypoints. Organization policies may restrict local plugin installation. Check client support and permissions if the entries are unavailable.
 - Installation through the client plugin page can load tools immediately on clients that support it. If the entry is still missing, check that the plugin is enabled, then try a new chat. Close and reopen the client normally if needed.
-- The plugin starts Pulse by executable name with a PATH bound to its installation folder. That folder must not contain a semicolon. After moving the portable folder, check local entry bindings in Pulse Settings → Maintenance and repair them as needed. If Codex still retains an old plugin cache, remove the old Pulse plugin and add it again from the new location. Reinstall from the plugin page if the client retains an old plugin cache after an update.
+- The plugin starts Pulse by executable name with a PATH bound to its installation folder. That folder must not contain a semicolon. After moving the portable folder, check local entry bindings in Pulse Settings → Desktop & Codex and repair them as needed. If Codex still retains an old plugin cache, remove the old Pulse plugin and add it again from the new location. Reinstall from the plugin page if the client retains an old plugin cache after an update.
 - Uninstall **Codex Pulse** in the Codex plugin page to remove its client entry. Pulse itself and existing usage data remain available.
 
 See [OpenAI plugin packaging](https://developers.openai.com/plugins/build/plugins) and [desktop local MCP configuration](https://developers.openai.com/plugins/deploy/desktop-only) for stdio configuration, `${PLUGIN_ROOT}` paths, and local installation.

@@ -1,0 +1,11 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "widget",
+  "description": "Allow the floating widget to fit its own content.",
+  "windows": [
+    "widget"
+  ],
+  "permissions": [
+    "core:window:allow-set-size"
+  ]
+}

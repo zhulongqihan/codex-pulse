@@ -17,3 +17,7 @@
 .pulse-widget-coach .pulse-widget-header>.pulse-widget-notice{display:flex;flex:1;min-width:0;gap:4px;justify-content:flex-start;padding:2px 5px;background:rgb(180 110 20 / .12);color:rgb(135 78 8);font-size:12px;font-weight:600}
 .pulse-widget-notice span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 html[data-theme=dark] .pulse-widget-coach .pulse-widget-header>.pulse-widget-notice{color:rgb(250 199 109)}
+.pulse-widget-coach .coach-empty-guide{margin-top:12px;padding:10px 0;border-top:1px solid var(--pace-line);font-size:12px;line-height:1.6}
+.pulse-widget-coach .coach-empty-guide h3{margin:0;font-size:13px;font-weight:600}
+.pulse-widget-coach .coach-empty-guide>p{margin-top:7px;color:var(--pace-muted)}
+.pulse-widget-coach .coach-empty-guide .coach-reset-notice{margin-top:10px}

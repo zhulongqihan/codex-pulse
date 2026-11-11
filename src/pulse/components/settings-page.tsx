@@ -3,6 +3,7 @@ import { PulseSourceSettings } from "./pulse-source-settings";
 import { PulseCodexIntegration } from "./pulse-codex-integration";
 import { CloseBehaviorNote } from "./close-behavior";
 import { PulseInstallationSettings } from "./pulse-installation-settings";
+import { integrationSettingsCopy } from "@/lib/integration-settings-copy";
 import { PulsePaceSettings } from "./pulse-pace-settings";
 import { usePulseCopy } from "@/lib/pulse-copy";
 import { useShellCopy } from "@/lib/shell-copy";
@@ -78,9 +79,9 @@ const TRAY_OPTION_KEYS = {
   cost: "cost",
 } as const;
 
-export type SettingsSection = "appearance" | "source" | "general" | "menuBar" | "maintenance" | "third_party";
+export type SettingsSection = "appearance" | "source" | "general" | "desktop" | "menuBar" | "maintenance" | "third_party";
 
-const SETTINGS_SECTIONS: SettingsSection[] = ["appearance", "general", "source", "menuBar", "maintenance", "third_party"];
+const SETTINGS_SECTIONS: SettingsSection[] = ["appearance", "general", "desktop", "source", "menuBar", "maintenance", "third_party"];
 
 export function SettingsPage({
   initialSection = "appearance",
@@ -133,12 +134,16 @@ export function SettingsPage({
   }, [updateInfo?.releaseNotes, i18n.language, i18n.resolvedLanguage]);
   const hasSub = hasSubscription(codexLimits);
   const currentLanguage = getLanguage(i18n.resolvedLanguage ?? i18n.language);
+  const entryCopy = (key: Parameters<typeof integrationSettingsCopy>[1]) => integrationSettingsCopy(currentLanguage, key);
   const isLoginStartupChecking = !launchAtLoginKnown && !launchAtLoginError;
   const loginStartupStatus = isLaunchAtLoginUpdating ? "updating" : launchAtLoginError ? "unconfirmed" : !launchAtLoginKnown ? "checking" : launchAtLogin ? "enabled" : "disabled";
   const focusLoginStartup = () => {
-    const target = document.getElementById("toggle-launch-at-login");
-    target?.scrollIntoView({ block: "center", behavior: "auto" });
-    target?.focus({ preventScroll: true });
+    setActiveSection("general");
+    requestAnimationFrame(() => {
+      const target = document.getElementById("toggle-launch-at-login");
+      target?.scrollIntoView({ block: "center", behavior: "auto" });
+      target?.focus({ preventScroll: true });
+    });
   };
 
   const optionKeys: Array<"limit5h" | "limitWeekly" | "tokens" | "cost"> = hasSub
@@ -166,7 +171,7 @@ export function SettingsPage({
 
   const renderSectionTab = (section: SettingsSection) => {
     const selected = activeSection === section;
-    const label = section === "menuBar" ? shellCopy("tray") : section === "appearance" || section === "source" ? copy(section) : t(`settings.nav_${section}`);
+    const label = section === "desktop" || section === "appearance" ? entryCopy(section) : section === "menuBar" ? entryCopy("tray") : section === "source" ? copy(section) : t(`settings.nav_${section}`);
     const sectionId = `settings-section-${section}`;
 
     return (
@@ -202,11 +207,40 @@ export function SettingsPage({
     );
   };
 
+  const languageContent = (
+      <Card>
+        <CardHeader>
+          <CardTitle>{t("settings.language_title")}</CardTitle>
+          <CardDescription>{t("settings.language_desc")}</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="flex flex-col gap-4 border-t border-border pt-5 sm:flex-row sm:items-center sm:justify-between">
+            <div className="space-y-1">
+              <h4 className="text-sm font-medium text-foreground">{t("settings.language_label")}</h4>
+            </div>
+            <div className="flex items-center gap-2">
+              <Select
+                value={currentLanguage}
+                onValueChange={handleLanguageChange}
+                disabled={isDisabled}
+              >
+                <SelectTrigger className="w-[140px]" aria-label={t("settings.language_label")}>
+                  <SelectValue placeholder={t("settings.language_label")} />
+                </SelectTrigger>
+                <SelectContent>
+                  {languageCodes.map((code) => (
+                    <SelectItem key={code} value={code}>{languages[code].name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+  );
+
   const generalContent = (
     <>
-      <PulsePaceSettings onManageStartup={focusLoginStartup} manageStartupDisabled={isDisabled || isLoginStartupChecking || isLaunchAtLoginUpdating}/>
-      <PulseCodexIntegration />
-      <CloseBehaviorNote />
       <Card>
         <CardHeader>
           <CardTitle>{t("settings.updates_title")}</CardTitle>
@@ -323,35 +357,7 @@ export function SettingsPage({
         </CardContent>
       </Card>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>{t("settings.language_title")}</CardTitle>
-          <CardDescription>{t("settings.language_desc")}</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="flex flex-col gap-4 border-t border-border pt-5 sm:flex-row sm:items-center sm:justify-between">
-            <div className="space-y-1">
-              <h4 className="text-sm font-medium text-foreground">{t("settings.language_label")}</h4>
-            </div>
-            <div className="flex items-center gap-2">
-              <Select
-                value={currentLanguage}
-                onValueChange={handleLanguageChange}
-                disabled={isDisabled}
-              >
-                <SelectTrigger className="w-[140px]">
-                  <SelectValue placeholder={t("settings.language_label")} />
-                </SelectTrigger>
-                <SelectContent>
-                  {languageCodes.map((code) => (
-                    <SelectItem key={code} value={code}>{languages[code].name}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
+
 
       <Card>
         <CardHeader>
@@ -458,6 +464,7 @@ export function SettingsPage({
               />
             </button>
           </div>
+          <Button type="button" variant="secondary" size="sm" className="mt-4 h-auto min-h-8 max-w-full whitespace-normal" onClick={() => { setActiveSection("desktop"); requestAnimationFrame(() => document.getElementById("settings-tab-desktop")?.focus()); }}>{entryCopy("openDesktop")}</Button>
         </CardContent>
       </Card>
     </>
@@ -465,7 +472,6 @@ export function SettingsPage({
 
   const menuBarContent = (
     <>
-    <PulseWidgetSettings/>
     <Card>
       <CardHeader>
         <CardTitle>{isMac ? t("settings.menu_bar_title") : shellCopy("trayTitle")}</CardTitle>
@@ -554,7 +560,6 @@ export function SettingsPage({
 
   const maintenanceContent = (
     <>
-      <PulseInstallationSettings onBindingsChanged={onBindingsChanged} />
       <Card>
         <CardHeader>
           <CardTitle>{t("settings.cache_title")}</CardTitle>
@@ -593,7 +598,14 @@ export function SettingsPage({
           id="settings-panel"
           className="space-y-4"
         >
-          <section role="tabpanel" hidden={activeSection !== "appearance"} id="settings-section-appearance" aria-labelledby="settings-tab-appearance" className="pulse-settings-tab-panel"><PulseAppearanceSettings/></section>
+          <section role="tabpanel" hidden={activeSection !== "appearance"} id="settings-section-appearance" aria-labelledby="settings-tab-appearance" className="pulse-settings-tab-panel space-y-4"><PulseAppearanceSettings/>{languageContent}</section>
+          <section role="tabpanel" hidden={activeSection !== "desktop"} id="settings-section-desktop" aria-labelledby="settings-tab-desktop" className="pulse-settings-tab-panel space-y-4">
+            <PulsePaceSettings onManageStartup={focusLoginStartup} manageStartupDisabled={isDisabled || isLoginStartupChecking || isLaunchAtLoginUpdating}/>
+            <PulseWidgetSettings/>
+            <PulseCodexIntegration/>
+            <PulseInstallationSettings onBindingsChanged={onBindingsChanged}/>
+            <CloseBehaviorNote/>
+          </section>
           <section
             id="settings-section-general"
             role="tabpanel" hidden={activeSection !== "general"}

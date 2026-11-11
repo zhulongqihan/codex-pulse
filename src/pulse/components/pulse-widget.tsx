@@ -1,4 +1,4 @@
-import { useId, useRef, useState } from "react";
+import { useCallback, useId, useRef, useState } from "react";
 import { Bell, ChevronDown, ChevronUp, ExternalLink, GripHorizontal, Pin, PinOff, X } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { pulseWidgetAction, usePulsePreferences } from "@/lib/pulse-appearance";
@@ -10,6 +10,7 @@ import { quotaCoachCopy, quotaCoachFeedback } from "@/lib/quota-pace-coach-copy"
 import { quotaCoachFromSnapshot } from "@/lib/quota-pace-coach";
 import { PulseBrandMark } from "./pulse-brand-mark";
 import { PulsePaceCard } from "./pulse-pace";
+import { useWidgetContentSize } from "@/hooks/use-widget-content-size";
 import "./pulse-widget.css";
 
 export function PulseWidget() {
@@ -21,9 +22,14 @@ export function PulseWidget() {
   const [pinPending, setPinPending] = useState(false);
   const pinLock = useRef(false);
   const hideHintId = useId();
+  const panel = useRef<HTMLElement>(null);
   const language = i18n.resolvedLanguage ?? i18n.language;
   const pinLabel = copy(preferences.widgetAlwaysOnTop ? "unpinAction" : "pinAction");
-  const compactNotice = !preferences.widgetExpanded && quotaCoachFromSnapshot(pace.data, Date.now(), pace.error).resetNotice?.isUnread;
+  const coach = quotaCoachFromSnapshot(pace.data, Date.now(), pace.error);
+  const compactNotice = !preferences.widgetExpanded && coach.resetNotice?.isUnread;
+  const empty = coach.remainingPercent == null;
+  const resizeFailure = useCallback(() => setActionFailed(true), []);
+  useWidgetContentSize(panel, preferences.widgetExpanded, empty, `${language}:${preferences.skinId}:${preferences.theme}:${preferences.widgetAlwaysOnTop}:${preferences.widgetVisible}`, resizeFailure);
   const action = (value: Parameters<typeof pulseWidgetAction>[0]) => {
     setActionFailed(false);
     void pulseWidgetAction(value).catch(() => setActionFailed(true));
@@ -36,7 +42,7 @@ export function PulseWidget() {
     catch { setActionFailed(true); }
     finally { pinLock.current = false; setPinPending(false); }
   };
-  return <main className={`pulse-widget pulse-widget-coach ${preferences.widgetExpanded ? "is-expanded" : ""}`}>
+  return <main ref={panel} className={`pulse-widget pulse-widget-coach ${preferences.widgetExpanded ? "is-expanded" : ""}${empty ? " is-empty" : ""}`}>
     <header className="pulse-widget-header" data-tauri-drag-region>
       <PulseBrandMark size={20}/>{compactNotice ? <button type="button" className="pulse-widget-notice" onClick={() => action("expand")} title={quotaCoachFeedback(language, "noticeCompact")}><Bell size={13}/><span>{quotaCoachFeedback(language, "noticeCompact")}</span></button> : <strong data-tauri-drag-region>{quotaCoachCopy(language, "title")}</strong>}
       <GripHorizontal size={15} className="pulse-widget-grip" data-tauri-drag-region aria-hidden="true"/>

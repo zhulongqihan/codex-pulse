@@ -230,6 +230,34 @@ describe('Pulse native parity', () => {
     }
   });
 
+  it('searches loaded session groups and restores the list with Escape in both skins', async () => {
+    const sessions = await invoke<any[]>('fetch_session_details');
+    const target = sessions.find(session => session.sessionId && !session.parentSessionId)!;
+    expect(target).toBeDefined();
+    const checks: unknown[] = [];
+    for (const skinId of ['clear', 'meter']) {
+      await invoke('set_pulse_preferences', { patch: { skinId, theme: 'light', motionLevel: 'off' } });
+      await $('[data-testid="sessions-nav-tab"]').click();
+      const search = $('[data-testid="session-list-search"] input');
+      await search.waitForDisplayed();
+      await search.setValue(target.sessionId);
+      await $('[data-testid="session-list-search-result"]').waitForDisplayed();
+      await $('[data-testid="session-card"]').waitForDisplayed();
+      const result = await $('[data-testid="session-list-search-result"]').getText();
+      expect(result).toContain('1 个匹配组');
+      await search.setValue('__pulse_native_search_no_match__');
+      await $('h3=没有匹配的会话组').waitForDisplayed();
+      expect(await browser.$$('[data-testid="session-card"]').length).toBe(0);
+      await search.click();
+      await browser.keys('Escape');
+      await expect(search).toHaveValue('');
+      await $('[data-testid="session-card"]').waitForDisplayed();
+      checks.push({ skinId, metadataQueryMatchedOneGroup: true, noResultsExplicit: true, escapeRestored: true, result });
+      await shot(`${skinId}-session-list-search`);
+    }
+    evidence('session-list-search', checks);
+  });
+
   it('keeps search, selected replay and scroll position without data requests on appearance changes', async () => {
     await $('[data-testid="sessions-nav-tab"]').click();
     await $('[data-testid="session-card"]').waitForDisplayed();
@@ -308,8 +336,8 @@ describe('Pulse native parity', () => {
       await $('[data-testid="settings-nav-tab"]').click();
       expect(await browser.execute(() => document.querySelector<HTMLElement>('.pulse-main-scroll')!.scrollTop)).toBe(0);
       await expect($('#settings-tab-appearance')).toHaveAttribute('aria-selected', 'true');
-      await $('#settings-tab-general').click();
-      await expect($('#settings-section-general')).toBeDisplayed();
+      await $('#settings-tab-desktop').click();
+      await expect($('#settings-section-desktop')).toBeDisplayed();
       await expect($('[data-testid="add-to-codex"]')).toBeDisplayed();
       await expect($('[data-testid="add-to-codex"]')).toBeEnabled();
       await expect($('#settings-section-appearance')).not.toBeDisplayed();
@@ -415,7 +443,7 @@ describe('Pulse native parity', () => {
 
   it('shares preferences and engine across widget and tray, with actual native visibility', async () => {
     const widgetSizes: Record<string, unknown> = {};
-    async function verifyWidgetClient(name: string, height: 180 | 480) {
+    async function verifyWidgetClient(name: string, height: 180 | 'expanded') {
       const nativeClient = async () => {
         const [scaleFactor, physicalClient] = await Promise.all([
           invoke<number>('plugin:window|scale_factor', { label: 'widget' }),
@@ -426,8 +454,17 @@ describe('Pulse native parity', () => {
       try {
         await browser.waitUntil(async () => {
           const size = await nativeClient();
-          return size.scaleFactor > 0 && Math.abs(size.physicalClient.width - Math.round(350 * size.scaleFactor)) <= 1
-            && Math.abs(size.physicalClient.height - Math.round(height * size.scaleFactor)) <= 1;
+          const layout = await browser.execute(() => {
+            const empty = document.querySelector('[data-testid="widget-empty-guide"]');
+            const body = document.querySelector('.coach-body'), footer = document.querySelector('.pulse-pace-footer');
+            const last = body?.lastElementChild?.getBoundingClientRect(), foot = footer?.getBoundingClientRect();
+            return { empty: empty !== null, blank: last && foot ? Math.max(0, foot.top - last.bottom) : null };
+          });
+          const expected = height === 180 ? 180 : layout.empty ? null : 480;
+          const heightMatches = expected != null ? Math.abs(size.physicalClient.height - Math.round(expected * size.scaleFactor)) <= 1
+            : size.logicalClient.height >= 220 - 1 / size.scaleFactor && size.logicalClient.height <= 480 + 1 / size.scaleFactor
+              && layout.blank != null && layout.blank <= 20;
+          return size.scaleFactor > 0 && Math.abs(size.physicalClient.width - Math.round(350 * size.scaleFactor)) <= 1 && heightMatches;
         });
       } catch (error) {
         const [outerSize, preferences, dom] = await Promise.all([
@@ -461,12 +498,17 @@ describe('Pulse native parity', () => {
         const state = document.querySelector('.coach-state');
         const recover = document.querySelector('.coach-recover');
         const actions = [...document.querySelectorAll('.pulse-widget-header > button')];
+        const emptyGuide = document.querySelector('[data-testid="widget-empty-guide"]');
+        const body = document.querySelector('.coach-body'), lastBodyChild = body?.lastElementChild?.getBoundingClientRect();
+        const footerBounds = footer?.getBoundingClientRect();
         return { viewport: { width: innerWidth, height: innerHeight }, devicePixelRatio,
           documentFits: document.documentElement.scrollWidth <= innerWidth + 1,
           mainFits: mainBounds.left >= -1 && mainBounds.top >= -1 && mainBounds.right <= innerWidth + 1 && mainBounds.bottom <= innerHeight + 1,
           contentFitsWidth: scroll.scrollWidth <= scroll.clientWidth + 1,
           readings: readings.length, readingsHit: readings.length === 2 && readings.every(hit),
           recoveryHit: state !== null && recover !== null && hit(state) && hit(recover),
+          emptyGuide: emptyGuide !== null,
+          blankBeforeFooter: lastBodyChild && footerBounds ? Math.max(0, footerBounds.top - lastBodyChild.bottom) : null,
           headerActions: actions.length, headerActionsHit: actions.length >= 4 && actions.every(hit),
           pinTarget: (() => { const button = document.querySelector('[data-testid="widget-pin"]')!; const rect = button.getBoundingClientRect(); return { width: rect.width, height: rect.height, label: button.getAttribute('aria-label'), pressed: button.getAttribute('aria-pressed') }; })(),
           footerExists: footer !== null, footerHit: footer !== null && hit(footer),
@@ -475,9 +517,19 @@ describe('Pulse native parity', () => {
       widgetSizes[name] = { expectedLogicalClient: { width: 350, height }, ...size, content };
       evidence('widget-native-client-sizes', widgetSizes);
       expect(Math.abs(size.logicalClient.width - 350)).toBeLessThanOrEqual(1 / size.scaleFactor);
-      expect(Math.abs(size.logicalClient.height - height)).toBeLessThanOrEqual(1 / size.scaleFactor);
+      if (height === 180 || !content.emptyGuide) {
+        const expectedHeight = height === 180 ? 180 : 480;
+        expect(Math.abs(size.logicalClient.height - expectedHeight)).toBeLessThanOrEqual(1 / size.scaleFactor);
+        expect(Math.abs(content.viewport.height - expectedHeight)).toBeLessThanOrEqual(1);
+      } else {
+        expect(size.logicalClient.height).toBeGreaterThanOrEqual(220 - 1 / size.scaleFactor);
+        expect(size.logicalClient.height).toBeLessThanOrEqual(480 + 1 / size.scaleFactor);
+        expect(content.blankBeforeFooter).not.toBeNull();
+        expect(content.blankBeforeFooter!).toBeLessThanOrEqual(20);
+        expect(content.readings).toBe(0);
+      }
       expect(Math.abs(content.viewport.width - 350)).toBeLessThanOrEqual(1);
-      expect(Math.abs(content.viewport.height - height)).toBeLessThanOrEqual(1);
+      expect(Math.abs(content.viewport.height - size.logicalClient.height)).toBeLessThanOrEqual(1);
       expect(content.documentFits).toBe(true); expect(content.mainFits).toBe(true);
       expect(content.contentFitsWidth).toBe(true);
       expect([0, 2]).toContain(content.readings);
@@ -515,7 +567,7 @@ describe('Pulse native parity', () => {
       await shot(`${skin}-widget`);
       await invoke('widget_action', { action: 'expand' });
       await $('.pulse-widget.is-expanded').waitForDisplayed();
-      await verifyWidgetClient(`${skin}-expanded`, 480);
+      await verifyWidgetClient(`${skin}-expanded`, 'expanded');
       const pin = $('[data-testid="widget-pin"]');
       expect(await pin.getAttribute('aria-label')).toBe('取消置顶');
       await pin.click();
@@ -526,8 +578,11 @@ describe('Pulse native parity', () => {
       await pin.click();
       await browser.waitUntil(async () => (await invoke<any>('get_pulse_preferences')).widgetAlwaysOnTop === true);
       await browser.waitUntil(async () => await pin.getAttribute('aria-label') === '取消置顶');
+      await verifyWidgetClient(`${skin}-expanded-after-pin`, 'expanded');
       await shot(`${skin}-widget-expanded`);
       await invoke('widget_action', { action: 'collapse' });
+      await $('.pulse-widget:not(.is-expanded)').waitForDisplayed();
+      await verifyWidgetClient(`${skin}-collapsed-after-expanded`, 180);
       await browser.switchToWindow('main');
       await invoke('tray_popover_action', { action: 'rightClick' });
       await browser.switchToWindow('tray');

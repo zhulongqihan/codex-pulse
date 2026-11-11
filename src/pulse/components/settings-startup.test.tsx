@@ -1,10 +1,12 @@
 // @vitest-environment jsdom
-import { render, screen } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type { ComponentProps } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import i18n from "@/i18n";
 import { paceCopy } from "@/lib/pulse-pace-copy";
+import { integrationSettingsCopy } from "@/lib/integration-settings-copy";
+import { pulseCopy } from "@/lib/pulse-copy";
 import { SettingsPage } from "./settings-page";
 
 vi.mock("@tauri-apps/api/core", () => ({ isTauri: () => false, invoke: vi.fn() }));
@@ -54,13 +56,16 @@ describe("login startup and the existing titlebar setting", () => {
   });
   it.each(["en", "zh", "zh-Hant", "ja", "ko", "de"])("keeps login startup separate from opening Codex in %s", async language => {
     await i18n.changeLanguage(language);
-    render(<SettingsPage {...props()}/>);
+    render(<SettingsPage {...props({ initialSection: "desktop" })}/>);
     const note = screen.getByText(paceCopy(language, "settingNote"));
     expect(note).toBeVisible(); expect(note).toHaveTextContent("Pulse"); expect(note).toHaveTextContent("Codex");
+    expect(screen.queryByRole("heading", { name: i18n.t("settings.launch_at_login_title") })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: paceCopy(language, "manageStartup") })).toBeVisible();
+    await userEvent.click(screen.getByRole("button", { name: paceCopy(language, "manageStartup") }));
     expect(screen.getByRole("heading", { name: i18n.t("settings.launch_at_login_title") })).toBeVisible();
     expect(screen.getByTestId("login-startup-status")).toHaveTextContent(i18n.t("settings.launch_at_login_disabled"));
     expect(document.querySelectorAll("#toggle-launch-at-login")).toHaveLength(1);
-    expect(screen.getByRole("button", { name: paceCopy(language, "manageStartup") })).toBeVisible();
+    expect(screen.getByRole("button", { name: integrationSettingsCopy(language, "openDesktop") })).toBeVisible();
   });
 
   it("does not report the initial unknown value as off or allow a write before the read completes", async () => {
@@ -82,7 +87,9 @@ describe("login startup and the existing titlebar setting", () => {
     rerender(<SettingsPage {...handlers} isLaunchAtLoginUpdating/>);
     const toggle = screen.getByRole("button", { name: "Toggle Launch at Login" });
     expect(toggle).toBeDisabled(); expect(toggle).toHaveAttribute("aria-busy", "true");
+    await userEvent.click(screen.getByRole("tab", { name: "Desktop & Codex" }));
     expect(screen.getByRole("button", { name: "Manage login startup" })).toBeDisabled();
+    await userEvent.click(screen.getByRole("tab", { name: "General" }));
     expect(screen.getByTestId("login-startup-status")).toHaveTextContent("Saving the login-startup setting");
     rerender(<SettingsPage {...handlers} launchAtLogin={false} launchAtLoginKnown={false} launchAtLoginError="Cannot read the login item"/>);
     expect(screen.getByTestId("login-startup-status")).toHaveTextContent("could not be confirmed");
@@ -90,19 +97,43 @@ describe("login startup and the existing titlebar setting", () => {
     expect(toggle).not.toBeDisabled();
     await userEvent.click(toggle); expect(handlers.onLaunchAtLoginChange).toHaveBeenCalledExactlyOnceWith(true);
     rerender(<SettingsPage {...handlers} isDisabled/>);
+    await userEvent.click(screen.getByRole("tab", { name: "Desktop & Codex" }));
     expect(screen.getByRole("button", { name: "Manage login startup" })).toBeDisabled();
   });
 
   it.each(["clear", "meter"])("moves keyboard focus to the one existing toggle without enabling it in %s", async skin => {
     document.documentElement.dataset.skin = skin;
-    const handlers = props(); render(<SettingsPage {...handlers}/>);
+    const handlers = props({ initialSection: "desktop" }); render(<SettingsPage {...handlers}/>);
     const manage = screen.getByRole("button", { name: "Manage login startup" });
     manage.focus(); await userEvent.keyboard("{Enter}");
     const toggle = screen.getByRole("button", { name: "Toggle Launch at Login" });
-    expect(toggle).toHaveFocus();
+    await waitFor(() => expect(toggle).toHaveFocus());
     expect(Element.prototype.scrollIntoView).toHaveBeenCalledWith({ block: "center", behavior: "auto" });
     expect(handlers.onLaunchAtLoginChange).not.toHaveBeenCalled();
     expect(toggle).toHaveAttribute("aria-pressed", "false");
     await userEvent.keyboard(" "); expect(handlers.onLaunchAtLoginChange).toHaveBeenCalledExactlyOnceWith(true);
+  });
+
+  it.each(["zh", "zh-Hant", "en", "ja", "ko", "de"])("groups entries once and keeps language in Appearance in %s", async language => {
+    await i18n.changeLanguage(language); const handlers=props({initialSection:"desktop"});render(<SettingsPage {...handlers}/>);
+    const desktop=screen.getByRole("tabpanel",{name:integrationSettingsCopy(language,"desktop")});
+    expect(within(desktop).getByTestId("titlebar-enabled")).toBeVisible();
+    expect(within(desktop).getByRole("checkbox",{name:pulseCopy(language,"visible")})).toBeVisible();
+    expect(within(desktop).getByTestId("installation-check")).toBeVisible();
+    expect(document.querySelectorAll("#toggle-launch-at-login")).toHaveLength(1);
+    await userEvent.click(screen.getByRole("tab",{name:integrationSettingsCopy(language,"appearance")}));
+    expect(screen.getByRole("combobox",{name:i18n.t("settings.language_label")})).toBeVisible();
+    await userEvent.click(screen.getByRole("tab",{name:integrationSettingsCopy(language,"tray")}));
+    expect(screen.queryByRole("checkbox",{name:pulseCopy(language,"visible")})).not.toBeInTheDocument();
+    expect(handlers.onLaunchAtLoginChange).not.toHaveBeenCalled();expect(handlers.onReset).not.toHaveBeenCalled();
+  });
+
+  it("keeps legacy section keys and keyboard tab traversal while moving controls to their true group", async () => {
+    render(<SettingsPage {...props({initialSection:"maintenance"})}/>);
+    const maintenance=screen.getByRole("tab",{name:"Maintenance"});expect(maintenance).toHaveAttribute("aria-selected","true");
+    expect(screen.queryByTestId("installation-check")).not.toBeVisible();
+    maintenance.focus();await userEvent.keyboard("{Home}");expect(screen.getByRole("tab",{name:"Appearance & language"})).toHaveFocus();
+    await userEvent.keyboard("{ArrowRight}{ArrowRight}");expect(screen.getByRole("tab",{name:"Desktop & Codex"})).toHaveFocus();
+    expect(screen.getByTestId("installation-check")).toBeVisible();await userEvent.keyboard("{End}");expect(screen.getByRole("tab",{name:i18n.t("settings.nav_third_party")})).toHaveFocus();
   });
 });

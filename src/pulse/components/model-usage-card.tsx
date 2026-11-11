@@ -18,6 +18,7 @@ import {
 import { formatCompactNumber, formatCurrency, formatNumber, formatPercent } from "@/lib/formatters";
 import { cn } from "@/lib/utils";
 import { useTranslation } from "react-i18next";
+import { readingGuidanceCopy } from "@/lib/reading-guidance-copy";
 
 type ModelUsageCardProps = { models: OverviewResponse["models"] };
 
@@ -75,8 +76,19 @@ function QuotaBar({ value, maxPercent, color, label, metric }: { value: ModelQuo
   </div>;
 }
 
+function QuotaWindow({ value, label, color, totalMax, perMillionMax }: { value: ModelQuotaEstimate | null | undefined; label: string; color: string; totalMax: number; perMillionMax: number }) {
+  const { t, i18n } = useTranslation();
+  return <div className="grid gap-1" data-quota-window data-has-sample={value != null}>
+    <span className={cn("text-[12px] font-medium", color === "#0ea5e9" ? "text-sky-600 dark:text-sky-400" : "text-violet-600 dark:text-violet-400")}>{label}</span>
+    {value == null ? <p className="text-[12px] leading-relaxed text-muted-foreground" title={readingGuidanceCopy(i18n.resolvedLanguage ?? i18n.language, "modelMissing")}>{t("models.quota.no_sample")}</p> : <>
+      <QuotaBar value={value} maxPercent={totalMax} color={color} label={label} metric="percent" />
+      <QuotaBar value={value} maxPercent={perMillionMax} color={color} label={label} metric="percentPerMillionTokens" />
+    </>}
+  </div>;
+}
+
 export function ModelUsageCard({ models }: ModelUsageCardProps) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const [sort, setSort] = useState<ModelSort>("tokens");
   const totals = useMemo(() => models.reduce((result, model) => ({
     inputTokens: result.inputTokens + model.inputTokens,
@@ -101,6 +113,7 @@ export function ModelUsageCard({ models }: ModelUsageCardProps) {
   const unavailable = t("models.pricing_unavailable");
   const quotaMaxPercent = Math.max(100, Math.ceil(Math.max(...models.flatMap((model) => [model.fiveHourQuota?.percent ?? 0, model.weeklyQuota?.percent ?? 0])) / 25) * 25);
   const quotaPerMillionMaxPercent = Math.max(100, Math.ceil(Math.max(...models.flatMap((model) => [model.fiveHourQuota?.percentPerMillionTokens ?? 0, model.weeklyQuota?.percentPerMillionTokens ?? 0])) / 25) * 25);
+  const hasQuotaSamples = models.some(model => model.fiveHourQuota != null || model.weeklyQuota != null);
 
   if (models.length === 0) {
     return <Card><CardContent className="py-14 text-center text-sm text-muted-foreground">{t("models.no_data")}</CardContent></Card>;
@@ -128,27 +141,19 @@ export function ModelUsageCard({ models }: ModelUsageCardProps) {
       <Card data-testid="model-quota-estimates">
         <CardHeader><CardTitle>{t("models.quota.title")}</CardTitle><CardDescription>{t("models.quota.subtitle")}</CardDescription></CardHeader>
         <CardContent className="space-y-3">
-          <div className="flex flex-wrap items-center gap-x-5 gap-y-1 text-[12px] text-muted-foreground">
+          {hasQuotaSamples ? <div className="flex flex-wrap items-center gap-x-5 gap-y-1 text-[12px] text-muted-foreground">
             <span><i className="mr-1.5 inline-block h-2.5 w-2.5 rounded-full bg-sky-500" />{t("models.quota.five_hour")}</span>
             <span><i className="mr-1.5 inline-block h-2.5 w-2.5 rounded-full bg-violet-500" />{t("models.quota.weekly")}</span>
             <span className="sm:ml-auto">{t("models.quota.scale", { max: formatPercent(quotaMaxPercent / 100) })}</span>
             <span>{t("models.quota.per_million_scale", { max: formatPercent(quotaPerMillionMaxPercent / 100) })}</span>
-          </div>
+          </div> : <p className="text-[12px] leading-relaxed text-muted-foreground" data-testid="model-quota-no-samples">{readingGuidanceCopy(i18n.resolvedLanguage ?? i18n.language, "modelMissing")}</p>}
           <div className="divide-y divide-border/70">
             {sortedModels.map((model) => <details key={model.model} data-quota-model={model.model} className="group">
               <summary className="grid cursor-pointer list-none gap-3 py-4 focus-visible:rounded-md focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring content-md:grid-cols-[minmax(10rem,15rem)_minmax(0,1fr)] content-md:items-center [&::-webkit-details-marker]:hidden">
                 <span className="flex min-w-0 items-center gap-2 font-medium"><ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground transition-transform group-open:rotate-180" /><span className="truncate" title={model.model}>{model.model}</span></span>
                 <div className="grid gap-3">
-                  <div className="grid gap-1">
-                    <span className="text-[12px] font-medium text-sky-600 dark:text-sky-400">{t("models.quota.five_hour")}</span>
-                    <QuotaBar value={model.fiveHourQuota} maxPercent={quotaMaxPercent} color="#0ea5e9" label={t("models.quota.five_hour")} metric="percent" />
-                    <QuotaBar value={model.fiveHourQuota} maxPercent={quotaPerMillionMaxPercent} color="#0ea5e9" label={t("models.quota.five_hour")} metric="percentPerMillionTokens" />
-                  </div>
-                  <div className="grid gap-1">
-                    <span className="text-[12px] font-medium text-violet-600 dark:text-violet-400">{t("models.quota.weekly")}</span>
-                    <QuotaBar value={model.weeklyQuota} maxPercent={quotaMaxPercent} color="#8b5cf6" label={t("models.quota.weekly")} metric="percent" />
-                    <QuotaBar value={model.weeklyQuota} maxPercent={quotaPerMillionMaxPercent} color="#8b5cf6" label={t("models.quota.weekly")} metric="percentPerMillionTokens" />
-                  </div>
+                  <QuotaWindow value={model.fiveHourQuota} totalMax={quotaMaxPercent} perMillionMax={quotaPerMillionMaxPercent} color="#0ea5e9" label={t("models.quota.five_hour")} />
+                  <QuotaWindow value={model.weeklyQuota} totalMax={quotaMaxPercent} perMillionMax={quotaPerMillionMaxPercent} color="#8b5cf6" label={t("models.quota.weekly")} />
                 </div>
               </summary>
               <div data-quota-details className="grid gap-4 rounded-md bg-muted/40 p-4 text-sm content-md:ml-[15rem] content-md:grid-cols-2">

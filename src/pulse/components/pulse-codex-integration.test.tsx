@@ -4,13 +4,23 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { invoke } from "@tauri-apps/api/core";
 import i18n from "../i18n";
 import { PulseCodexIntegration } from "./pulse-codex-integration";
+import { integrationSettingsCopy } from "@/lib/integration-settings-copy";
 
 vi.mock("@tauri-apps/api/core", () => ({ invoke: vi.fn() }));
-beforeEach(async () => { vi.mocked(invoke).mockReset(); await i18n.changeLanguage("en"); });
+beforeEach(async () => { vi.mocked(invoke).mockReset(); history.replaceState(null,"","/"); await i18n.changeLanguage("en"); });
 afterEach(() => { Reflect.deleteProperty(window, "__TAURI_INTERNALS__"); });
 const desktop = () => Object.defineProperty(window, "__TAURI_INTERNALS__", { configurable: true, value: {} });
 
 describe("adding the Codex desktop entry", () => {
+  it.each(["zh","zh-Hant","en","ja","ko","de"])("explains the actual local capabilities, following rule and host limits in %s",async language=>{
+    await i18n.changeLanguage(language);render(<PulseCodexIntegration/>);
+    for(const key of ["description","following","refresh","host"] as const)expect(screen.getByText(integrationSettingsCopy(language,key))).toBeVisible();
+    expect(invoke).not.toHaveBeenCalled();
+  });
+  it("does not request a real installation page from a synthetic demo even when its bridge is present",()=>{
+    desktop();history.replaceState(null,"","/?demo=1");render(<PulseCodexIntegration/>);fireEvent.click(screen.getByRole("button",{name:"Add to Codex"}));
+    expect(invoke).not.toHaveBeenCalled();expect(screen.getByRole("status")).toHaveTextContent("from the Pulse desktop app");
+  });
   it("explains the desktop requirement without invoking a native command in a browser", () => {
     render(<PulseCodexIntegration />);
     fireEvent.click(screen.getByRole("button", { name: "Add to Codex" }));

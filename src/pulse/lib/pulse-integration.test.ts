@@ -20,6 +20,11 @@ function limits(): CodexLimitsResponse {
 }
 
 describe("local companion summary projection", () => {
+  it("canonicalizes the published language and resolved theme without exporting presentation extras",()=>{
+    const value=buildPulseIntegration(overview(),limits(),false,false,now,{language:"zh-CN",resolvedTheme:"dark",privateAccount:"must-not-export"} as {language:string;resolvedTheme:string});
+    expect(value.presentation).toEqual({language:"zh",resolvedTheme:"dark"});expect(JSON.stringify(value)).not.toContain("must-not-export");
+    expect(buildPulseIntegration(null,null,true,true,now,{language:"zh-TW",resolvedTheme:"unknown"}).presentation).toEqual({language:"zh-Hant",resolvedTheme:null});
+  });
   it("takes the source timezone's current daily row, never the range aggregate or the host date", () => {
     const value = buildPulseIntegration(overview(), limits(), false, false, now);
     expect(value.today).toMatchObject({ date: "2026-11-07", timezone: "America/Los_Angeles", totalTokens: 220, costUSD: null, stale: false });

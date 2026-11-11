@@ -130,6 +130,14 @@ function toUpdateProgressState(progress: UpdateDownloadProgress): UpdateProgress
 
 export function useUsageDashboard() {
   const { t, i18n } = useTranslation();
+  const [integrationTheme, setIntegrationTheme] = useState(() => document.documentElement.dataset.theme);
+  useEffect(() => {
+    const root = document.documentElement;
+    const observer = new MutationObserver(() => setIntegrationTheme(root.dataset.theme));
+    observer.observe(root, { attributes: true, attributeFilter: ["data-theme"] });
+    setIntegrationTheme(root.dataset.theme);
+    return () => observer.disconnect();
+  }, []);
   const [view, setView] = useState<DashboardView>("dashboard");
   const [range, setRange] = useState<RangeKey>("30d");
   const [overview, setOverview] = useState<OverviewResponse | null>(null);
@@ -954,7 +962,10 @@ export function useUsageDashboard() {
     const widgetData: TrayPopoverData = {
         quotaIdentityRevision: quotaIdentityRevision.current,
         localUsage: buildLocalUsageSummary(todayOverview, scanError !== null || isTodayStale),
-        integration: buildPulseIntegration(todayOverview, codexLimits, scanError !== null || isTodayStale, codexLimitsError !== null),
+        integration: buildPulseIntegration(todayOverview, codexLimits, scanError !== null || isTodayStale, codexLimitsError !== null, new Date(), {
+          language: i18n.resolvedLanguage ?? i18n.language,
+          resolvedTheme: integrationTheme,
+        }),
         updatedAt: todayOverview?.updatedAt ?? null,
         stale: scanError !== null || codexLimitsError !== null || isTodayStale,
         account: codexLimits?.account ?? null,
@@ -1000,6 +1011,9 @@ export function useUsageDashboard() {
     trayMenuShow,
     trayCountdownUnits,
     trayClockMinute,
+    integrationTheme,
+    i18n.resolvedLanguage,
+    i18n.language,
     t,
   ]);
 

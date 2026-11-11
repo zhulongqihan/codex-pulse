@@ -1,0 +1,8 @@
+.pulse-usage-guide{margin-top:10px;max-width:75ch;font-size:12px;line-height:1.65}
+.pulse-usage-guide>details{border-top:1px solid rgb(var(--border));padding:7px 0}
+.pulse-usage-guide summary{min-height:30px;align-content:center;cursor:pointer;font-weight:600;color:rgb(var(--foreground))}
+.pulse-usage-guide summary:focus-visible{outline:2px solid rgb(var(--primary));outline-offset:2px;border-radius:3px}
+.pulse-usage-guide p,.pulse-usage-guide dd{margin:5px 0 0;color:rgb(var(--muted-foreground));overflow-wrap:anywhere}
+.pulse-usage-guide dl{margin:8px 0 0;display:grid;gap:10px}
+.pulse-usage-guide dt{font-weight:550;color:rgb(var(--foreground))}
+.pulse-usage-guide p+dl{margin-top:12px}

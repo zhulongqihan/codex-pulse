@@ -143,15 +143,33 @@ describe("model analytics", () => {
     const weekly = document.querySelector('[data-quota-model="gpt-b"]') as HTMLElement;
     expect(within(weekly).getByRole("img", { name: "Weekly quota · Total: 25.0%" }).firstElementChild).toHaveStyle({ width: "20%" });
     expect(within(weekly).getByRole("img", { name: "Weekly quota · Per 1M tokens: 25.0%" }).firstElementChild).toHaveStyle({ width: "25%" });
-    expect(within(row).getByRole("img", { name: "Weekly quota · Per 1M tokens: No attributable snapshots" })).toBeInTheDocument();
+    const missingWindow = row.querySelector('[data-quota-window][data-has-sample="false"]') as HTMLElement;
+    expect(within(missingWindow).getByText("No attributable snapshots")).toBeInTheDocument();
+    expect(within(missingWindow).queryByRole("img")).not.toBeInTheDocument();
     expect(row).not.toHaveAttribute("open");
     await user.click(within(row).getByText("gpt-a"));
     expect(row).toHaveAttribute("open");
     expect(within(row).getByText("Total ≈ 125.0%")).toBeVisible();
     expect(within(row).getByText("Per 1M tokens ≈ 2.0%")).toBeInTheDocument();
     expect(within(row).getByText("Sample: 1,000,000 tokens · snapshot groups: 1")).toBeInTheDocument();
-    expect(within(row).getByText("No attributable snapshots")).toBeInTheDocument();
+    expect(within(row.querySelector("[data-quota-details]") as HTMLElement).getByText("No attributable snapshots")).toBeInTheDocument();
     await user.click(within(row).getByText("gpt-a"));
     expect(row).not.toHaveAttribute("open");
+  });
+
+  it.each(["en", "zh", "zh-Hant", "ja", "ko", "de"])("keeps missing samples distinct from a measured zero in %s", async language => {
+    await i18n.changeLanguage(language);
+    const zero = { percent: 0, lowerPercent: 0, upperPercent: 0, percentPerMillionTokens: 0, lowerPercentPerMillionTokens: 0, upperPercentPerMillionTokens: 0, sampledTokens: 1000, samples: 2 };
+    const { rerender } = render(<ModelUsageCard models={[model("no-history", 100)]}/>);
+    const card = screen.getByTestId("model-quota-estimates");
+    expect(screen.getByTestId("model-quota-no-samples")).toBeVisible();
+    expect(card.querySelectorAll("[data-quota-metric]")).toHaveLength(0);
+    expect(card).not.toHaveTextContent("0.0%");
+    rerender(<ModelUsageCard models={[model("no-history", 100), model("measured-zero", 100, { fiveHourQuota: zero })]}/>);
+    const measured = document.querySelector('[data-quota-model="measured-zero"]') as HTMLElement;
+    expect(measured.querySelectorAll("[data-quota-metric]")).toHaveLength(2);
+    expect(measured.querySelector("[data-quota-metric] > div")).toHaveStyle({ width: "0%" });
+    expect(document.querySelector('[data-quota-model="no-history"] [data-quota-metric]')).toBeNull();
+    await i18n.changeLanguage("en");
   });
 });

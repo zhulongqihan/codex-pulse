@@ -37,6 +37,7 @@ import { Sparkles, X, ChevronDown, ChevronUp, AlertTriangle, ArrowLeft, UserRoun
 import { Button } from "@/components/ui/button";
 import { useTranslation } from "react-i18next";
 import "./shell-ux.css";
+import { usePaceDetailsRequest } from "@/hooks/use-pace-details-request";
 
 const QUICK_START_DISMISSED = "codexpulse.quickstart.dismissed.v1";
 function useCompactWindow() {
@@ -217,15 +218,7 @@ export default function App() {
     setPaceDetailsRequested(true);
     void handleViewChange("dashboard");
   };
-  useEffect(() => {
-    let disposed = false;
-    let stop: (() => void) | undefined;
-    void listen("pulse-show-pace-details", () => paceDetails.current()).then(unlisten => {
-      if (disposed) unlisten();
-      else stop = unlisten;
-    }).catch(() => { /* The public browser preview has no native window events. */ });
-    return () => { disposed = true; stop?.(); };
-  }, []);
+  usePaceDetailsRequest(paceDetails);
   useEffect(() => {
     if (isTauri() || new URLSearchParams(location.search).get("demo") !== "1") return;
     try {

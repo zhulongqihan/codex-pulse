@@ -4,6 +4,24 @@ User-facing changes are grouped by release, following [Keep a Changelog](https:/
 
 ## [Unreleased]
 
+## [0.9.0] - 2026-11-11
+
+### Added / 新增
+
+- Search loaded sessions by title, ID, model and project while retaining matching parent/subagent groups.
+- 主会话列表支持标题、ID、模型和项目搜索，保留命中的父子代理组。
+- Show cycle observations and sourced reset notices in the local Codex plugin, with relevant desktop detail actions.
+- 本地 Codex 插件显示本轮观测与带来源预告，并提供对应桌面详情入口。
+
+### Improved / 改进
+
+- Explain missing quota samples, provide task-focused usage help and keep unavailable-quota widgets compact.
+- 解释缺少额度样本的状态，补充实用帮助，并压缩缺额度浮窗的留白。
+- Clarify plugin preference rules and group desktop and Codex entries in settings.
+- 明确插件偏好规则，将桌面与 Codex 入口集中到同一设置分区。
+
+[完整中英说明 / Full release notes](docs/releases/v0.9.0.md)
+
 ## [0.8.0] - 2026-11-10
 
 ### Added / 新增
@@ -187,7 +205,8 @@ User-facing changes are grouped by release, following [Keep a Changelog](https:/
 
 Earlier releases remain available in [GitHub Releases](https://github.com/zhulongqihan/codex-pulse/releases). / 更早版本保留在 GitHub Releases。
 
-[Unreleased]: https://github.com/zhulongqihan/codex-pulse/compare/v0.8.0...HEAD
+[Unreleased]: https://github.com/zhulongqihan/codex-pulse/compare/v0.9.0...HEAD
+[0.9.0]: https://github.com/zhulongqihan/codex-pulse/releases/tag/v0.9.0
 [0.8.0]: https://github.com/zhulongqihan/codex-pulse/releases/tag/v0.8.0
 [0.7.4]: https://github.com/zhulongqihan/codex-pulse/releases/tag/v0.7.4
 [0.7.3]: https://github.com/zhulongqihan/codex-pulse/releases/tag/v0.7.3

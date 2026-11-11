@@ -218,12 +218,12 @@ describe("App", () => {
     render(<App />);
     await screen.findByTestId("dashboard-hero");
     await userEvent.click(screen.getByTestId(`${source}-nav-tab`));
-    if (source === "settings") expect(screen.getByRole("tab", { name: "Appearance" })).toBeVisible();
+    if (source === "settings") expect(screen.getByRole("tab", { name: "Appearance & language" })).toBeVisible();
     vi.spyOn(document, "hasFocus").mockReturnValue(false);
     await act(async () => {
       for (const callback of eventListeners.get("pulse-show-pace-details") ?? []) callback({ payload: null });
     });
-    await waitFor(() => expect(screen.queryByRole("tab", { name: "Appearance" })).not.toBeInTheDocument());
+    await waitFor(() => expect(screen.queryByRole("tab", { name: "Appearance & language" })).not.toBeInTheDocument());
     expect(screen.getByTestId("dashboard-hero")).toBeVisible();
     expect(document.getElementById("pulse-pace-details")).toBeInTheDocument();
     expect(document.activeElement).not.toBe(document.getElementById("pulse-pace-details"));
@@ -237,6 +237,22 @@ describe("App", () => {
       for (const callback of eventListeners.get("pulse-show-pace-details") ?? []) callback({ payload: null });
     });
     await waitFor(() => expect(observations.open).toBe(true));
+  });
+  it("publishes a resolved theme change to the local plugin snapshot without querying usage", async () => {
+    mockLoadedDashboard();
+    const previous = document.documentElement.dataset.theme;
+    onTestFinished(() => {
+      if (previous === undefined) delete document.documentElement.dataset.theme;
+      else document.documentElement.dataset.theme = previous;
+    });
+    render(<App />);
+    await screen.findByTestId("dashboard-hero");
+    const requests = () => invokeMock.mock.calls.filter(([command]) => ["scan_usage", "fetch_codex_limits", "activate_codex_window"].includes(command)).length;
+    const before = requests();
+    const next = document.documentElement.dataset.theme === "dark" ? "light" : "dark";
+    await act(async () => { document.documentElement.dataset.theme = next; });
+    await waitFor(() => expect(updateWidgetSnapshotMock.mock.calls.at(-1)?.[0].data.integration.presentation.resolvedTheme).toBe(next));
+    expect(requests()).toBe(before);
   });
   it.each([760, 1440])("prioritizes pace in compact windows while keeping today's usage reachable at %ipx", async width => {
     Object.defineProperty(window, "innerWidth", { configurable: true, writable: true, value: width });
@@ -265,12 +281,12 @@ describe("App", () => {
       expect(await screen.findByRole("dialog", { name: "Account capacity" })).toBeVisible();
       await userEvent.keyboard("{Escape}");
       expect(screen.queryByRole("dialog", { name: "Account capacity" })).not.toBeInTheDocument();
-      expect(screen.getByRole("tab", { name: "Appearance" })).toBeVisible();
+      expect(screen.getByRole("tab", { name: "Appearance & language" })).toBeVisible();
     } else {
       await waitFor(() => expect(document.getElementById("pulse-account-rail")).toBeVisible());
       await waitFor(() => expect(document.activeElement).toBe(document.getElementById("pulse-account-rail")));
       expect(screen.getByTestId("dashboard-hero")).toBeVisible();
-      expect(screen.queryByRole("tab", { name: "Appearance" })).not.toBeInTheDocument();
+      expect(screen.queryByRole("tab", { name: "Appearance & language" })).not.toBeInTheDocument();
     }
   });
   it("keeps the previous update result visible across navigation until marking it read succeeds", async () => {
@@ -522,10 +538,10 @@ describe("App", () => {
     main.scrollTop = initialScroll;
     await userEvent.click(screen.getByRole("button", { name: "Settings" }));
     expect(main.scrollTop).toBe(0);
-    expect(screen.getByRole("tab", { name: "Appearance" })).toHaveAttribute("aria-selected", "true");
+    expect(screen.getByRole("tab", { name: "Appearance & language" })).toHaveAttribute("aria-selected", "true");
     const general = screen.getByRole("tab", { name: "General" });
     main.scrollTop = 400;
-    screen.getByRole("tab", { name: "Appearance" }).focus();
+    screen.getByRole("tab", { name: "Appearance & language" }).focus();
     await userEvent.keyboard("{ArrowRight}");
     expect(general).toHaveFocus();
     expect(general).toHaveAttribute("aria-selected", "true");
@@ -3031,13 +3047,13 @@ describe("App", () => {
     await userEvent.click(screen.getByRole("button", { name: "Settings" }));
 
     expect(screen.getByText("Appearance, account, desktop controls, data sources and maintenance.")).toBeVisible();
-    expect(screen.getByRole("tabpanel", { name: "Appearance" })).toBeInTheDocument();
+    expect(screen.getByRole("tabpanel", { name: "Appearance & language" })).toBeInTheDocument();
     expect(screen.getByText("Display Settings")).toBeInTheDocument();
-    expect(screen.getByText("System tray")).not.toBeVisible();
+    expect(screen.getByRole("heading", { name: "System tray", hidden: true })).not.toBeVisible();
     expect(screen.queryByRole("button", { name: "Export" })).not.toBeInTheDocument();
     await userEvent.click(screen.getByRole("tab", { name: "Maintenance" }));
     expect(screen.getByRole("tab", { name: "Maintenance" })).toHaveAttribute("aria-selected", "true");
-    expect(screen.getByText("System tray")).not.toBeVisible();
+    expect(screen.getByRole("heading", { name: "System tray", hidden: true })).not.toBeVisible();
     expect(screen.getByText("Local cache")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Reset cache" })).toBeEnabled();
     await userEvent.click(screen.getByRole("button", { name: "Reset cache" }));
@@ -3461,7 +3477,7 @@ describe("App", () => {
     await userEvent.click(settingsTab);
     await userEvent.click(screen.getByRole("tab", { name: "General" }));
 
-    expect(screen.getByText("System tray")).not.toBeVisible();
+    expect(screen.getByRole("heading", { name: "System tray", hidden: true })).not.toBeVisible();
     expect(screen.getByText("Display Settings")).toBeInTheDocument();
 
     // Verify Display Settings card is rendered with "Show Logs Tab" toggle switch
@@ -3502,7 +3518,7 @@ describe("App", () => {
     render(<App />);
 
     await userEvent.click(await screen.findByRole("button", { name: "Settings" }));
-    await userEvent.click(screen.getByRole("tab", { name: "General" }));
+    await userEvent.click(screen.getByRole("tab", { name: "Appearance & language" }));
     const languageSelect = screen.getAllByRole("combobox").find((element) => element.textContent === "English")!;
     await waitFor(() => expect(languageSelect).toBeEnabled());
     fireEvent.keyDown(languageSelect, { key: "ArrowDown" });
@@ -3564,7 +3580,7 @@ describe("App", () => {
     render(<App />);
 
     await userEvent.click(await screen.findByRole("button", { name: "Settings" }));
-    await userEvent.click(screen.getByRole("tab", { name: "Tray & widget" }));
+    await userEvent.click(screen.getByRole("tab", { name: "System tray" }));
     fireEvent.change(screen.getByRole("textbox", { name: "Hour" }), { target: { value: " hours" } });
 
     expect(localStorage.getItem("tray_countdown_units")).toBe(JSON.stringify({

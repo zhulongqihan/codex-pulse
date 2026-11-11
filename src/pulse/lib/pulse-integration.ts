@@ -1,21 +1,24 @@
 import type { CodexLimitsResponse, OverviewResponse } from "./api";
 import { currentDateInTimezone } from "./trend-buckets";
+import { getLanguage } from "./languages";
 
 /** Raw, identity-free projection for the local Codex companion. */
 export type PulseIntegrationData = {
   schemaVersion: 1;
+  presentation?: { language: string; resolvedTheme: "light" | "dark" | null };
   today: { date: string; timezone: string; totalTokens: number | null; costUSD: number | null; updatedAt: string | null; stale: boolean };
   quotas: { kind: "session" | "weekly"; windowMinutes: number | null; remainingPercent: number | null; resetsAt: string | null }[];
   quotaUpdatedAt: string | null;
   quotaStale: boolean;
 };
 
-export function buildPulseIntegration(today: OverviewResponse | null, limits: CodexLimitsResponse | null, todayStale: boolean, quotaStale: boolean, now = new Date()): PulseIntegrationData {
+export function buildPulseIntegration(today: OverviewResponse | null, limits: CodexLimitsResponse | null, todayStale: boolean, quotaStale: boolean, now = new Date(), presentation?: { language: string; resolvedTheme?: string }): PulseIntegrationData {
   const timezone = today?.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone;
   const date = currentDateInTimezone(timezone, now);
   const row = today?.daily.find(day => day.date === date);
   return {
     schemaVersion: 1,
+    ...(presentation ? { presentation: { language: getLanguage(presentation.language), resolvedTheme: presentation.resolvedTheme === "light" || presentation.resolvedTheme === "dark" ? presentation.resolvedTheme : null } } : {}),
     today: { date, timezone, totalTokens: row?.totalTokens ?? null, costUSD: row?.costUSD ?? null, updatedAt: today?.updatedAt ?? null, stale: todayStale || !row },
     quotas: (["session", "weekly"] as const).map(kind => {
       const window = limits?.[kind];

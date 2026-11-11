@@ -1,11 +1,11 @@
 import { sumKnownCosts } from "@/lib/costs";
 import { useSessionCredits } from "@/hooks/use-session-credits";
 import { SessionCredits } from "./session-credits";
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useDeferredValue, useId, useRef } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import type { SessionDetailRow, SessionQuotaWindowUsage } from "@/lib/api";
 import { formatCompactNumber, formatCurrency, formatNumber, formatPercent } from "@/lib/formatters";
-import { Terminal, Folder, ChevronDown, Calendar, GitBranch } from "lucide-react";
+import { Terminal, Folder, ChevronDown, Calendar, GitBranch, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import dayjs from "dayjs";
 import { useTranslation } from "react-i18next";
@@ -13,6 +13,8 @@ import { modelTone } from "@/lib/model-tone";
 import { SessionQuotaUsageView } from "./session-quota-usage";
 import { SessionArchivedBadge } from "./session-archived-badge";
 import { projectLabel, sessionProjectReferences } from "@/lib/project-reference";
+import { indexSessionSearch, searchSessionGroups } from "@/lib/session-list-search";
+import { sessionSearchCopy } from "@/lib/session-list-search-copy";
 
 type SessionDisplayRow = SessionDetailRow & {
   usageDate: string;
@@ -374,6 +376,19 @@ export function SessionUsageTable({
   const [collapsedDates, setCollapsedDates] = useState<Record<string, boolean>>({});
   const [visibleGroupCounts, setVisibleGroupCounts] = useState<Record<string, number>>({});
   const [expandedAgentGroups, setExpandedAgentGroups] = useState<Record<string, boolean>>({});
+  const [searchQuery, setSearchQuery] = useState("");
+  const [searchCollapsedDates, setSearchCollapsedDates] = useState<Record<string, boolean>>({});
+  const [searchCollapsedAgents, setSearchCollapsedAgents] = useState<Record<string, boolean>>({});
+  const searchInput = useRef<HTMLInputElement>(null);
+  const searchDescriptionId = useId();
+  const query = useDeferredValue(embedded ? "" : searchQuery.trim().toLowerCase());
+  const searchActive = query.length > 0;
+  const searchCopy = (key: Parameters<typeof sessionSearchCopy>[1], values?: Record<string, string | number>) => sessionSearchCopy(i18n.resolvedLanguage ?? i18n.language, key, values);
+  const changeSearch = (value: string) => {
+    setSearchQuery(value);
+    setSearchCollapsedDates({});
+    setSearchCollapsedAgents({});
+  };
 
   useEffect(() => {
     if (initialExpandedDate) {
@@ -414,11 +429,19 @@ export function SessionUsageTable({
     return projectDay ? rows : rebaseQuotaUsage(rows);
   }, [sessions, projectDay]);
 
+  const scopedSessions = useMemo(() => selectedProject
+    ? displaySessions.filter(session => session.projects.includes(selectedProject))
+    : displaySessions, [displaySessions, selectedProject]);
+  const searchIndex = useMemo(() => embedded ? [] : indexSessionSearch(sessions), [embedded, sessions]);
+  const searchResult = useMemo(() => query
+    ? searchSessionGroups(searchIndex, query, new Set(scopedSessions.map(session => session.path)))
+    : null, [query, searchIndex, scopedSessions]);
+
   // Group and sort session-day rows using the scanner's application-timezone dates.
   const groups = useMemo(() => {
     const map: Record<string, SessionDisplayRow[]> = {};
-    for (const session of displaySessions) {
-      if (selectedProject && !session.projects.includes(selectedProject)) {
+    for (const session of scopedSessions) {
+      if (searchResult && !searchResult.paths.has(session.path)) {
         continue;
       }
       const dateStr = session.usageDate;
@@ -455,12 +478,9 @@ export function SessionUsageTable({
           projects,
         };
       });
-  }, [displaySessions, selectedProject]);
+  }, [scopedSessions, searchResult]);
 
-  const filteredCount = useMemo(() => {
-    if (!selectedProject) return displaySessions.length;
-    return displaySessions.filter((session) => session.projects.includes(selectedProject)).length;
-  }, [displaySessions, selectedProject]);
+  const filteredCount = scopedSessions.length;
   const selectedProjectReference = useMemo(() => {
     if (!selectedProject) return null;
     return sessions
@@ -484,6 +504,10 @@ export function SessionUsageTable({
     [groups],
   );
   const toggleDate = (date: string) => {
+    if (searchActive) {
+      setSearchCollapsedDates(previous => ({ ...previous, [date]: !previous[date] }));
+      return;
+    }
     setCollapsedDates((prev) => ({
       ...prev,
       [date]: !isCollapsed(date),
@@ -491,10 +515,15 @@ export function SessionUsageTable({
   };
 
   const toggleAgentGroup = (key: string) => {
+    if (searchActive) {
+      setSearchCollapsedAgents(previous => ({ ...previous, [key]: !previous[key] }));
+      return;
+    }
     setExpandedAgentGroups((previous) => ({ ...previous, [key]: !previous[key] }));
   };
 
   const isCollapsed = (date: string) => {
+    if (searchActive) return searchCollapsedDates[date] ?? false;
     if (collapsedDates[date] !== undefined) {
       return collapsedDates[date];
     }
@@ -509,7 +538,8 @@ export function SessionUsageTable({
   const creditThreads = showSessionCredits && creditsActive ? groups.flatMap((group) => {
     if (isCollapsed(group.date)) return [];
     return group.agentGroups.slice(0, visibleGroupCounts[group.date] ?? agentGroupPageSize ?? group.agentGroups.length).flatMap((agentGroup) => {
-      const expanded = expandedAgentGroups[`${group.date}:${agentGroup.key}`];
+      const key = `${group.date}:${agentGroup.key}`;
+      const expanded = searchActive ? !searchCollapsedAgents[key] : expandedAgentGroups[key];
       const visible = expanded ? agentGroup.sessions : agentGroup.sessions.slice(0, COLLAPSED_SUBAGENT_LIMIT + 1);
       return visible.flatMap((session) => session.threadId ? [{ threadId: session.threadId, modifiedAtMs: session.modifiedAtMs }] : []);
     });
@@ -539,17 +569,32 @@ export function SessionUsageTable({
         {credits.error ? <span role="status">{t(`session_credits.errors.${credits.error}`)}</span> : null}
       </div> : null}
       {!embedded ? <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between px-1">
-        <div>
-          <h2 className="text-xl font-bold tracking-tight text-foreground flex items-center gap-2.5">
+        <div className="min-w-0">
+          <h2 className="text-xl font-bold tracking-tight text-foreground flex flex-wrap items-center gap-2.5">
             {t("sessions.title")}
             <span className="inline-flex items-center rounded-full bg-primary/5 px-2.5 py-0.5 text-[12px] font-semibold text-primary border border-indigo-500/20">
-              {selectedProject ? t("sessions.showing_info_filtered", { filtered: filteredCount, total: displaySessions.length }) : t("sessions.showing_info", { count: displaySessions.length })}
+              {searchResult ? searchCopy("groups", { count: searchResult.groupCount }) : selectedProject ? t("sessions.showing_info_filtered", { filtered: filteredCount, total: displaySessions.length }) : t("sessions.showing_info", { count: displaySessions.length })}
             </span>
           </h2>
           <p className="text-sm text-muted-foreground">
             {t("sessions.subtitle")}
           </p>
         </div>
+      </div> : null}
+
+      {!embedded ? <div role="search" aria-label={searchCopy("label")} className="space-y-2" data-testid="session-list-search">
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="relative min-w-0 flex-1 basis-56">
+            <Search size={16} aria-hidden="true" className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground"/>
+            <input ref={searchInput} type="search" value={searchQuery} aria-label={searchCopy("label")} aria-describedby={searchDescriptionId}
+              placeholder={searchCopy("placeholder")} onChange={event => changeSearch(event.target.value)}
+              onKeyDown={event => { if (event.key === "Escape" && searchQuery) { event.preventDefault(); event.stopPropagation(); changeSearch(""); } }}
+              className="min-h-10 w-full rounded-lg border border-border bg-surface py-2 pl-10 pr-3 text-sm text-foreground placeholder:text-muted-foreground outline-none focus-visible:ring-2 focus-visible:ring-primary/40"/>
+          </div>
+          {searchQuery ? <Button variant="secondary" size="sm" className="h-auto min-h-9 max-w-full whitespace-normal" onClick={() => { changeSearch(""); searchInput.current?.focus(); }}>{searchCopy("clear")}</Button> : null}
+        </div>
+        <p id={searchDescriptionId} className="text-xs leading-relaxed text-muted-foreground">{searchCopy("scope")}</p>
+        {searchResult ? <p role="status" className="text-sm text-muted-foreground" data-testid="session-list-search-result">{searchCopy("result", { groups: searchResult.groupCount, sessions: searchResult.sessionCount })}</p> : null}
       </div> : null}
 
       {!embedded && selectedProject && (
@@ -578,7 +623,12 @@ export function SessionUsageTable({
       )}
 
       <div className="space-y-3">
-        {groups.length === 0 && selectedProject ? (
+        {groups.length === 0 && searchActive ? <Card>
+          <CardContent className="space-y-2 py-8 text-center">
+            <h3 className="text-base font-semibold">{searchCopy("empty")}</h3>
+            <p className="mx-auto max-w-lg text-sm leading-relaxed text-muted-foreground">{searchCopy("emptyHint")}</p>
+          </CardContent>
+        </Card> : groups.length === 0 && selectedProject ? (
           <Card className="border-border/60 bg-card/30 backdrop-blur-md">
             <CardContent className="flex flex-col items-center justify-center py-12 text-center">
               <div className="mb-4 rounded-full bg-muted/60 p-4 text-muted-foreground">
@@ -653,7 +703,7 @@ export function SessionUsageTable({
                   {/* Day total tokens indicator */}
                   {group.totalTokens > 0 ? (
                     <div className="space-y-1.5 min-w-[120px] text-right">
-                      <div className="text-[12px] text-muted-foreground">{t("sessions.day_total_tokens", { defaultValue: "Day Total Tokens" })}</div>
+                      <div className="text-[12px] text-muted-foreground">{searchActive ? searchCopy("dayTokens") : t("sessions.day_total_tokens", { defaultValue: "Day Total Tokens" })}</div>
                       <div className="font-bold text-foreground tabular-nums text-sm">
                         {formatNumber(group.totalTokens)}
                       </div>
@@ -672,7 +722,7 @@ export function SessionUsageTable({
                   {/* Day total cost */}
                   {group.totalTokens > 0 && (
                     <div className="text-right">
-                      <div className="text-[12px] text-muted-foreground mb-1">{t("sessions.day_cost", { defaultValue: "Day Cost" })}</div>
+                      <div className="text-[12px] text-muted-foreground mb-1">{searchActive ? searchCopy("dayCost") : t("sessions.day_cost", { defaultValue: "Day Cost" })}</div>
                       <span
                         className="inline-flex rounded-full px-3 py-0.5 font-bold text-foreground text-[12px] border border-white/5 shadow-sm"
                         style={{
@@ -692,7 +742,7 @@ export function SessionUsageTable({
                   {group.agentGroups.slice(0, visibleGroupCounts[group.date] ?? agentGroupPageSize ?? group.agentGroups.length).map((agentGroup) => {
                     const groupKey = `${group.date}:${agentGroup.key}`;
                     const hasSubagents = agentGroup.sessions.length > 1;
-                    const isExpanded = Boolean(expandedAgentGroups[groupKey]);
+                    const isExpanded = searchActive ? !searchCollapsedAgents[groupKey] : Boolean(expandedAgentGroups[groupKey]);
                     const visibleSessions = hasSubagents && !isExpanded
                       ? [agentGroup.sessions[0], ...agentGroup.sessions.slice(1, COLLAPSED_SUBAGENT_LIMIT + 1)]
                       : agentGroup.sessions;

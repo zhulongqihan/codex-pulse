@@ -2,6 +2,20 @@
 //! Different data roots intentionally remain independent (including isolated tests).
 use sha2::{Digest, Sha256};
 use std::path::Path;
+use std::sync::atomic::{AtomicBool, Ordering};
+
+static PENDING_PACE_DETAILS: AtomicBool = AtomicBool::new(false);
+
+pub(crate) fn mark_pace_details_pending() {
+    PENDING_PACE_DETAILS.store(true, Ordering::SeqCst);
+}
+
+/// Keep an explicit navigation request until the main renderer has registered
+/// its event listener, including launches received while its page is loading.
+#[tauri::command]
+pub fn take_pending_pace_details() -> bool {
+    PENDING_PACE_DETAILS.swap(false, Ordering::SeqCst)
+}
 
 fn profile_key(path: &Path) -> String {
     let canonical = path.canonicalize().unwrap_or_else(|_| path.to_path_buf());
@@ -26,6 +40,8 @@ pub fn plugin(paths: &crate::pulse_desktop::PulsePaths) -> tauri::plugin::TauriP
                 app.exit(0);
             } else if arguments.iter().any(|argument| argument == "--show-widget") {
                 request_widget(app);
+            } else if arguments.iter().any(|argument| argument == "--show-pace-details") {
+                request_pace_details(app);
             } else if !arguments.iter().any(|argument| argument == "--hidden") {
                 if let Some(window) = app.get_webview_window("main") {
                     let _ = window.show();
@@ -35,6 +51,28 @@ pub fn plugin(paths: &crate::pulse_desktop::PulsePaths) -> tauri::plugin::TauriP
             }
         })
         .build()
+}
+
+#[cfg(windows)]
+pub fn request_pace_details(app: &tauri::AppHandle) {
+    use tauri::Manager;
+    mark_pace_details_pending();
+    if app.try_state::<crate::pulse_desktop::PreferenceStore>().is_some()
+        && app.get_webview_window("main").is_some() {
+        let _ = crate::pulse_desktop::widget_action(app.clone(), "details".into());
+        return;
+    }
+    let app = app.clone();
+    std::thread::spawn(move || {
+        for _ in 0..50 {
+            if app.try_state::<crate::pulse_desktop::PreferenceStore>().is_some()
+                && app.get_webview_window("main").is_some() {
+                let _ = crate::pulse_desktop::widget_action(app.clone(), "details".into());
+                return;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(100));
+        }
+    });
 }
 
 #[cfg(windows)]

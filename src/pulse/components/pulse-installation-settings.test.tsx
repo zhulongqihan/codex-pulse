@@ -41,7 +41,7 @@ describe("installation entry maintenance", () => {
     const state = inspection(); state.entries[3] = { ...state.entries[3], status: "stale", canRepair: true, registeredTargetPath: "F:\\Old\\integrations\\codex" };
     invoke.mockResolvedValueOnce(state).mockResolvedValueOnce({ inspection: state, results: [{ id: "codexPlugin", outcome: "prepared", detailCode: "pluginReinstall" }, { id: "desktop", outcome: "failed", detailCode: "repairFailed" }] });
     render(<PulseInstallationSettings/>); fireEvent.click(screen.getByTestId("installation-check")); const row = await screen.findByTestId("installation-codexPlugin");
-    expect(row).toHaveTextContent("Settings → General"); expect(row).toHaveTextContent("F:\\Old\\integrations\\codex"); fireEvent.click(within(row).getByRole("button"));
+    expect(row).toHaveTextContent("Settings → Desktop & Codex"); expect(row).toHaveTextContent("F:\\Old\\integrations\\codex"); fireEvent.click(within(row).getByRole("button"));
     await screen.findByText(installationCopy("en", "prepared")); expect(screen.getByTestId("installation-result-desktop")).toHaveTextContent(installationCopy("en", "failed"));
   });
   it("prevents overlapping operations and lets a failed check be retried", async () => {

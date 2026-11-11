@@ -588,6 +588,9 @@ pub(crate) fn show_main_action(
         "details" => Some("pulse-show-pace-details"),
         _ => return Err("Unknown main window action".into()),
     };
+    if action == "details" {
+        crate::pulse_instance::mark_pace_details_pending();
+    }
     show()?;
     if let Some(event) = event {
         emit(event)?;
@@ -607,7 +610,7 @@ pub fn widget_action(app: tauri::AppHandle, action: String) -> Result<(), String
         "collapse" => serde_json::json!({"widgetExpanded":false}),
         "pin" => serde_json::json!({"widgetAlwaysOnTop":true}),
         "unpin" => serde_json::json!({"widgetAlwaysOnTop":false}),
-        "showMain" | "account" => {
+        "showMain" | "account" | "details" => {
             return show_main_action(
                 &action,
                 || {

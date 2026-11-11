@@ -6,6 +6,7 @@ import { paceCopy } from "@/lib/pulse-pace-copy";
 import { syntheticPaceSnapshot, type PaceResetNotice, type PaceSnapshot } from "@/lib/pulse-pace";
 import { formatCoachCountdown, quotaCoachBadgeCopy, quotaCoachClarity, quotaCoachCopy, quotaCoachFeedback } from "@/lib/quota-pace-coach-copy";
 import { PulsePaceBadgeView, PulsePaceCard } from "./pulse-pace";
+import { readingGuidanceCopy } from "@/lib/reading-guidance-copy";
 
 const now = Date.parse("2026-11-09T08:00:00Z");
 const iso = (minutes: number) => new Date(now + minutes * 60_000).toISOString();
@@ -27,6 +28,28 @@ function recentDepletion(remaining = 77): PaceSnapshot {
 }
 
 describe("shared cycle pace card", () => {
+  it.each(["en", "zh", "zh-Hant", "ja", "ko", "de"])("replaces empty expanded widget placeholders with honest guidance and recovery in %s", async language => {
+    await i18n.changeLanguage(language);
+    const onRecover = vi.fn(), handlers = actions();
+    const { rerender } = render(<PulsePaceCard data={null} variant="widget" onRecover={onRecover} {...handlers}/>);
+    expect(screen.queryByTestId("coach-remaining")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("coach-countdown")).not.toBeInTheDocument();
+    expect(screen.getByTestId("widget-empty-guide")).toHaveTextContent(readingGuidanceCopy(language, "emptyObservation"));
+    expect(screen.queryByTestId("coach-cycle-observations")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: quotaCoachFeedback(language, "recover") }));
+    expect(onRecover).toHaveBeenCalledOnce();
+    rerender(<PulsePaceCard data={null} failed variant="widget" onRecover={onRecover} {...handlers}/>);
+    expect(screen.getByRole("status")).toHaveTextContent(quotaCoachCopy(language, "failed"));
+    fireEvent.click(screen.getByRole("button", { name: paceCopy(language, "refresh") }));
+    expect(handlers.onRefresh).toHaveBeenCalledOnce();
+    rerender(<PulsePaceCard data={cycle(0)} variant="widget" {...handlers}/>);
+    expect(screen.queryByTestId("widget-empty-guide")).not.toBeInTheDocument();
+    expect(screen.getByTestId("coach-remaining")).toHaveTextContent("0%");
+    const retained = cycle(80); retained.updatedAt = iso(-10);
+    rerender(<PulsePaceCard data={retained} variant="widget" {...handlers}/>);
+    expect(screen.getByTestId("coach-remaining")).toHaveTextContent("80%");
+    expect(screen.queryByTestId("widget-empty-guide")).not.toBeInTheDocument();
+  });
   it.each(["en", "zh", "zh-Hant", "ja", "ko", "de"])("makes the nominal time basis and every returned window inspectable without refreshing in %s", async language => {
     await i18n.changeLanguage(language);
     const data = cycle(), handlers = actions();

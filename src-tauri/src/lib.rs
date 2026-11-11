@@ -1064,7 +1064,7 @@ pub fn run() {
             app.manage(background_refresh_schedule.clone());
 
             let background_launch = std::env::args()
-                .any(|arg| arg == "--hidden" || arg == "--quit" || arg == "--show-widget");
+                .any(|arg| arg == "--hidden" || arg == "--quit" || arg == "--show-widget" || arg == "--show-pace-details");
             tauri::WebviewWindowBuilder::new(
                 app,
                 "main",
@@ -1084,6 +1084,10 @@ pub fn run() {
             #[cfg(windows)]
             if std::env::args().any(|argument| argument == "--show-widget") {
                 pulse_instance::request_widget(app.handle());
+            }
+            #[cfg(windows)]
+            if std::env::args().any(|argument| argument == "--show-pace-details") {
+                pulse_instance::request_pace_details(app.handle());
             }
             setup_app_menu(app)?;
             #[cfg(any(target_os = "macos", target_os = "windows"))]
@@ -1169,6 +1173,7 @@ pub fn run() {
             pulse_desktop::get_legacy_preferences,
             pulse_desktop::set_pulse_preferences,
             pulse_desktop::widget_action,
+            pulse_instance::take_pending_pace_details,
             pulse_desktop::get_pulse_paths,
             pulse_shortcuts::create_pulse_shortcuts,
             pulse_installation::inspect_pulse_installation,

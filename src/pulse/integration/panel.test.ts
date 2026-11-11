@@ -4,7 +4,8 @@ import { createRequire } from "node:module";
 import { resolve } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-const html = readFileSync(resolve(process.cwd(), "src/pulse/integration/panel.html"), "utf8");
+const panelCopy = JSON.parse(readFileSync(resolve(process.cwd(), "src/pulse/integration/panel-copy.json"), "utf8")) as Record<string, Record<string, string>>;
+const html = readFileSync(resolve(process.cwd(), "src/pulse/integration/panel.html"), "utf8").replace("__PULSE_COPY__", JSON.stringify(panelCopy));
 const script = html.match(/<script>([\s\S]*)<\/script>/)![1];
 const { JSDOM } = createRequire(import.meta.url)("jsdom") as { JSDOM: new (html: string, options: Record<string, unknown>) => { window: Window & typeof globalThis } };
 type Message = { jsonrpc: string; id?: number; method?: string; params?: Record<string, unknown> };
@@ -55,7 +56,88 @@ function snapshot() {
     quotaUpdatedAt: "2026-11-08T04:59:00Z", quotaStale: false };
 }
 
+function companionSnapshot(now: number, language = "en") {
+  const iso = (value: number) => new Date(value).toISOString();
+  const reset = iso(now + 2 * 86400_000);
+  return { ...snapshot(), capturedAt: iso(now),
+    presentation: { language, skinId: "meter", theme: "dark", resolvedTheme: "dark" },
+    pace: { schemaVersion: 1, status: "sampling", updatedAt: iso(now), windows: [{ kind: "weekly", windowMinutes: 10080, resetsAt: reset, remainingPercent: 65, state: "sampling" }] },
+    coach: { observedWindow: { kind: "weekly", windowMinutes: 10080, resetsAt: reset }, observationTimezone: "America/New_York",
+      dailyObservations: [{ date: "2026-11-02", consumedPercentPoints: null, coveredMinutes: 20, partial: true }, { date: "2026-11-01", consumedPercentPoints: 0, coveredMinutes: 1500, partial: false }],
+      resetNotice: { summary: "A public reset watch", sourceUrl: "https://x.com/OpenAI/status/123?tracking=1#ignored", publishedAt: iso(now - 60_000), updatedAt: iso(now), startAt: iso(now + 3600_000), endAt: iso(now + 7200_000), verification: "third_party", scope: "global" },
+    },
+  };
+}
+
 describe("the shipped MCP panel script", () => {
+  it.each(["zh", "zh-Hant", "en", "ja", "ko", "de"])("follows Pulse language/appearance and preserves an explicit panel-only style override in %s", async language => {
+    const now = Date.parse("2026-11-02T18:00:00Z"), p = panel(); vi.spyOn(p.child.Date, "now").mockReturnValue(now);
+    const usage = await p.connect(), data = companionSnapshot(now, language); await p.respond(usage, { structuredContent: data });
+    expect(p.doc.documentElement.lang).toBe(language === "zh" ? "zh-CN" : language);
+    expect(p.doc.documentElement.dataset.theme).toBe("dark"); expect(p.doc.querySelector("main")!.dataset.style).toBe("meter");
+    expect(p.get("details-button")).toHaveTextContent(panelCopy[language].details);
+    p.receive({ jsonrpc: "2.0", method: "ui/notifications/host-context-changed", params: { theme: "light", locale: "en-US" } });
+    expect(p.doc.documentElement.lang).toBe(language === "zh" ? "zh-CN" : language); expect(p.doc.documentElement.dataset.theme).toBe("dark");
+    p.doc.querySelector<HTMLButtonElement>('[data-style-choice="clear"]')!.click(); expect(p.doc.querySelector("main")!.dataset.style).toBe("clear");
+    p.receive({ jsonrpc: "2.0", method: "ui/notifications/tool-result", params: { structuredContent: data } }); expect(p.doc.querySelector("main")!.dataset.style).toBe("clear");
+    p.doc.querySelector<HTMLButtonElement>('[data-style-choice="follow"]')!.click(); expect(p.doc.querySelector("main")!.dataset.style).toBe("meter");
+    expect(p.child.localStorage.getItem("pulse-panel-style")).toBeNull(); expect(p.get("notice-content").hidden).toBe(false);
+    expect(p.doc.body.textContent).not.toContain("undefined"); expect(p.doc.querySelector("main")!.dataset.styleSource).toBe("pulse");
+  });
+
+  it("falls back explicitly when Pulse preferences are missing rather than carrying the old followed style", async () => {
+    const now = Date.parse("2026-11-02T18:00:00Z"), p = panel(); vi.spyOn(p.child.Date, "now").mockReturnValue(now);
+    const usage = await p.connect(); await p.respond(usage, { structuredContent: companionSnapshot(now, "de-DE") });
+    expect(p.doc.documentElement.lang).toBe("de"); expect(p.doc.querySelector("main")!.dataset.style).toBe("meter");
+    p.receive({ jsonrpc: "2.0", method: "ui/notifications/tool-result", params: { structuredContent: snapshot() } });
+    expect(p.doc.documentElement.lang).toBe("en"); expect(p.doc.querySelector("main")!.dataset.style).toBe("clear"); expect(p.doc.documentElement.dataset.theme).toBe("light");
+    expect(p.get("presentation-fallback").hidden).toBe(false); expect(p.get("presentation-fallback")).toHaveTextContent(panelCopy.en.prefsMissing);
+  });
+
+  it("shows scoped daily zero, unknown/partial coverage and a legitimate 25-hour DST date distinctly", async () => {
+    const now = Date.parse("2026-11-02T18:00:00Z"), p = panel(); vi.spyOn(p.child.Date, "now").mockReturnValue(now);
+    const usage = await p.connect(), data = companionSnapshot(now); await p.respond(usage, { structuredContent: data });
+    expect(p.get("observation-zone")).toHaveTextContent("America/New_York"); expect(p.get("observation-list").children).toHaveLength(2);
+    expect(p.get("observation-list").children[0]).toHaveTextContent(panelCopy.en.unobserved); expect(p.get("observation-list").children[0]).toHaveTextContent(panelCopy.en.partial);
+    expect(p.get("observation-list").children[1]).toHaveTextContent("0"); expect(p.get("observation-list").children[1]).toHaveTextContent("1,500");
+    expect(p.get("observation-list").children[1]).not.toHaveTextContent(panelCopy.en.partial);
+    const details = p.get("observations") as HTMLDetailsElement; expect(details.querySelector("summary")).not.toBeNull(); details.querySelector("summary")!.click(); expect(details.open).toBe(true);
+    data.coach.observedWindow.resetsAt = new Date(now - 1).toISOString(); p.receive({ jsonrpc: "2.0", method: "ui/notifications/tool-result", params: { structuredContent: data } });
+    expect(p.get("observation-list").children).toHaveLength(0); expect(p.get("no-daily").hidden).toBe(false);
+  });
+
+  it("renders notice text without HTML and rejects unsafe, expired or stale source data", async () => {
+    const now = Date.parse("2026-11-02T18:00:00Z"), p = panel(); vi.spyOn(p.child.Date, "now").mockReturnValue(now);
+    const usage = await p.connect(), data = companionSnapshot(now); data.coach.resetNotice.summary = '<img src="private-value" onerror="alert(1)">';
+    await p.respond(usage, { structuredContent: data });
+    expect(p.get("notice-summary").textContent).toContain("<img"); expect(p.get("notice-summary").querySelector("img")).toBeNull();
+    expect(p.get("notice-source").getAttribute("href")).toBe("https://x.com/OpenAI/status/123");
+    for (const sourceUrl of ["javascript:alert(1)", "https://x.com.evil.invalid/1", "https://user:secret@x.com/1", "https://x.com/" + "a".repeat(1024)]) {
+      p.receive({ jsonrpc: "2.0", method: "ui/notifications/tool-result", params: { structuredContent: { ...data, coach: { ...data.coach, resetNotice: { ...data.coach.resetNotice, sourceUrl } } } } });
+      expect(p.get("notice-content").hidden).toBe(true); expect(p.get("notice-source").hasAttribute("href")).toBe(false);
+    }
+    for (const invalid of [{ endAt: new Date(now - 1).toISOString() }, { updatedAt: new Date(now - 301_000).toISOString() }, { publishedAt: new Date(now + 1).toISOString() }]) {
+      p.receive({ jsonrpc: "2.0", method: "ui/notifications/tool-result", params: { structuredContent: { ...data, coach: { ...data.coach, resetNotice: { ...data.coach.resetNotice, ...invalid } } } } }); expect(p.get("notice-content").hidden).toBe(true);
+    }
+  });
+
+  it("opens actual details through the bounded MCP target and never mutates notice read state", async () => {
+    const now = Date.parse("2026-11-02T18:00:00Z"), p = panel(); vi.spyOn(p.child.Date, "now").mockReturnValue(now);
+    const usage = await p.connect(); await p.respond(usage, { structuredContent: companionSnapshot(now) });
+    p.button("details-button").click(); expect(p.messages.at(-1)!.params).toEqual({ name: "pulse_open", arguments: { target: "details" } });
+    await p.respond(p.messages.at(-1)!, { structuredContent: { opened: true } }); expect(p.get("status")).toHaveTextContent(panelCopy.en.requestedDetails);
+    expect(p.messages.filter(message => message.method === "tools/call").every(message => ["pulse_usage", "pulse_open"].includes(String(message.params?.name)))).toBe(true);
+  });
+
+  it("keeps retained values on reread failure but hides notices and observations as current data", async () => {
+    const now = Date.parse("2026-11-02T18:00:00Z"), p = panel(); vi.spyOn(p.child.Date, "now").mockReturnValue(now);
+    const usage = await p.connect(); await p.respond(usage, { structuredContent: companionSnapshot(now) }); expect(p.get("notice-content").hidden).toBe(false);
+    p.button("refresh").click(); await p.respond(p.messages.at(-1)!, { isError: true });
+    expect(p.get("tokens").textContent).toBe("13,600"); expect(p.get("status").dataset.error).toBe("true");
+    expect(p.get("notice-content").hidden).toBe(true); expect(p.get("observation-list").children).toHaveLength(0);
+    p.button("refresh").click(); await p.respond(p.messages.at(-1)!, { structuredContent: companionSnapshot(now) }); expect(p.get("notice-content").hidden).toBe(false);
+  });
+
   it.each([59.9, 60, 60.1, 1439.9, 1440, 1440.1])("uses the same remaining-horizon reference at %s minutes before a weekly reset", async minutes => {
     const now = Date.parse("2026-11-09T08:00:00Z");
     const p = panel(); vi.spyOn(p.child.Date, "now").mockReturnValue(now);

@@ -1,6 +1,8 @@
 import { useState } from "react";
 import { Check, Monitor, Moon, Sun, SlidersHorizontal } from "lucide-react";
 import { usePulseCopy } from "@/lib/pulse-copy";
+import { useTranslation } from "react-i18next";
+import { integrationSettingsCopy } from "@/lib/integration-settings-copy";
 import { updatePulsePreferences, usePulsePreferences, usePulsePreferencesError, type PulsePreferences } from "@/lib/pulse-appearance";
 
 export function PulseStyleSwitcher() {
@@ -14,6 +16,7 @@ export function PulseStyleSwitcher() {
 
 export function PulseAppearanceSettings() {
   const copy = usePulseCopy();
+  const { i18n } = useTranslation();
   const preferences = usePulsePreferences();
   const error = usePulsePreferencesError();
   const [saving, setSaving] = useState(false);
@@ -23,7 +26,7 @@ export function PulseAppearanceSettings() {
     setSaving(false);
   };
   return <section className="pulse-settings-section" aria-labelledby="pulse-appearance-title">
-    <header><h2 id="pulse-appearance-title">{copy("appearance")}</h2><p>{copy("saved")}</p></header>
+    <header><h2 id="pulse-appearance-title">{copy("appearance")}</h2><p>{copy("saved")}</p><p>{integrationSettingsCopy(i18n.resolvedLanguage ?? i18n.language, "appearanceNote")}</p></header>
     <div className="pulse-skin-options" role="group" aria-label={copy("skin")}>
       {(["clear", "meter"] as const).map((skinId) => <button key={skinId} type="button" className="pulse-skin-option" aria-pressed={preferences.skinId === skinId} onClick={() => void change({ skinId })}>
         <span className={`pulse-skin-preview pulse-preview-${skinId}`} aria-hidden="true"><span className="pulse-preview-nav"/><span className="pulse-preview-stat"/><span className="pulse-preview-chart"><i/><i/><i/><i/></span><span className="pulse-preview-list"><i/><i/><i/></span></span>
