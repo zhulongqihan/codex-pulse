@@ -75,7 +75,7 @@ describe("quota forecast presentation", () => {
     expect(invoke).toHaveBeenLastCalledWith("refresh_pulse_pace");
   });
 
-  it("honors a failed refresh DTO until a genuinely new account observation arrives", async () => {
+  it("honors the backend failure state until a healthy snapshot is accepted", async () => {
     vi.useFakeTimers();
     const initial = syntheticPaceSnapshot("forecast", new Date("2026-11-08T06:00:00Z"));
     vi.mocked(invoke).mockResolvedValueOnce(initial);
@@ -87,10 +87,10 @@ describe("quota forecast presentation", () => {
     expect(result.current.error).toBe(true);
     expect(result.current.data?.updatedAt).toBe(initial.updatedAt);
     expect(result.current.data?.refreshAfterSeconds).toBe(300);
-    vi.mocked(invoke).mockResolvedValueOnce(initial);
+    vi.mocked(invoke).mockResolvedValueOnce({ ...initial, refreshFailed: true, refreshAfterSeconds: 280 });
     await act(async () => { vi.advanceTimersByTime(20_000); });
     expect(result.current.error).toBe(true);
-    vi.mocked(invoke).mockResolvedValueOnce(syntheticPaceSnapshot("forecast", new Date("2026-11-08T06:01:00Z")));
+    vi.mocked(invoke).mockResolvedValueOnce({ ...initial, refreshFailed: false });
     await act(async () => { vi.advanceTimersByTime(20_000); });
     expect(result.current.error).toBe(false);
   });

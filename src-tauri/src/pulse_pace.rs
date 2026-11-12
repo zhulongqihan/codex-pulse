@@ -408,12 +408,13 @@ pub(crate) fn unavailable(reason: &str) {
 }
 
 pub(crate) fn failed(identity: Option<&str>) {
-    with_store(|store| {
-        if store.identity_hash.as_deref() == identity && identity.is_some() {
-            store.failed = true;
-            store.reason = Some("refresh_failed".into());
-        }
-    });
+    with_store(|store| failed_into(store, identity));
+}
+fn failed_into(store: &mut Store, identity: Option<&str>) {
+    if store.identity_hash.as_deref() == identity && identity.is_some() {
+        store.failed = true;
+        store.reason = Some("refresh_failed".into());
+    }
 }
 
 /// Only successful, identity-rechecked official responses may enter the sampler.
@@ -782,6 +783,40 @@ mod tests {
     }
     fn sample(store: &mut Store, at: i64, used: f64, reset: i64) {
         observe_into(store, Some(&identity()), &limits(at, used, reset), at);
+    }
+    #[test]
+    fn quota_refresh_real_failure_retains_the_last_reading_and_success_recovers_it() {
+        let at = start();
+        let mut data = store();
+        let mut reading = limits(at, 63.0, at + 7 * 86400);
+        reading.weekly = reading.session.take();
+        reading.weekly.as_mut().unwrap().window_minutes = Some(10080);
+        observe_into(&mut data, Some(&identity()), &reading, at);
+        failed_into(&mut data, Some(&identity()));
+        let failed = project(&data, now(at + 5));
+        assert_eq!(failed.windows[1].remaining_percent, Some(37.0));
+        assert_eq!(failed.windows[1].state, "stale");
+        assert_eq!(failed.reason.as_deref(), Some("refresh_failed"));
+        assert_eq!(
+            data.updated_at,
+            Some(at),
+            "Failure cannot restamp an old reading"
+        );
+        reading.updated_at = iso(at + 60);
+        reading.weekly.as_mut().unwrap().used_percent = 64.0;
+        reading.weekly.as_mut().unwrap().remaining_percent = 36.0;
+        observe_into(&mut data, Some(&identity()), &reading, at + 60);
+        assert!(!data.failed);
+        assert_eq!(
+            project(&data, now(at + 60)).windows[1].remaining_percent,
+            Some(36.0)
+        );
+        failed_into(&mut data, Some("other-account"));
+        failed_into(&mut data, None);
+        assert!(
+            !data.failed,
+            "Another account's failure cannot change this reading"
+        );
     }
     fn steady() -> (Store, i64) {
         let mut data = store();

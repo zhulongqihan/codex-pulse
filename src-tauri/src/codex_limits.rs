@@ -21,7 +21,10 @@ use std::{
     io::Read,
     path::{Path, PathBuf},
     process::{Command, Stdio},
-    sync::{Arc, Condvar, Mutex, OnceLock},
+    sync::{
+        atomic::{AtomicU64, Ordering},
+        Arc, Condvar, Mutex, OnceLock,
+    },
     thread,
     time::{Duration, Instant},
 };
@@ -131,6 +134,22 @@ static WINDOW_ACTIVATION_LOCK: Mutex<()> = Mutex::new(());
 static LIMITS_FETCH_IN_FLIGHT: Mutex<Option<Arc<LimitsFetchFlight>>> = Mutex::new(None);
 static LIMITS_SUCCESS: Mutex<Option<LimitsSuccess>> = Mutex::new(None);
 static LIMITS_PUBLISHER: OnceLock<tauri::AppHandle> = OnceLock::new();
+static LIMITS_GENERATION: AtomicU64 = AtomicU64::new(1);
+static LIMITS_PUBLICATION: Mutex<PublicationOrder> = Mutex::new(PublicationOrder { generation: 0 });
+
+#[derive(Default)]
+struct PublicationOrder {
+    generation: u64,
+}
+impl PublicationOrder {
+    fn apply<T>(&mut self, generation: u64, publish: impl FnOnce() -> T) -> Option<T> {
+        if generation <= self.generation {
+            return None;
+        }
+        self.generation = generation;
+        Some(publish())
+    }
+}
 
 struct LimitsSuccess {
     identity: String,
@@ -179,6 +198,7 @@ pub(crate) fn invalidate_scope(revision: u64) {
 #[derive(Default)]
 struct LimitsFetchFlight {
     identity: String,
+    generation: u64,
     result: Mutex<Option<Result<CodexLimitsResponse, String>>>,
     ready: Condvar,
 }
@@ -243,8 +263,8 @@ fn fetch_codex_limits_with_reuse(allow_reuse: bool) -> Result<CodexLimitsRespons
         "{:x}",
         Sha256::digest(
             format!(
-                "{:?}|{:?}|{:?}|{}",
-                environment, auth.account_id, auth.user_id, auth.access_token
+                "{:?}|{:?}|{:?}|{}|{}",
+                environment, auth.account_id, auth.user_id, auth.access_token, scope_revision
             )
             .as_bytes()
         )
@@ -258,86 +278,136 @@ fn fetch_codex_limits_with_reuse(allow_reuse: bool) -> Result<CodexLimitsRespons
             })
         })
         .flatten();
-    let reused = cached.is_some();
-    let mut result = if let Some(limits) = cached {
-        Ok(limits)
-    } else {
-        fetch_codex_limits_single_flight(&identity, || {
-            log::info!("Starting fetch_codex_limits...");
-            let limits = fetch_codex_limits_with(
-                || fetch_oauth_limits(&auth),
-                || fetch_account_snapshot(&auth),
-            )?;
-            #[cfg(debug_assertions)]
-            let limits = if window_activation_debug_enabled() {
-                let mut debug_limits = limits;
-                set_debug_session_window(&mut debug_limits, 0.0, Utc::now().timestamp());
-                debug_limits
-            } else {
-                limits
-            };
-            #[cfg(debug_assertions)]
-            let limits = {
-                let mut limits = limits;
-                if let Ok(value) = env::var(CREDITS_DEBUG_ENV) {
-                    apply_debug_credits(&mut limits, &value);
-                }
-                limits
-            };
-            Ok(limits)
-        })
+    let credentials_current = || {
+        selected_codex_environment() == environment
+            && load_codex_auth().ok().as_ref() == Some(&auth)
     };
-    if selected_codex_environment() != environment || load_codex_auth().ok().as_ref() != Some(&auth)
-    {
-        // A retired credential flight is not a failure of the current account.
-        // In particular, token rotation can retain the same stable pace identity.
-        return Err("identityChanged".into());
-    }
-    if let Ok(limits) = &mut result {
-        limits.identity_revision = Some(scope_revision);
-    }
-    #[cfg(debug_assertions)]
-    let synthetic_quota = window_activation_debug_enabled();
-    #[cfg(not(debug_assertions))]
-    let synthetic_quota = false;
-    if synthetic_quota {
-        crate::pulse_pace::unavailable("synthetic");
-    } else {
-        if crate::quota_scope::with_current(scope_revision, || match &result {
-            Ok(limits) => {
-                if !reused {
+    let complete = |generation, result: &mut Result<CodexLimitsResponse, String>| {
+        if !credentials_current() {
+            return Err("identityChanged".into());
+        }
+        if let Ok(limits) = result {
+            limits.identity_revision = Some(scope_revision);
+        }
+        #[cfg(debug_assertions)]
+        let synthetic_quota = window_activation_debug_enabled();
+        #[cfg(not(debug_assertions))]
+        let synthetic_quota = false;
+        if synthetic_quota {
+            crate::pulse_pace::unavailable("synthetic");
+        } else if crate::quota_scope::with_current(scope_revision, || {
+            // Scope -> publication -> stores/cache -> gate. Never hold the gate
+            // while fetching, emitting an event, or acquiring the account scope.
+            let mut publication = LIMITS_PUBLICATION
+                .lock()
+                .unwrap_or_else(|error| error.into_inner());
+            publication.apply(generation, || match result {
+                Ok(limits) => {
                     crate::pulse_pace::observe(pace_identity.as_deref(), limits);
                     crate::pulse_coach::observe(pace_identity.as_deref(), limits);
                     if let Ok(mut cached) = LIMITS_SUCCESS.lock() {
                         *cached = Some(LimitsSuccess {
-                            identity,
+                            identity: identity.clone(),
                             completed_at: Instant::now(),
                             limits: limits.clone(),
                         });
                     }
-                    publish_success(limits);
-                } else {
+                    crate::pulse_pace_view::account_observation_finished(None);
                     publish_success(limits);
                 }
-            }
-            Err(_) => {
-                if let Ok(mut cached) = LIMITS_SUCCESS.lock() {
-                    if cached
-                        .as_ref()
-                        .is_some_and(|cached| cached.identity == identity)
-                    {
-                        *cached = None;
+                Err(error) => {
+                    if let Ok(mut cached) = LIMITS_SUCCESS.lock() {
+                        if cached
+                            .as_ref()
+                            .is_some_and(|cached| cached.identity == identity)
+                        {
+                            *cached = None;
+                        }
+                    }
+                    crate::pulse_pace::failed(pace_identity.as_deref());
+                    crate::pulse_pace_view::account_observation_finished(Some(error));
+                    if let Some(app) = LIMITS_PUBLISHER.get() {
+                        use tauri::Emitter;
+                        let _ = app.emit(
+                            "codex-limits-failed",
+                            serde_json::json!({"revision":scope_revision,"error":error}),
+                        );
+                        let _ = app.emit("pulse-pace-updated", ());
                     }
                 }
-                crate::pulse_pace::failed(pace_identity.as_deref());
-                if let Some(app) = LIMITS_PUBLISHER.get() {
-                    use tauri::Emitter;
-                    let _ = app.emit("codex-limits-failed", serde_json::json!({"revision":scope_revision,"error":result.as_ref().err()}));
-                }
-            }
-        }).is_none() { return Err("identityChanged".into()); }
+            })
+        })
+        .flatten()
+        .is_none()
+        {
+            // A superseded completion is retired, not a new failure of the live
+            // account. Keep the established caller sentinel off the public DTO.
+            return Err("identityChanged".into());
+        }
+        Ok(())
+    };
+    if let Some(limits) = cached {
+        // This exact source observation has already been published. Reusing it
+        // must not restamp it, clear a newer failure, or broadcast it a second time.
+        if !credentials_current()
+            || crate::quota_scope::with_current(scope_revision, || {
+                LIMITS_SUCCESS
+                    .lock()
+                    .ok()
+                    .and_then(|cached| {
+                        cached
+                            .as_ref()
+                            .and_then(|cached| cached.read(&identity, Instant::now()))
+                    })
+                    .as_ref()
+                    == Some(&limits)
+            }) != Some(true)
+        {
+            return Err("identityChanged".into());
+        }
+        Ok(limits)
+    } else {
+        fetch_limits_with_publication(
+            &identity,
+            || {
+                log::info!("Starting fetch_codex_limits...");
+                let limits = fetch_codex_limits_with(
+                    || fetch_oauth_limits(&auth),
+                    || fetch_account_snapshot(&auth),
+                )?;
+                #[cfg(debug_assertions)]
+                let limits = if window_activation_debug_enabled() {
+                    let mut debug_limits = limits;
+                    set_debug_session_window(&mut debug_limits, 0.0, Utc::now().timestamp());
+                    debug_limits
+                } else {
+                    limits
+                };
+                #[cfg(debug_assertions)]
+                let limits = {
+                    let mut limits = limits;
+                    if let Ok(value) = env::var(CREDITS_DEBUG_ENV) {
+                        apply_debug_credits(&mut limits, &value);
+                    }
+                    limits
+                };
+                Ok(limits)
+            },
+            complete,
+        )
     }
-    result
+}
+
+fn fetch_limits_with_publication(
+    identity: &str,
+    fetch: impl FnOnce() -> Result<CodexLimitsResponse, String>,
+    publish: impl FnOnce(u64, &mut Result<CodexLimitsResponse, String>) -> Result<(), String>,
+) -> Result<CodexLimitsResponse, String> {
+    fetch_codex_limits_single_flight(identity, |generation| {
+        let mut result = fetch();
+        publish(generation, &mut result)?;
+        result
+    })
 }
 
 #[cfg(debug_assertions)]
@@ -368,7 +438,7 @@ fn apply_debug_credits(limits: &mut CodexLimitsResponse, value: &str) {
 
 fn fetch_codex_limits_single_flight(
     identity: &str,
-    fetch: impl FnOnce() -> Result<CodexLimitsResponse, String>,
+    fetch: impl FnOnce(u64) -> Result<CodexLimitsResponse, String>,
 ) -> Result<CodexLimitsResponse, String> {
     let (flight, should_fetch) = {
         let mut in_flight = LIMITS_FETCH_IN_FLIGHT
@@ -379,6 +449,7 @@ fn fetch_codex_limits_single_flight(
             _ => {
                 let flight = Arc::new(LimitsFetchFlight {
                     identity: identity.into(),
+                    generation: LIMITS_GENERATION.fetch_add(1, Ordering::Relaxed),
                     ..Default::default()
                 });
                 *in_flight = Some(Arc::clone(&flight));
@@ -401,7 +472,7 @@ fn fetch_codex_limits_single_flight(
         return result.as_ref().unwrap().clone();
     }
 
-    let result = fetch();
+    let result = fetch(flight.generation);
     {
         let mut stored = flight
             .result
@@ -1611,13 +1682,15 @@ mod tests {
     }
     use std::cell::Cell;
     use std::sync::mpsc;
+    static FLIGHT_TEST_LOCK: Mutex<()> = Mutex::new(());
 
     #[test]
     fn concurrent_limits_fetches_share_one_result() {
+        let _serial = FLIGHT_TEST_LOCK.lock().unwrap();
         let (started_tx, started_rx) = mpsc::channel();
         let (release_tx, release_rx) = mpsc::channel();
         let first = thread::spawn(move || {
-            fetch_codex_limits_single_flight("test-account", || {
+            fetch_codex_limits_single_flight("test-account", |_| {
                 started_tx.send(()).unwrap();
                 release_rx.recv().unwrap();
                 Ok(make_response(
@@ -1636,7 +1709,7 @@ mod tests {
         started_rx.recv().unwrap();
 
         let second = thread::spawn(|| {
-            fetch_codex_limits_single_flight("test-account", || Err("duplicate fetch".to_string()))
+            fetch_codex_limits_single_flight("test-account", |_| Err("duplicate fetch".to_string()))
         });
         let deadline = Instant::now() + Duration::from_secs(5);
         while !LIMITS_FETCH_IN_FLIGHT
@@ -1649,7 +1722,7 @@ mod tests {
             thread::yield_now();
         }
         assert_eq!(
-            fetch_codex_limits_single_flight("another-account", || Err("isolated result".into()))
+            fetch_codex_limits_single_flight("another-account", |_| Err("isolated result".into()))
                 .unwrap_err(),
             "isolated result"
         );
@@ -1660,8 +1733,189 @@ mod tests {
         assert_eq!(first_result.source, "first");
 
         let fresh =
-            fetch_codex_limits_single_flight("test-account", || Err("new fetch".to_string()));
+            fetch_codex_limits_single_flight("test-account", |_| Err("new fetch".to_string()));
         assert_eq!(fresh.unwrap_err(), "new fetch");
+    }
+
+    #[test]
+    fn quota_refresh_joined_flight_publishes_its_result_only_once() {
+        let _serial = FLIGHT_TEST_LOCK.lock().unwrap();
+        use std::sync::atomic::{AtomicUsize, Ordering};
+        let publications = Arc::new(AtomicUsize::new(0));
+        let (started, entered) = mpsc::channel();
+        let (release, released) = mpsc::channel();
+        let first_publications = publications.clone();
+        let first = thread::spawn(move || {
+            fetch_limits_with_publication(
+                "anonymous-publication-flight",
+                || {
+                    started.send(()).unwrap();
+                    released.recv().unwrap();
+                    Err("synthetic timeout".into())
+                },
+                |_, _| {
+                    first_publications.fetch_add(1, Ordering::SeqCst);
+                    Ok(())
+                },
+            )
+        });
+        entered.recv_timeout(Duration::from_secs(2)).unwrap();
+        let second_publications = publications.clone();
+        let second = thread::spawn(move || {
+            fetch_limits_with_publication(
+                "anonymous-publication-flight",
+                || panic!("A joined reader must not query the account again"),
+                |_, _| {
+                    second_publications.fetch_add(1, Ordering::SeqCst);
+                    Ok(())
+                },
+            )
+        });
+        let deadline = Instant::now() + Duration::from_secs(3);
+        while !LIMITS_FETCH_IN_FLIGHT
+            .lock()
+            .unwrap()
+            .as_ref()
+            .is_some_and(|flight| {
+                flight.identity == "anonymous-publication-flight" && Arc::strong_count(flight) >= 3
+            })
+        {
+            assert!(Instant::now() < deadline, "second reader did not join");
+            thread::yield_now();
+        }
+        release.send(()).unwrap();
+        assert_eq!(first.join().unwrap().unwrap_err(), "synthetic timeout");
+        assert_eq!(second.join().unwrap().unwrap_err(), "synthetic timeout");
+        assert_eq!(
+            publications.load(Ordering::SeqCst),
+            1,
+            "Do not publish one failed flight for every waiter"
+        );
+    }
+
+    #[test]
+    fn quota_refresh_new_success_survives_older_failed_owner_and_waiter() {
+        let _serial = FLIGHT_TEST_LOCK.lock().unwrap();
+        struct Published {
+            order: PublicationOrder,
+            cached: Option<CodexLimitsResponse>,
+            failed: bool,
+            events: usize,
+        }
+        let state = Arc::new(Mutex::new(Published {
+            order: PublicationOrder::default(),
+            cached: None,
+            failed: true,
+            events: 0,
+        }));
+        let (started, entered) = mpsc::channel();
+        let (release, released) = mpsc::channel();
+        let old_state = state.clone();
+        let owner = thread::spawn(move || {
+            fetch_limits_with_publication(
+                "anonymous-same-account",
+                || {
+                    started.send(()).unwrap();
+                    released.recv().unwrap();
+                    Err("older failed read".into())
+                },
+                |generation, _| {
+                    let mut state = old_state.lock().unwrap();
+                    let Published {
+                        order,
+                        cached,
+                        failed,
+                        events,
+                    } = &mut *state;
+                    order
+                        .apply(generation, || {
+                            *cached = None;
+                            *failed = true;
+                            *events += 1;
+                        })
+                        .ok_or_else(|| "identityChanged".to_string())
+                },
+            )
+        });
+        entered.recv_timeout(Duration::from_secs(2)).unwrap();
+        let waiter = thread::spawn(|| {
+            fetch_limits_with_publication(
+                "anonymous-same-account",
+                || panic!("The old waiter must share its original network result"),
+                |_, _| panic!("A waiter must never publish a result"),
+            )
+        });
+        let deadline = Instant::now() + Duration::from_secs(3);
+        while !LIMITS_FETCH_IN_FLIGHT
+            .lock()
+            .unwrap()
+            .as_ref()
+            .is_some_and(|flight| {
+                flight.identity == "anonymous-same-account" && Arc::strong_count(flight) >= 3
+            })
+        {
+            assert!(Instant::now() < deadline, "old waiter did not join");
+            thread::yield_now();
+        }
+        // A credential flight may replace the active slot without changing the
+        // stable account. The later read of that same account must win.
+        assert!(
+            fetch_codex_limits_single_flight("anonymous-rotated-credential", |_| Err(
+                "retired credential".into()
+            ))
+            .is_err()
+        );
+        let newest = limits_with_session(63.0, "2099-11-10T05:00:00Z");
+        let expected = newest.clone();
+        let new_state = state.clone();
+        let accepted = fetch_limits_with_publication(
+            "anonymous-same-account",
+            || Ok(newest),
+            |generation, result| {
+                let mut state = new_state.lock().unwrap();
+                let Published {
+                    order,
+                    cached,
+                    failed,
+                    events,
+                } = &mut *state;
+                order
+                    .apply(generation, || {
+                        *cached = Some(result.as_ref().unwrap().clone());
+                        *failed = false;
+                        *events += 1;
+                    })
+                    .ok_or_else(|| "identityChanged".to_string())
+            },
+        )
+        .unwrap();
+        assert_eq!(accepted, expected);
+        release.send(()).unwrap();
+        assert_eq!(owner.join().unwrap().unwrap_err(), "identityChanged");
+        assert_eq!(waiter.join().unwrap().unwrap_err(), "identityChanged");
+        let state = state.lock().unwrap();
+        assert!(
+            !state.failed,
+            "A late failure cannot replace the accepted success"
+        );
+        assert_eq!(
+            state.cached.as_ref(),
+            Some(&expected),
+            "The new success cache must survive"
+        );
+        assert_eq!(state.events, 1, "Only the accepted success is published");
+    }
+
+    #[test]
+    fn quota_refresh_publication_generation_cannot_publish_twice_or_regress() {
+        let mut order = PublicationOrder::default();
+        assert_eq!(order.apply(4, || "new success"), Some("new success"));
+        assert!(order.apply(4, || panic!("Duplicate completion")).is_none());
+        assert!(order.apply(3, || panic!("Older completion")).is_none());
+        assert_eq!(
+            order.apply(5, || "real newer error"),
+            Some("real newer error")
+        );
     }
 
     fn window(used_percent: f64, window_minutes: Option<i64>) -> RateLimitWindow {

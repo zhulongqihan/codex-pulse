@@ -26,7 +26,7 @@ A quiet quota-pacing companion for Codex on Windows: view remaining quota and re
 - **Two styles and six languages:** Clear/Meter, light/dark/system, density and motion are independent preferences that preserve your working state. Supports Simplified Chinese, Traditional Chinese, English, Japanese, Korean and German.
 - **Exports and updates:** XLSX/Markdown contain range summary, daily, model and project statistics. Pulse updates verify the release signature, product, platform and package digest, preserving data and restoring the previous executable if startup fails.
 
-0.9.1 explains expired, stale and unavailable notices, and fixes read-state races across windows during refreshes and misleading read-mark errors after successful persistence. Upgrades retain local data, preferences and same-account observations. Read the [release notes](docs/releases/v0.9.1.md#english).
+0.9.2 clears outdated quota-refresh errors after recovery, prevents an older failure from replacing a newer result, and clears local snapshot-read errors when reading recovers. Actual failures still retain the previous reading and retry cooldown. Upgrades retain local data, preferences and same-account observations. Read the [release notes](docs/releases/v0.9.2.md#english).
 
 ## Interactive pace preview
 

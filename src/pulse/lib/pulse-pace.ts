@@ -182,19 +182,18 @@ export function usePulsePace() {
   const [noticeError, setNoticeError] = useState(false);
   const noticeReadPending = useRef(false);
   const current = useRef<PaceSnapshot | null>(null);
-  const failedAt = useRef<{ updatedAt: string | null } | null>(null);
   const requestRevision = useRef(0);
   const manualPending = useRef(false);
   const queuedRead = useRef(false);
   const localRead = useRef<(() => Promise<void>) | null>(null);
   const mounted = useRef(false);
-  const accept = useCallback((value: PaceSnapshot) => {
+  const accept = useCallback((value: PaceSnapshot, snapshotRead = true) => {
     if (current.current?.coachExtras?.resetNotice?.id !== value.coachExtras?.resetNotice?.id || !value.coachExtras?.resetNotice?.isUnread) setNoticeError(false);
-    if (value.refreshFailed) failedAt.current = { updatedAt: value.updatedAt };
-    else if (failedAt.current && value.updatedAt !== failedAt.current.updatedAt) failedAt.current = null;
     current.current = value;
     setData(value);
-    setError(failedAt.current !== null);
+    // Local transport recovery does not require a new account observation.
+    // An optimistic notice update is not evidence that snapshot reading recovered.
+    setError(previous => value.refreshFailed === true || (!snapshotRead && previous));
   }, []);
   useEffect(() => {
     mounted.current = true;
@@ -203,7 +202,7 @@ export function usePulsePace() {
       if (manualPending.current) { queuedRead.current = true; return; }
       const ownRevision = ++requestRevision.current;
       try { const value = await fetchPulsePace(); if (active && ownRevision === requestRevision.current) accept(value); }
-      catch { if (active && ownRevision === requestRevision.current) { failedAt.current = { updatedAt: current.current?.updatedAt ?? null }; setError(true); } }
+      catch { if (active && ownRevision === requestRevision.current) setError(true); }
     };
     localRead.current = read;
     let unlisten: UnlistenFn | undefined;
@@ -228,7 +227,7 @@ export function usePulsePace() {
     const ownRevision = ++requestRevision.current;
     setRefreshing(true);
     try { const value = await fetchPulsePace(true); if (mounted.current && ownRevision === requestRevision.current) accept(value); }
-    catch { if (mounted.current) { failedAt.current = { updatedAt: current.current?.updatedAt ?? null }; setError(true); } }
+    catch { if (mounted.current && ownRevision === requestRevision.current) setError(true); }
     finally {
       manualPending.current = false;
       if (mounted.current) {
@@ -246,14 +245,14 @@ export function usePulsePace() {
       if (demo()) {
         demoReadNotices.add(id);
         const value = current.current;
-        if (value?.coachExtras && mounted.current) accept({ ...value, coachExtras: { ...value.coachExtras, resetNotice: { ...notice, isUnread: false } } });
+        if (value?.coachExtras && mounted.current) accept({ ...value, coachExtras: { ...value.coachExtras, resetNotice: { ...notice, isUnread: false } } }, false);
       } else {
         await invoke("mark_pulse_notice_read", { id });
         invalidatePaceRead();
         const ownRevision = ++requestRevision.current;
         const confirmed = current.current;
         if (mounted.current && confirmed?.coachExtras?.resetNotice?.id === id) {
-          accept({ ...confirmed, coachExtras: { ...confirmed.coachExtras, resetNotice: { ...confirmed.coachExtras.resetNotice, isUnread: false } } });
+          accept({ ...confirmed, coachExtras: { ...confirmed.coachExtras, resetNotice: { ...confirmed.coachExtras.resetNotice, isUnread: false } } }, false);
         }
         try {
           const value = await fetchPulsePace();
@@ -261,7 +260,7 @@ export function usePulsePace() {
         } catch {
           // The write has succeeded: a failed snapshot reread is not an unread-write failure.
           if (mounted.current && ownRevision === requestRevision.current) {
-            failedAt.current = { updatedAt: current.current?.updatedAt ?? null }; setError(true);
+            setError(true);
           }
         }
       }

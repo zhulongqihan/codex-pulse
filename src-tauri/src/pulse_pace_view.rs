@@ -108,6 +108,7 @@ struct PollGate {
     failures: u32,
     in_flight: bool,
     failed: bool,
+    outcome_revision: u64,
 }
 impl PollGate {
     fn new(now: Instant) -> Self {
@@ -116,6 +117,7 @@ impl PollGate {
             failures: 0,
             in_flight: false,
             failed: false,
+            outcome_revision: 0,
         }
     }
     fn start(&mut self, now: Instant) -> bool {
@@ -126,8 +128,9 @@ impl PollGate {
         self.next = now + Duration::from_secs(60);
         true
     }
+    /// An accepted account completion updates all entries, but does not own the poll lease.
     fn finish(&mut self, now: Instant, error: Option<&str>) {
-        self.in_flight = false;
+        self.outcome_revision = self.outcome_revision.wrapping_add(1);
         self.failed = error.is_some();
         let delay = if let Some(error) = error {
             self.failures = (self.failures + 1).min(5);
@@ -141,7 +144,26 @@ impl PollGate {
             self.failures = 0;
             60
         };
-        self.next = now + Duration::from_secs(delay);
+        self.next = self.next.max(now + Duration::from_secs(delay));
+    }
+    fn release(&mut self, now: Instant) {
+        self.in_flight = false;
+        self.next = self.next.max(now + Duration::from_secs(60));
+    }
+    fn complete(&mut self, now: Instant, before: u64, error: Option<&str>) {
+        // Errors before a flight exists still need a visible outcome. Never
+        // count an already-published failure twice or overwrite a newer result.
+        if self.outcome_revision == before {
+            if let Some(error) = error.filter(|error| *error != "identityChanged") {
+                self.finish(now, Some(error));
+            }
+        }
+        self.release(now);
+    }
+    fn invalidate(&mut self) {
+        self.failed = false;
+        self.failures = 0;
+        self.outcome_revision = self.outcome_revision.wrapping_add(1);
     }
     fn wait_seconds(&self, now: Instant) -> u64 {
         self.next
@@ -154,15 +176,21 @@ static POLL_GATE: LazyLock<Mutex<PollGate>> =
     LazyLock::new(|| Mutex::new(PollGate::new(Instant::now())));
 pub(crate) fn invalidate_scope() {
     let mut gate = POLL_GATE.lock().unwrap_or_else(|error| error.into_inner());
-    gate.failed = false;
-    gate.failures = 0;
+    gate.invalidate();
+}
+/// Store/cache are already committed; release this lock before emitting update events.
+pub(crate) fn account_observation_finished(error: Option<&str>) {
+    POLL_GATE
+        .lock()
+        .unwrap_or_else(|error| error.into_inner())
+        .finish(Instant::now(), error);
 }
 struct PollOutcome {
     failed: bool,
     wait_seconds: u64,
 }
 fn guarded_observation() -> PollOutcome {
-    {
+    let before = {
         let mut gate = POLL_GATE.lock().unwrap_or_else(|error| error.into_inner());
         if !gate.start(Instant::now()) {
             return PollOutcome {
@@ -170,16 +198,16 @@ fn guarded_observation() -> PollOutcome {
                 wait_seconds: gate.wait_seconds(Instant::now()),
             };
         }
-    }
+        gate.outcome_revision
+    };
     let result = crate::codex_limits::fetch_codex_limits();
     let mut gate = POLL_GATE.lock().unwrap_or_else(|error| error.into_inner());
-    gate.finish(
+    // Only the shared owner commits an outcome. A retired or delayed caller must
+    // not mark a newer account observation failed when releasing its own lease.
+    gate.complete(
         Instant::now(),
-        result
-            .as_ref()
-            .err()
-            .map(String::as_str)
-            .filter(|error| *error != "identityChanged"),
+        before,
+        result.as_ref().err().map(String::as_str),
     );
     PollOutcome {
         failed: gate.failed,
@@ -318,11 +346,12 @@ mod tests {
         assert!(gate.start(now));
         assert!(!gate.start(now + Duration::from_secs(120)));
         gate.finish(now, None);
+        gate.release(now);
         assert!(!gate.start(now + Duration::from_secs(59)));
         assert!(gate.start(now + Duration::from_secs(60)));
     }
     #[test]
-    fn rate_limits_wait_five_minutes_and_success_recovers_normal_cadence() {
+    fn rate_limits_keep_the_deadline_then_success_recovers_normal_cadence() {
         let now = Instant::now();
         let mut gate = PollGate::new(now);
         gate.finish(now, Some("quota response 429"));
@@ -336,6 +365,117 @@ mod tests {
         gate.finish(now, None);
         assert!(!gate.failed);
         assert_eq!(gate.failures, 0);
-        assert_eq!(gate.next.duration_since(now), Duration::from_secs(60));
+        assert_eq!(gate.next.duration_since(now), Duration::from_secs(900));
+        gate.release(now);
+        let later = now + Duration::from_secs(900);
+        assert!(gate.start(later));
+        gate.finish(later, None);
+        gate.release(later);
+        assert_eq!(gate.next.duration_since(later), Duration::from_secs(60));
+    }
+    #[test]
+    fn quota_refresh_independent_success_keeps_existing_rate_limit_deadline() {
+        let now = Instant::now();
+        let mut gate = PollGate::new(now);
+        gate.finish(now, Some("quota response 429"));
+        let deadline = gate.next;
+        gate.finish(now + Duration::from_secs(5), None);
+        assert!(
+            !gate.failed,
+            "New accepted quota data clears the old failure"
+        );
+        assert_eq!(gate.failures, 0);
+        assert_eq!(
+            gate.next, deadline,
+            "A success must not shorten the 429 cooldown"
+        );
+    }
+    #[test]
+    fn quota_refresh_published_success_does_not_release_a_running_pace_read() {
+        let now = Instant::now();
+        let mut gate = PollGate::new(now);
+        assert!(gate.start(now));
+        gate.finish(now + Duration::from_secs(1), None);
+        assert!(
+            gate.in_flight,
+            "Publication and poll ownership are separate"
+        );
+        assert!(!gate.start(now + Duration::from_secs(300)));
+        gate.release(now + Duration::from_secs(1));
+        assert!(!gate.in_flight);
+        assert!(gate.start(now + Duration::from_secs(61)));
+    }
+    #[test]
+    fn quota_refresh_true_failure_keeps_backoff_after_a_late_poll_release() {
+        let now = Instant::now();
+        let mut gate = PollGate::new(now);
+        assert!(gate.start(now));
+        gate.finish(now + Duration::from_secs(5), Some("synthetic timeout"));
+        assert!(gate.failed);
+        assert_eq!(gate.next.duration_since(now), Duration::from_secs(125));
+        gate.release(now + Duration::from_secs(6));
+        assert!(gate.failed);
+        assert!(!gate.start(now + Duration::from_secs(124)));
+        assert!(gate.start(now + Duration::from_secs(125)));
+    }
+    #[test]
+    fn quota_refresh_unpublished_local_error_is_visible_but_cannot_overwrite_recovery() {
+        let now = Instant::now();
+        let mut gate = PollGate::new(now);
+        assert!(gate.start(now));
+        let before = gate.outcome_revision;
+        gate.complete(
+            now + Duration::from_secs(5),
+            before,
+            Some("synthetic local lock error"),
+        );
+        assert!(gate.failed);
+        let failed_deadline = gate.next;
+        gate.finish(now + Duration::from_secs(6), None);
+        gate.complete(
+            now + Duration::from_secs(7),
+            before,
+            Some("older local error"),
+        );
+        assert!(!gate.failed);
+        assert_eq!(gate.next, failed_deadline);
+    }
+    #[test]
+    fn quota_refresh_a_published_failure_is_not_backed_off_twice() {
+        let now = Instant::now();
+        let mut gate = PollGate::new(now);
+        assert!(gate.start(now));
+        let before = gate.outcome_revision;
+        gate.finish(now + Duration::from_secs(5), Some("synthetic timeout"));
+        let deadline = gate.next;
+        gate.complete(
+            now + Duration::from_secs(6),
+            before,
+            Some("synthetic timeout"),
+        );
+        assert_eq!(gate.failures, 1);
+        assert_eq!(gate.next, deadline);
+    }
+    #[test]
+    fn quota_refresh_old_scope_or_retired_completion_cannot_fail_the_new_scope() {
+        let now = Instant::now();
+        let mut gate = PollGate::new(now);
+        assert!(gate.start(now));
+        let before = gate.outcome_revision;
+        gate.invalidate();
+        gate.complete(
+            now + Duration::from_secs(1),
+            before,
+            Some("old scope local error"),
+        );
+        assert!(!gate.failed);
+        let before = gate.outcome_revision;
+        gate.complete(
+            now + Duration::from_secs(2),
+            before,
+            Some("identityChanged"),
+        );
+        assert!(!gate.failed);
+        assert_eq!(gate.failures, 0);
     }
 }

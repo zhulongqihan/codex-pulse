@@ -4,6 +4,19 @@ User-facing changes are grouped by release, following [Keep a Changelog](https:/
 
 ## [Unreleased]
 
+## [0.9.2] - 2026-11-12
+
+### Fixed / 修复
+
+- Clear outdated pace-refresh failures after a successful account read from another entry.
+- 其他入口成功读取额度后，及时清除配速卡片中保留的旧刷新失败状态。
+- Publish a shared quota request once and prevent an older failure from replacing a newer result or clearing its cache.
+- 同一额度请求只发布一次结果，避免较早的失败覆盖新结果或清除新缓存。
+- Clear local snapshot-read errors after recovery even when the quota timestamp is unchanged, and ignore manual-refresh errors superseded by a newer update.
+- 本地快照读取恢复后，即使额度时间戳未变也清除错误；较新更新到达后忽略旧手动刷新错误。
+
+[完整中英说明 / Full release notes](docs/releases/v0.9.2.md)
+
 ## [0.9.1] - 2026-11-11
 
 ### Fixed / 修复
