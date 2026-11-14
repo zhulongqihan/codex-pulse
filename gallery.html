@@ -6,7 +6,7 @@
   <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; img-src 'self'; base-uri 'none'; form-action 'none'">
   <title>Codex Pulse Screenshots — Clear &amp; Meter Windows Usage Monitor</title>
   <link rel="icon" type="image/png" href="screenshots/icon.png">
-  <meta name="description" content="Explore Codex Pulse for Windows: Clear and Meter themes, local token usage, ChatGPT account quota, six analysis views, and a floating widget. Screenshots use synthetic data.">
+  <meta name="description" content="Explore Codex Pulse for Windows: Clear and Meter themes, local token usage, ChatGPT account quota, a focused dashboard and separate usage analysis, and a floating widget. Screenshots use synthetic data.">
   <link rel="canonical" href="https://zhulongqihan.github.io/codex-pulse/gallery.html">
   <meta property="og:type" content="website">
   <meta property="og:site_name" content="Codex Pulse">
@@ -113,7 +113,7 @@
     <header class="site-header">
       <a class="brand" href="./?demo=1" aria-label="Codex Pulse 合成演示">
         <svg viewBox="0 0 28 28" aria-hidden="true"><image href="screenshots/icon.png" width="28" height="28"/></svg>
-        Codex Pulse <span class="version">v0.9.2 · 合成演示截图</span>
+        Codex Pulse <span class="version">v0.10.0 · 合成演示截图</span>
       </a>
       <nav class="header-links" aria-label="项目导航">
         <a href="./?demo=1">在线演示</a>
@@ -132,18 +132,25 @@
       <p class="demo-note"><span lang="zh-CN">以下截图与网页演示均使用合成记录，不含真实账号或对话，不会读取你的本机日志。未返回的账号信息保持未知。点选截图可查看原图。</span><span class="caption-en" lang="en">Screenshots and the browser demo use synthetic records, contain no real accounts or conversations, and do not read your local logs. Unavailable account data stays unknown. Select an image to view the original.</span></p>
     </div>
     <nav class="section-nav" aria-label="图集导航">
-      <a href="#themes">清爽与刻度</a><a href="#views">六个主视图</a><a href="#pricing">价格目录</a><a href="#replay">会话回放</a><a href="#settings">设置</a><a href="#widget">悬浮窗</a><a href="#tray">系统托盘</a><a href="#scope">数据边界</a>
+      <a href="#themes">清爽与刻度</a><a href="#usage-analysis">用量分析</a><a href="#views">工作视图</a><a href="#pricing">价格目录</a><a href="#replay">会话回放</a><a href="#settings">设置</a><a href="#widget">悬浮窗</a><a href="#tray">系统托盘</a><a href="#scope">数据边界</a>
     </nav>
     <main id="main">
       <section id="themes" class="theme-section" aria-labelledby="themes-title">
         <div class="section-heading"><h2 id="themes-title">清爽与刻度</h2><p>切换外观，保留日期、筛选、搜索、排序与回放阅读位置。</p></div>
         <div class="screen-grid">
-          <figure><a class="screenshot" href="screenshots/clear-overview.png" target="_blank" rel="noopener" aria-label="查看清爽 · 仪表盘原图，新标签页打开"><img loading="lazy" decoding="async" src="screenshots/clear-overview.png" alt="Codex Pulse Clear 仪表盘，合成演示数据"></a><figcaption><h3>清爽 · 仪表盘 <span lang="en">Clear dashboard</span></h3><p><span lang="zh-CN">本轮配速、今日本机用量与所选时段趋势分开呈现。</span><span class="caption-en" lang="en">Cycle pace, today's local usage, and trends for the selected period are shown separately.</span></p></figcaption></figure>
-          <figure><a class="screenshot" href="screenshots/meter-overview.png" target="_blank" rel="noopener" aria-label="查看刻度 · 仪表盘原图，新标签页打开"><img loading="lazy" decoding="async" src="screenshots/meter-overview.png" alt="Codex Pulse Meter 仪表盘，合成演示数据"></a><figcaption><h3>刻度 · 仪表盘 <span lang="en">Meter dashboard</span></h3><p><span lang="zh-CN">本轮配速、今日本机用量与所选时段趋势分开呈现。</span><span class="caption-en" lang="en">Cycle pace, today's local usage, and trends for the selected period are shown separately.</span></p></figcaption></figure>
+          <figure><a class="screenshot" href="screenshots/clear-overview.png" target="_blank" rel="noopener" aria-label="查看清爽 · 仪表盘原图，新标签页打开"><img loading="lazy" decoding="async" src="screenshots/clear-overview.png" alt="Codex Pulse Clear 仪表盘，合成演示数据"></a><figcaption><h3>清爽 · 仪表盘 <span lang="en">Clear dashboard</span></h3><p><span lang="zh-CN">首页聚焦本轮额度、配速与今日参考成本，历史趋势进入独立用量分析。</span><span class="caption-en" lang="en">Current quota, pacing and today's reference cost stay on the dashboard; historical trends live in Usage analysis.</span></p></figcaption></figure>
+          <figure><a class="screenshot" href="screenshots/meter-overview.png" target="_blank" rel="noopener" aria-label="查看刻度 · 仪表盘原图，新标签页打开"><img loading="lazy" decoding="async" src="screenshots/meter-overview.png" alt="Codex Pulse Meter 仪表盘，合成演示数据"></a><figcaption><h3>刻度 · 仪表盘 <span lang="en">Meter dashboard</span></h3><p><span lang="zh-CN">首页聚焦本轮额度、配速与今日参考成本，历史趋势进入独立用量分析。</span><span class="caption-en" lang="en">Current quota, pacing and today's reference cost stay on the dashboard; historical trends live in Usage analysis.</span></p></figcaption></figure>
+        </div>
+      </section>
+      <section id="usage-analysis" aria-labelledby="analysis-title">
+        <div class="section-heading"><h2 id="analysis-title">独立用量分析</h2><p>所选时段的汇总、趋势、消耗分布和导出集中在同一页。</p></div>
+        <div class="screen-grid">
+          <figure><a class="screenshot" href="screenshots/clear-analysis.png" target="_blank" rel="noopener" aria-label="查看清爽 · 用量分析原图，新标签页打开"><img loading="lazy" decoding="async" src="screenshots/clear-analysis.png" alt="Codex Pulse 清爽用量分析，合成数据"></a><figcaption><h3>清爽 · 用量分析 <span lang="en">Usage analysis</span></h3><p><span lang="zh-CN">历史范围与今日读数独立，选择日期后查看明细。</span><span class="caption-en" lang="en">Historical ranges remain separate from today's readings. Select a date for detail.</span></p></figcaption></figure>
+          <figure><a class="screenshot" href="screenshots/meter-analysis.png" target="_blank" rel="noopener" aria-label="查看刻度 · 用量分析原图，新标签页打开"><img loading="lazy" decoding="async" src="screenshots/meter-analysis.png" alt="Codex Pulse 刻度用量分析，合成数据"></a><figcaption><h3>刻度 · 用量分析 <span lang="en">Usage analysis</span></h3><p><span lang="zh-CN">历史范围与今日读数独立，选择日期后查看明细。</span><span class="caption-en" lang="en">Historical ranges remain separate from today's readings. Select a date for detail.</span></p></figcaption></figure>
         </div>
       </section>
       <section id="views" aria-labelledby="views-title">
-        <div class="section-heading"><h2 id="views-title">六个主视图</h2><p>仪表盘之外，沿模型、日期、项目或会话继续阅读。</p></div>
+        <div class="section-heading"><h2 id="views-title">工作视图</h2><p>仪表盘之外，从左侧用量分析查看时段趋势，也可沿模型、日期、项目或会话继续阅读。</p></div>
         <div class="screen-grid">
           <figure><a class="screenshot" href="screenshots/clear-sessions.png" target="_blank" rel="noopener" aria-label="查看清爽 · 会话原图，新标签页打开"><img loading="lazy" decoding="async" src="screenshots/clear-sessions.png" alt="Codex Pulse Clear 会话，合成演示数据"></a><figcaption><h3>清爽 · 会话 <span lang="en">Sessions</span></h3><p><span lang="zh-CN">在已加载会话信息中搜索标题、会话 ID、模型与项目，再展开会话与代理。</span><span class="caption-en" lang="en">Search loaded session information by title, session ID, model or project, then inspect conversations and agents.</span></p></figcaption></figure>
 <figure><a class="screenshot" href="screenshots/meter-sessions.png" target="_blank" rel="noopener" aria-label="查看刻度 · 会话原图，新标签页打开"><img loading="lazy" decoding="async" src="screenshots/meter-sessions.png" alt="Codex Pulse Meter 会话，合成演示数据"></a><figcaption><h3>刻度 · 会话 <span lang="en">Sessions</span></h3><p><span lang="zh-CN">在已加载会话信息中搜索标题、会话 ID、模型与项目，再展开会话与代理。</span><span class="caption-en" lang="en">Search loaded session information by title, session ID, model or project, then inspect conversations and agents.</span></p></figcaption></figure>
