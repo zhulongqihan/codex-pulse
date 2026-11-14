@@ -31,6 +31,8 @@ Release 的 `.sha256` 用于核对下载完整性，例如在 PowerShell 运行 
 
 退出与迁移说明见 [使用说明](../README.md#windows-启动)，故障与隐私报告见 [SUPPORT](../SUPPORT.md)、[SECURITY](../SECURITY.md)。
 
+[完整隐私与网络访问说明](../PRIVACY.md) · [卸载与数据保留](UNINSTALL.md) · [Code signing policy / 代码签名政策](CODE_SIGNING.md)。
+
 ## English
 
 Codex Pulse is an independent MIT-licensed project, not affiliated with OpenAI. Download from the [official zhulongqihan/codex-pulse release page](https://github.com/zhulongqihan/codex-pulse/releases/latest) and check the complete repository name to distinguish similarly named projects.
@@ -59,3 +61,5 @@ The current Windows EXE has no **Authenticode publisher code signature**. Warnin
 The release `.sha256` checks download integrity. For example, run `Get-FileHash .\CodexPulse-<version>-windows-x64.zip -Algorithm SHA256` in PowerShell and compare with its matching digest file. Pulse's updater separately verifies the manifest signature, package digest, product and platform. This does not establish Windows publisher identity. Do not disable system protection to run the app; if policy blocks it, retain the message and follow your organization's policy or report minimal non-sensitive details.
 
 See the [user guide](../README.en.md#run-on-windows), [SUPPORT](../SUPPORT.md) and [SECURITY](../SECURITY.md) for exit, relocation and safe reporting.
+
+[Privacy and network access](../PRIVACY.md#english) · [Uninstallation and data retention](UNINSTALL.md#english) · [Code signing policy](CODE_SIGNING.md#english).

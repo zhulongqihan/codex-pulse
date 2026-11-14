@@ -162,3 +162,5 @@ Each application update goes through a user-workflow review, necessary correctio
 MIT licensed. The Rust engine, orchestration, replay components, translations and tests reuse [Codex Usage Desktop 5.6.0](https://github.com/itvincent-git/codex-usage-desktop) by Vincent and contributors, with its original license preserved. Pulse adds its own identity, Clear/Meter interface, portable storage, floating widget and update channel.
 
 [Changelog](CHANGELOG.md) · [Versioning and compatibility](VERSIONING.md) · [Source notices](THIRD_PARTY_NOTICES.md) · [Dependency licenses](THIRD_PARTY_LICENSES.txt) · [Contributing](CONTRIBUTING.md) · [Privacy and security reporting](SECURITY.md)
+
+[Privacy and network access](PRIVACY.md#english) · [Uninstallation and data retention](docs/UNINSTALL.md#english) · [Code signing policy](docs/CODE_SIGNING.md#english)
