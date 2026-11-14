@@ -361,47 +361,56 @@ function AgentHierarchy({
   );
 }
 
-function TextBlock({
-  title,
-  text,
-  defaultCollapsed = false,
-  markdown = false,
-  titleClassName = "text-muted-foreground",
-}: {
+function ReplayTextBody({ text, defaultCollapsed = false, markdown = false }: {
+  text: string;
+  defaultCollapsed?: boolean;
+  markdown?: boolean;
+}) {
+  const { t } = useTranslation();
+  const [userExpanded, setUserExpanded] = useState(false);
+  const isLong = text.length > LONG_TEXT_THRESHOLD;
+  const isFullVisible = userExpanded || (!defaultCollapsed && !isLong);
+  const preview = isLong ? `${text.slice(0, TEXT_PREVIEW_LENGTH)}...` : text;
+  const displayText = isFullVisible ? text : preview;
+
+  return (
+    <SessionSearchText text={text} full={isFullVisible}>
+      {isLong ? (
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          className="mb-2 h-7 px-2 text-xs"
+          aria-expanded={isFullVisible}
+          onClick={() => setUserExpanded((value) => !value)}
+        >
+          {isFullVisible ? t("sessions.detail.hide_full_text") : t("sessions.detail.show_full_text")}
+        </Button>
+      ) : null}
+      {markdown ? (
+        <Suspense fallback={<div className="whitespace-pre-wrap break-words text-sm leading-relaxed text-foreground">{displayText}</div>}>
+          <MarkdownContent content={displayText} />
+        </Suspense>
+      ) : (
+        <pre className="whitespace-pre-wrap break-words font-mono text-xs leading-relaxed text-foreground">
+          {displayText}
+        </pre>
+      )}
+    </SessionSearchText>
+  );
+}
+
+function TextBlock({ title, text, defaultCollapsed = false, markdown = false, titleClassName = "text-muted-foreground" }: {
   title: string;
   text: string;
   defaultCollapsed?: boolean;
   markdown?: boolean;
   titleClassName?: string;
 }) {
-  const { t } = useTranslation();
-  const [isFullVisible, setIsFullVisible] = useSessionSearchExpansion(!defaultCollapsed && text.length <= LONG_TEXT_THRESHOLD);
-  const isLong = text.length > LONG_TEXT_THRESHOLD;
-  const preview = isLong ? `${text.slice(0, TEXT_PREVIEW_LENGTH)}...` : text;
-
   return (
     <div className="py-2">
       <div className={`mb-1 text-[10px] font-semibold uppercase tracking-[0.12em] ${titleClassName}`}>{title}</div>
-      {markdown ? (
-        <SessionSearchText text={text}><Suspense fallback={<pre className="whitespace-pre-wrap break-words text-sm leading-relaxed text-foreground">{text}</pre>}>
-          <MarkdownContent content={isFullVisible ? text : preview} />
-        </Suspense></SessionSearchText>
-      ) : (
-        <pre className="whitespace-pre-wrap break-words font-mono text-xs leading-relaxed text-foreground">
-          <SessionSearchText text={text}>{isFullVisible ? text : preview}</SessionSearchText>
-        </pre>
-      )}
-      {isLong ? (
-        <Button
-          type="button"
-          variant="ghost"
-          size="sm"
-          className="mt-2 h-7 px-2 text-xs"
-          onClick={() => setIsFullVisible((value) => !value)}
-        >
-          {isFullVisible ? t("sessions.detail.hide_full_text") : t("sessions.detail.show_full_text")}
-        </Button>
-      ) : null}
+      <ReplayTextBody text={text} defaultCollapsed={defaultCollapsed} markdown={markdown} />
     </div>
   );
 }
@@ -430,9 +439,7 @@ function MessageItem({ item, tokenUsage, rawJsonl }: { item: Extract<ReplayItem,
         </span>
       </button>
       {isExpanded ? (
-        <SessionSearchText text={item.text}><Suspense fallback={<p className="whitespace-pre-wrap break-words text-sm leading-relaxed">{item.text}</p>}>
-          <MarkdownContent content={item.text} />
-        </Suspense></SessionSearchText>
+        <ReplayTextBody text={item.text} markdown />
       ) : <p className="line-clamp-3 whitespace-pre-wrap break-words text-sm text-muted-foreground">{buildCollapsedPreview(item.text, 3)}</p>}
       <div className="mt-2 flex justify-end"><CopyContentButton content={item.text} /></div>
       <RawJsonlDisclosure rawJsonl={rawJsonl} />

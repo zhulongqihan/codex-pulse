@@ -4,6 +4,19 @@ User-facing changes are grouped by release, following [Keep a Changelog](https:/
 
 ## [Unreleased]
 
+## [0.11.1] - 2026-11-14
+
+### Fixed / 修复
+
+- Open long user and assistant messages as previews instead of rendering their complete Markdown immediately; keep loading placeholders bounded as well.
+- 用户和助手的长消息先显示预览，避免立即渲染整段 Markdown；加载中的占位内容也使用预览。
+- Place the full-text control before the body so expanding a message keeps the control and keyboard focus in view.
+- 全文操作位于正文前，展开消息时保留可见的收起入口和键盘焦点。
+- Retain complete copying, full-content search, raw JSONL and turn navigation. Clearing a search restores the user's preview or expanded state.
+- 保留完整复制、全文搜索、原始 JSONL 与回合导航；清除搜索后恢复用户原先的预览或展开状态。
+
+[完整中英说明 / Full release notes](docs/releases/v0.11.1.md)
+
 ## [0.11.0] - 2026-11-14
 
 ### Added / 新增
@@ -269,7 +282,8 @@ User-facing changes are grouped by release, following [Keep a Changelog](https:/
 
 Earlier releases remain available in [GitHub Releases](https://github.com/zhulongqihan/codex-pulse/releases). / 更早版本保留在 GitHub Releases。
 
-[Unreleased]: https://github.com/zhulongqihan/codex-pulse/compare/v0.11.0...HEAD
+[Unreleased]: https://github.com/zhulongqihan/codex-pulse/compare/v0.11.1...HEAD
+[0.11.1]: https://github.com/zhulongqihan/codex-pulse/releases/tag/v0.11.1
 [0.11.0]: https://github.com/zhulongqihan/codex-pulse/releases/tag/v0.11.0
 [0.10.0]: https://github.com/zhulongqihan/codex-pulse/releases/tag/v0.10.0
 [0.9.2]: https://github.com/zhulongqihan/codex-pulse/releases/tag/v0.9.2
