@@ -4,6 +4,24 @@ User-facing changes are grouped by release, following [Keep a Changelog](https:/
 
 ## [Unreleased]
 
+## [0.10.0] - 2026-11-14
+
+### Added / 新增
+
+- Add Usage analysis in the sidebar for selected-period totals, trends, distributions and exports.
+- 左侧新增“用量分析”，集中查看所选时段汇总、趋势、分布和导出。
+
+### Improved / 改进
+
+- Focus the dashboard on current quota, reset time, pacing and today's API reference cost, with evidence and breakdowns available on demand.
+- 仪表盘聚焦当前额度、重置时间、配速和今日 API 参考成本，依据及构成明细按需展开。
+- Reach account identity, subscription, Credits, reset details and notices through the existing account entry, reducing repeated home-page content.
+- 通过已有账号入口查看身份、订阅、Credits、重置详情与预告，减少首页重复信息。
+- Retain independent today/range calculations, complete chart tools, export formats and existing local data when upgrading.
+- 保留今日与时段独立统计、完整图表工具、导出格式及升级前的本地数据。
+
+[完整中英说明 / Full release notes](docs/releases/v0.10.0.md)
+
 ## [0.9.2] - 2026-11-12
 
 ### Fixed / 修复
@@ -231,7 +249,9 @@ User-facing changes are grouped by release, following [Keep a Changelog](https:/
 
 Earlier releases remain available in [GitHub Releases](https://github.com/zhulongqihan/codex-pulse/releases). / 更早版本保留在 GitHub Releases。
 
-[Unreleased]: https://github.com/zhulongqihan/codex-pulse/compare/v0.9.1...HEAD
+[Unreleased]: https://github.com/zhulongqihan/codex-pulse/compare/v0.10.0...HEAD
+[0.10.0]: https://github.com/zhulongqihan/codex-pulse/releases/tag/v0.10.0
+[0.9.2]: https://github.com/zhulongqihan/codex-pulse/releases/tag/v0.9.2
 [0.9.1]: https://github.com/zhulongqihan/codex-pulse/releases/tag/v0.9.1
 [0.9.0]: https://github.com/zhulongqihan/codex-pulse/releases/tag/v0.9.0
 [0.8.0]: https://github.com/zhulongqihan/codex-pulse/releases/tag/v0.8.0

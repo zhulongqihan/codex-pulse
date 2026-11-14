@@ -1,7 +1,8 @@
-import { CalendarDays, ChartColumn, Folder, LayoutDashboard, Logs, PanelLeftClose, PanelLeftOpen, Settings, Terminal, Wallet } from "lucide-react";
+import { CalendarDays, ChartColumn, ChartNoAxesCombined, Folder, LayoutDashboard, Logs, PanelLeftClose, PanelLeftOpen, Settings, Terminal, Wallet } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import type { DashboardView } from "@/components/dashboard-header";
+import { useShellCopy } from "@/lib/shell-copy";
 
 type AppSidebarProps = {
   view: DashboardView;
@@ -16,6 +17,7 @@ type AppSidebarProps = {
 
 const pages = [
   { view: "dashboard", label: "dashboard", icon: LayoutDashboard },
+  { view: "analysis", label: "analysis", icon: ChartNoAxesCombined },
   { view: "sessions", label: "sessions", icon: Terminal },
   { view: "models", label: "model", icon: ChartColumn },
   { view: "daily", label: "daily", icon: CalendarDays },
@@ -32,6 +34,8 @@ export const clampSidebarWidth = (width: number) => Math.min(MAX_WIDTH, Math.max
 
 export function AppSidebar({ view, onViewChange, collapsed, onToggleCollapsed, width, onWidthChange, showLogsTab, limits }: AppSidebarProps) {
   const { t } = useTranslation();
+  const copy = useShellCopy();
+  const pageLabel = (label: string) => label === "analysis" ? copy("analysis") : t(`common.${label}`);
   const toggleLabel = t(collapsed ? "header.expand_sidebar" : "header.collapse_sidebar");
   const [resizingWidth, setResizingWidth] = useState<number | null>(null);
   const drag = useRef<{ startX: number; startWidth: number; width: number } | null>(null);
@@ -72,9 +76,9 @@ export function AppSidebar({ view, onViewChange, collapsed, onToggleCollapsed, w
       <nav id="app-navigation" aria-label={t("header.navigation")} className="min-h-0 flex-1 overflow-y-auto px-2 py-2">
         <div role="tablist" aria-orientation="vertical" aria-label={t("header.navigation")} className="space-y-1">
           {pages.filter((page) => page.view !== "logs" || showLogsTab).map(({ view: page, label, icon: Icon }) => (
-            <button key={page} type="button" role="tab" aria-selected={view === page} aria-label={t(`common.${label}`)} title={collapsed ? t(`common.${label}`) : undefined} data-testid={`${page}-nav-tab`} onClick={() => onViewChange(page)} className={`flex min-h-10 w-full items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors focus-visible:ring-2 focus-visible:ring-ring ${collapsed ? "justify-center" : "text-left"} ${view === page ? "bg-primary/10 text-primary" : "text-muted-foreground hover:bg-muted hover:text-foreground"}`}>
+            <button key={page} type="button" role="tab" aria-selected={view === page} aria-label={pageLabel(label)} title={collapsed ? pageLabel(label) : undefined} data-testid={`${page}-nav-tab`} onClick={() => onViewChange(page)} className={`flex min-h-10 w-full items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors focus-visible:ring-2 focus-visible:ring-ring ${collapsed ? "justify-center" : "text-left"} ${view === page ? "bg-primary/10 text-primary" : "text-muted-foreground hover:bg-muted hover:text-foreground"}`}>
               <Icon className="h-4 w-4 shrink-0" aria-hidden="true" />
-              {!collapsed ? <span className="truncate">{t(`common.${label}`)}</span> : null}
+              {!collapsed ? <span className="truncate">{pageLabel(label)}</span> : null}
             </button>
           ))}
         </div>

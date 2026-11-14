@@ -209,6 +209,78 @@ function mockLoadedDashboard() {
 }
 
 describe("App", () => {
+  it("keeps Home focused and remembers the account rail choice across restarts", async () => {
+    mockLoadedDashboard();
+    const first = render(<App/>);
+    await screen.findByTestId("dashboard-hero");
+    expect(screen.queryByTestId("range-summary")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("global-reset-forecast")).not.toBeInTheDocument();
+    expect(document.getElementById("pulse-account-rail")).not.toBeInTheDocument();
+    expect(forecastInvokeMock).not.toHaveBeenCalled();
+    await userEvent.click(screen.getByTestId("account-toggle"));
+    expect(await screen.findByTestId("account-subscription-facts")).toBeVisible();
+    expect(document.getElementById("pulse-account-rail")).toContainElement(screen.getByTestId("reset-area"));
+    await waitFor(() => expect(forecastInvokeMock).toHaveBeenCalled());
+    first.unmount();
+    const second = render(<App/>);
+    expect(await screen.findByTestId("account-toggle")).toHaveAttribute("aria-expanded", "true");
+    await userEvent.click(screen.getByTestId("account-toggle"));
+    second.unmount();
+    render(<App/>);
+    expect(await screen.findByTestId("account-toggle")).toHaveAttribute("aria-expanded", "false");
+  });
+
+  it("retains analysis filters and each page's reading position across Home and settings", async () => {
+    mockLoadedDashboard();
+    render(<App/>);
+    await screen.findByTestId("dashboard-hero");
+    const main = document.querySelector<HTMLElement>(".pulse-main-scroll")!;
+    main.scrollTop = 120;
+    await userEvent.click(screen.getByTestId("analysis-nav-tab"));
+    const analysis = await screen.findByTestId("usage-analysis");
+    expect(main.scrollTop).toBe(0);
+    const distribution = within(analysis.querySelector<HTMLElement>(".pulse-distribution")!);
+    await userEvent.click(distribution.getByRole("button", { name: "Model" }));
+    await userEvent.click(distribution.getByRole("button", { name: "API estimate" }));
+    main.scrollTop = 640;
+    await userEvent.click(screen.getByTestId("dashboard-nav-tab"));
+    expect(main.scrollTop).toBe(120);
+    expect(analysis).not.toBeVisible();
+    await userEvent.click(screen.getByTestId("analysis-nav-tab"));
+    expect(main.scrollTop).toBe(640);
+    expect(distribution.getByRole("button", { name: "Model" })).toHaveAttribute("aria-pressed", "true");
+    expect(distribution.getByRole("button", { name: "API estimate" })).toHaveAttribute("aria-pressed", "true");
+    await userEvent.click(screen.getByTestId("settings-nav-tab"));
+    expect(main.scrollTop).toBe(0);
+    await userEvent.click(screen.getByRole("button", { name: "Back" }));
+    expect(screen.getByTestId("analysis-nav-tab")).toHaveAttribute("aria-selected", "true");
+    expect(main.scrollTop).toBe(640);
+  });
+
+  it.each([760, 1440])("opens and focuses the legacy account-details link at %ipx", async width => {
+    Object.defineProperty(window, "innerWidth", { configurable: true, writable: true, value: width });
+    mockLoadedDashboard(); setPageActive(true);
+    const originalUrl = location.href;
+    history.replaceState(null, "", "#pulse-account-details");
+    onTestFinished(() => history.replaceState(null, "", originalUrl));
+    render(<App/>);
+    await waitFor(() => expect(document.activeElement).toBe(document.getElementById("pulse-account-details")));
+    expect(screen.getByTestId("reset-area")).toBeVisible();
+    if (width <= 1100) {
+      await userEvent.keyboard("{Escape}");
+      expect(screen.queryByTestId("account-drawer")).not.toBeInTheDocument();
+    } else await userEvent.click(screen.getByTestId("account-toggle"));
+    const link = document.createElement("a"); link.href = "#pulse-account-details"; document.body.append(link);
+    fireEvent.click(link); link.remove();
+    await waitFor(() => expect(document.activeElement).toBe(document.getElementById("pulse-account-details")));
+  });
+
+  it.each([["zh", "用量分析"], ["zh-Hant", "用量分析"], ["en", "Usage analysis"], ["ja", "使用量分析"], ["ko", "사용량 분석"], ["de", "Nutzungsanalyse"]])("names the analysis navigation in %s", async (language, label) => {
+    mockLoadedDashboard(); await i18n.changeLanguage(language);
+    render(<App/>);
+    expect(await screen.findByRole("tab", { name: label })).toHaveAttribute("data-testid", "analysis-nav-tab");
+  });
+
   it.each(["sessions", "settings"])("opens cycle pace observations after the native pace card leaves %s", async source => {
     mockLoadedDashboard();
     const invokeLoaded = invokeMock.getMockImplementation()!;
@@ -254,15 +326,15 @@ describe("App", () => {
     await waitFor(() => expect(updateWidgetSnapshotMock.mock.calls.at(-1)?.[0].data.integration.presentation.resolvedTheme).toBe(next));
     expect(requests()).toBe(before);
   });
-  it.each([760, 1440])("prioritizes pace in compact windows while keeping today's usage reachable at %ipx", async width => {
+  it.each([760, 1440])("prioritizes pace while keeping today's usage reachable at %ipx", async width => {
     Object.defineProperty(window, "innerWidth", { configurable: true, writable: true, value: width });
     mockLoadedDashboard();
     render(<App />);
     await screen.findByTestId("dashboard-hero");
     const pace = screen.getByTestId("pulse-coach-overview");
     const today = screen.getByTestId("today-summary");
-    const earlier = width <= 1100 ? pace : today;
-    const later = width <= 1100 ? today : pace;
+    const earlier = pace;
+    const later = today;
     expect(earlier.compareDocumentPosition(later) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(screen.getByTestId("today-tokens")).toBeVisible();
     expect(document.querySelector(".pulse-statusbar")?.textContent).not.toContain("— logs");
@@ -358,6 +430,7 @@ describe("App", () => {
       throw new Error(`Unexpected invoke: ${command}`);
     });
     render(<App />);
+    await userEvent.click(screen.getByTestId("account-toggle"));
     expect(await screen.findByTestId("reset-area")).toBeVisible();
     expect(await screen.findByTestId("global-reset-forecast")).toBeVisible();
     expect(within(await screen.findByRole("region", { name: "Latest 5 feed posts" })).getAllByRole("listitem")).toHaveLength(5);
@@ -456,6 +529,7 @@ describe("App", () => {
     });
     const user = userEvent.setup();
     render(<App />);
+    await userEvent.click(screen.getByTestId("analysis-nav-tab"));
     await waitFor(() => expect(screen.getAllByText("1,600").length).toBeGreaterThan(0));
     await user.click(screen.getByRole("tab", { name: "Monthly" }));
     const monthlyRow = () => screen.getByRole("cell", { name: "2026-06" }).closest("tr")!;
@@ -675,7 +749,7 @@ describe("App", () => {
     expect(screen.getByRole("tab", { name: "Sessions", selected: true })).toBeVisible();
     expect(await screen.findByRole("heading", { name: "Today's fixture" })).toBeVisible();
     expect(document.getElementById(`date-group-${date}`)).toBeVisible();
-    expect(invokeMock.mock.calls.filter(([command, args]) => command === "fetch_overview" && args.range === "1d").length).toBeGreaterThan(priorTodayReads);
+    expect(invokeMock.mock.calls.filter(([command, args]) => command === "fetch_overview" && args.range === "1d").length).toBe(priorTodayReads);
     await waitFor(() => expect(Element.prototype.scrollIntoView).toHaveBeenCalledWith({ behavior: motion === "off" ? "instant" : "smooth", block: "start" }));
   });
 
@@ -880,6 +954,7 @@ describe("App", () => {
     });
 
     render(<App />);
+    await userEvent.click(screen.getByTestId("analysis-nav-tab"));
     await waitFor(() => expect(screen.getAllByText("1,600").length).toBeGreaterThan(0));
 
     setPageActive(false);
@@ -919,6 +994,7 @@ describe("App", () => {
     });
 
     render(<App />);
+    await userEvent.click(screen.getByTestId("account-toggle"));
     await waitFor(() => expect(screen.getAllByText("80%").length).toBeGreaterThan(0));
 
     setPageActive(false);
@@ -953,6 +1029,7 @@ describe("App", () => {
     });
 
     render(<App />);
+    await userEvent.click(screen.getByTestId("account-toggle"));
     await screen.findByText(/Unable to get Codex limits right now/);
 
     setPageActive(false);
@@ -989,6 +1066,7 @@ describe("App", () => {
     });
 
     render(<App />);
+    await userEvent.click(screen.getByTestId("analysis-nav-tab"));
     await waitFor(() => expect(screen.getAllByText("1,600").length).toBeGreaterThan(0));
 
     setPageActive(false);
@@ -1056,6 +1134,7 @@ describe("App", () => {
     });
 
     render(<App />);
+    await userEvent.click(screen.getByTestId("account-toggle"));
     const activateButton = await screen.findByRole("button", { name: "Start limit window" });
     fireEvent.click(activateButton);
     fireEvent.click(activateButton);
@@ -1122,6 +1201,7 @@ describe("App", () => {
     });
 
     render(<App />);
+    await userEvent.click(screen.getByTestId("account-toggle"));
 
     expect(await screen.findByTestId("global-reset-forecast")).toBeInTheDocument();
     expect(screen.queryByText(/codex-reset\.com/)).not.toBeInTheDocument();
@@ -1167,6 +1247,7 @@ describe("App", () => {
     });
 
     render(<App />);
+    await userEvent.click(screen.getByTestId("account-toggle"));
 
     await userEvent.click(await screen.findByRole("button", { name: "Open reset credits in ChatGPT Usage" }));
 
@@ -1335,6 +1416,8 @@ describe("App", () => {
     });
 
     render(<App />);
+    await userEvent.click(screen.getByTestId("account-toggle"));
+    await userEvent.click(screen.getByTestId("analysis-nav-tab"));
 
     await waitFor(() => expect(screen.getAllByText("3,400").length).toBeGreaterThan(0));
     expect(screen.queryByText("Codex Limits")).not.toBeInTheDocument();
@@ -1343,13 +1426,13 @@ describe("App", () => {
     expect(screen.getAllByText("80%").length).toBeGreaterThan(0);
     expect(screen.getAllByText("55%").length).toBeGreaterThan(0);
     expect(screen.getAllByText("user@example.com")[0]).toBeInTheDocument();
-    expect(screen.getByText("Elelive团队")).toBeInTheDocument();
-    expect(screen.getByText("team", { selector: "strong" })).toBeInTheDocument();
+    expect(document.querySelector(".pulse-account-identity")).toHaveTextContent("Elelive团队");
+    expect(document.querySelector(".pulse-account-identity")).toHaveTextContent("team");
     expect(screen.getByText(/Expires 2026-06-12 \(\d+ days? left\).*Auto-renew off/)).toBeInTheDocument();
     const trendsCard = screen.getByTestId("usage-trends-card");
-    expect(within(trendsCard).getByRole("button", { name: "Tokens" })).toHaveAttribute("aria-pressed", "true");
-    expect(within(trendsCard).getByRole("button", { name: "API estimate" })).toBeInTheDocument();
-    const hero = screen.getByTestId("dashboard-hero");
+    expect(within(trendsCard).getByRole("button", { name: "Tokens" })).toHaveAttribute("aria-pressed", "false");
+    expect(within(trendsCard).getByRole("button", { name: "API estimate" })).toHaveAttribute("aria-pressed", "true");
+    const hero = screen.getByTestId("usage-analysis");
     for (const metric of ["Input breakdown and daily averages", "Avg / Day", "Cache Hit", "Cost / 1M"]) expect(hero).toHaveTextContent(metric);
     expect(screen.queryByText("Cached Tokens")).not.toBeInTheDocument();
     expect(screen.queryByText("Avg Daily Cost")).not.toBeInTheDocument();
@@ -1390,7 +1473,7 @@ describe("App", () => {
     await userEvent.click(dailyTab);
 
     // Switch back to Dashboard tab to perform range selection
-    const dashboardTab = screen.getByRole("tab", { name: "Dashboard" });
+    const dashboardTab = screen.getByRole("tab", { name: "Usage analysis" });
     await userEvent.click(dashboardTab);
 
     await userEvent.click(screen.getByRole("button", { name: "Select time range" }));
@@ -1455,6 +1538,7 @@ describe("App", () => {
     });
 
     render(<App />);
+    await userEvent.click(screen.getByTestId("analysis-nav-tab"));
 
     await waitFor(() => expect(screen.getAllByText("3,400").length).toBeGreaterThan(0));
     await userEvent.click(screen.getByRole("button", { name: "Select time range" }));
@@ -1577,6 +1661,7 @@ describe("App", () => {
     });
 
     render(<App />);
+    await userEvent.click(screen.getByTestId("analysis-nav-tab"));
 
     await waitFor(() => expect(screen.getAllByText("1,600").length).toBeGreaterThan(0));
     expect(screen.queryByText("Monthly Usage Details")).not.toBeInTheDocument();
@@ -1626,6 +1711,7 @@ describe("App", () => {
     });
 
     render(<App />);
+    await userEvent.click(screen.getByTestId("analysis-nav-tab"));
 
     await waitFor(() => expect(screen.getAllByText("1,600").length).toBeGreaterThan(0));
     await userEvent.click(screen.getByRole("tab", { name: "Sessions" }));
@@ -1655,6 +1741,7 @@ describe("App", () => {
     });
     const user = userEvent.setup();
     render(<App />);
+    await userEvent.click(screen.getByTestId("analysis-nav-tab"));
     await waitFor(() => expect(screen.getAllByText("1,600").length).toBeGreaterThan(0));
     await user.click(screen.getByRole("tab", { name: "Model" }));
     await user.click(screen.getByRole("combobox", { name: "Sort descending" }));
@@ -2204,6 +2291,7 @@ describe("App", () => {
     });
 
     render(<App />);
+    await userEvent.click(screen.getByTestId("analysis-nav-tab"));
     await waitFor(() => expect(screen.getAllByText("1,600").length).toBeGreaterThan(0));
 
     await userEvent.click(screen.getByRole("tab", { name: "Sessions" }));
@@ -2524,6 +2612,8 @@ describe("App", () => {
       </StrictMode>,
     );
 
+    await userEvent.click(screen.getByTestId("analysis-nav-tab"));
+
     await waitFor(() => expect(screen.getAllByText("3,400").length).toBeGreaterThan(0));
 
     await waitFor(() => expect(invokeMock.mock.calls.filter(([command]) => command === "scan_usage")).toHaveLength(1));
@@ -2578,6 +2668,7 @@ describe("App", () => {
     });
 
     render(<App />);
+    await userEvent.click(screen.getByTestId("analysis-nav-tab"));
 
     await waitFor(() => expect(screen.getAllByText("3,400").length).toBeGreaterThan(0));
     await waitFor(() => expect(screen.getByText("scan failed")).toBeInTheDocument());
@@ -2624,6 +2715,8 @@ describe("App", () => {
     });
 
     render(<App />);
+    await userEvent.click(screen.getByTestId("analysis-nav-tab"));
+    await userEvent.click(screen.getByTestId("account-toggle"));
 
     await waitFor(() => expect(screen.getAllByText("3,400").length).toBeGreaterThan(0));
     expect(
@@ -2698,6 +2791,7 @@ describe("App", () => {
       throw new Error(`Unexpected invoke: ${command}`);
     });
     render(<App />);
+    await userEvent.click(screen.getByTestId("analysis-nav-tab"));
     await waitFor(() => expect(updateWidgetSnapshotMock).toHaveBeenCalledWith({ data: expect.objectContaining({
       tokens: { value: "77", exact: "77" }, cost: "—", quotas: expect.any(Array),
     }) }));
@@ -2739,6 +2833,7 @@ describe("App", () => {
     });
 
     render(<App />);
+    await userEvent.click(screen.getByTestId("account-toggle"));
 
     await waitFor(() => {
       const payload = updateTrayMock.mock.calls.at(-1)?.[0]?.payload;
@@ -2933,6 +3028,7 @@ describe("App", () => {
     });
 
     render(<App />);
+    await userEvent.click(screen.getByTestId("account-toggle"));
     await screen.findByText(/Unable to get Codex limits right now/);
     await waitFor(() => expect(eventListeners.get("background-refresh-completed")).toHaveLength(1));
 
@@ -3042,6 +3138,7 @@ describe("App", () => {
     });
 
     render(<App />);
+    await userEvent.click(screen.getByTestId("analysis-nav-tab"));
 
     await waitFor(() => expect(screen.getAllByText("1,600").length).toBeGreaterThan(0));
     await userEvent.click(screen.getByRole("button", { name: "Settings" }));
@@ -3182,6 +3279,7 @@ describe("App", () => {
     });
 
     render(<App />);
+    await userEvent.click(screen.getByTestId("analysis-nav-tab"));
 
     await waitFor(() => expect(screen.getAllByText("3,400").length).toBeGreaterThan(0));
     await userEvent.click(screen.getByRole("button", { name: "Export" }));
@@ -3218,6 +3316,7 @@ describe("App", () => {
       return loaded(command, args);
     });
     render(<App />);
+    await userEvent.click(screen.getByTestId("analysis-nav-tab"));
     await waitFor(() => expect(screen.getByRole("button", { name: "Export" })).toBeEnabled());
     await userEvent.click(screen.getByRole("button", { name: "Export" }));
     await userEvent.click(screen.getByRole("menuitem", { name: "Excel (.xlsx)" }));
@@ -3256,6 +3355,7 @@ describe("App", () => {
     });
 
     render(<App />);
+    await userEvent.click(screen.getByTestId("analysis-nav-tab"));
 
     await waitFor(() => expect(screen.getByRole("button", { name: "Export" })).toBeEnabled());
     await userEvent.click(screen.getByRole("button", { name: "Export" }));

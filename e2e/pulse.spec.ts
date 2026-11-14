@@ -39,7 +39,7 @@ function evidence(name: string, value: unknown) {
 async function selectRange(range: string, label: string) {
   const data = await invoke<any>('fetch_overview', { range });
   // The embedded WebDriver click omits pointerdown; exercise Radix's real keyboard path.
-  await $('.pulse-range-toolbar button[aria-label="选择时间范围"]').execute(button => button.focus());
+  await $('[data-testid="range-summary"] button[aria-label="选择时间范围"]').execute(button => button.focus());
   await browser.keys('Enter');
   await $('[role="menuitemradio"]').waitForDisplayed();
   evidence('last-range-options', await browser.execute(() => [...document.querySelectorAll('[role="menuitemradio"]')].map(option => option.textContent)));
@@ -87,6 +87,9 @@ async function overviewFits() {
   expect(fit.points).toBeGreaterThan(0); expect(fit.points).toBeLessThanOrEqual(60);
   return fit;
 }
+async function retainedTodayText(id: 'today-tokens' | 'today-estimate') {
+  return browser.execute(testId => document.querySelector(`[data-testid="${testId}"]`)?.textContent ?? '', id);
+}
 async function verifyTodayAndRange(skin: string) {
   await $('[data-testid="dashboard-nav-tab"]').click();
   await $('[data-testid="today-summary"]').waitForDisplayed();
@@ -98,23 +101,31 @@ async function verifyTodayAndRange(skin: string) {
   const exactToday = await $('[data-testid="today-tokens"]').getAttribute('title');
   expect(exactToday).not.toBeNull();
   expect(Number((exactToday ?? '').replace(/\D/g, ''))).toBe(row.totalTokens);
+  await $('[data-testid="analysis-nav-tab"]').click();
+  await $('[data-testid="usage-analysis"]').waitForDisplayed();
+  await expect($('[data-testid="today-summary"]')).not.toBeDisplayed();
   const range30 = await selectRange('30d', '最近 30 天');
   const defaultFit = await overviewFits();
   expect(defaultFit.points).toBe(range30.daily.length);
+  // Analysis starts without a duplicated daily inspector. A later skin switch
+  // preserves the user's selected date through React Activity instead of resetting it.
+  if (skin === 'clear') await expect($('[data-testid="trend-inspector"]')).not.toBeExisting();
   const historical = $('.pulse-trend-day');
+  await historical.click();
+  await $('[data-testid="trend-inspector"]').waitForDisplayed();
   await historical.moveTo();
   // Embedded pointerMove emits only pointermove/mousemove, so complete its missing boundary event.
   // Real pointer hover is covered separately by Chromium; this keeps native component wiring checked.
   await historical.execute(element => element.dispatchEvent(new MouseEvent('mouseover', { bubbles: true, relatedTarget: document.body })));
   await expect($('[data-testid="trend-inspector"]')).toHaveAttribute('data-preview', 'true');
-  expect(await $('[data-testid="today-tokens"]').getText()).toBe(baseline.tokens);
-  expect(await $('[data-testid="today-estimate"]').getText()).toBe(baseline.estimate);
+  expect(await retainedTodayText('today-tokens')).toBe(baseline.tokens);
+  expect(await retainedTodayText('today-estimate')).toBe(baseline.estimate);
   const ranges: Record<string, unknown> = {};
   for (const [range, label] of [['7d', '最近 7 天'], ['365d', '最近 365 天'], ['all', '全部留存记录']]) {
     const data = await selectRange(range, label);
     const fit = await overviewFits();
-    expect(await $('[data-testid="today-tokens"]').getText()).toBe(baseline.tokens);
-    expect(await $('[data-testid="today-estimate"]').getText()).toBe(baseline.estimate);
+    expect(await retainedTodayText('today-tokens')).toBe(baseline.tokens);
+    expect(await retainedTodayText('today-estimate')).toBe(baseline.estimate);
     if (data.daily.length <= 60) expect(fit.points).toBe(data.daily.length);
     ranges[range] = { ...fit, days: data.daily.length, start: data.startDate, end: data.endDate };
   }
@@ -130,13 +141,17 @@ async function verifyTodayAndRange(skin: string) {
       return original.call(this, options);
     };
   });
+  await $('[data-testid="dashboard-nav-tab"]').click();
+  await $('[data-testid="today-summary"]').waitForDisplayed();
+  await expect($('[data-testid="usage-trends-card"]')).not.toBeDisplayed();
   await $('[data-testid="today-summary"] button').click();
   await expect($('[data-testid="sessions-nav-tab"]')).toHaveAttribute('aria-selected', 'true');
   await $(`[id="date-group-${baseline.date}"]`).waitForDisplayed();
   await browser.waitUntil(async () => await browser.execute(() => (window as any).pulseDateScrolls.length) > 0);
   const dateScrolls = await browser.execute(() => { (window as any).pulseRestoreDateScroll(); return (window as any).pulseDateScrolls; });
   expect(dateScrolls.at(-1)).toEqual({ id: `date-group-${baseline.date}`, behavior: 'instant', motion: 'off' });
-  await $('[data-testid="dashboard-nav-tab"]').click();
+  await $('[data-testid="analysis-nav-tab"]').click();
+  await $('[data-testid="usage-analysis"]').waitForDisplayed();
   await selectRange('30d', '最近 30 天');
   await browser.execute(() => { document.querySelector<HTMLElement>('.pulse-main-scroll')!.scrollTop = 0; });
   evidence(`${skin}-today-range`, { baseline, expectedTodayTokens: row.totalTokens, defaultFit, ranges, todaySessionsOpened: true, dateScrolls, embeddedDriverHoverBoundarySynthesized: true });
@@ -197,7 +212,7 @@ describe('Pulse native parity', () => {
         expect(snapshot.quotas.every((quota: any) => !('account' in quota))).toBe(true);
         evidence('native-integration-producer', { schemaVersion: snapshot.schemaVersion, todayMatchesScanner: true, identityFieldsAbsent: true });
       }
-      for (const route of ['dashboard', 'sessions', 'models', 'daily', 'monthly', 'projects', 'settings']) {
+      for (const route of ['dashboard', 'analysis', 'sessions', 'models', 'daily', 'monthly', 'projects', 'settings']) {
         const tab = $(`[data-testid="${route}-nav-tab"]`);
         await tab.waitForDisplayed(); await tab.click();
         await $('#root').waitForDisplayed();
@@ -398,8 +413,12 @@ describe('Pulse native parity', () => {
         }, { timeout: 5000, interval: 100, timeoutMsg: 'Today reading geometry did not settle after scrolling' });
         expect(geometry.todayCenterInsideViewport).toBe(true); expect(geometry.todayCenterInsideMain).toBe(true);
         expect(geometry.documentFits).toBe(true); expect(geometry.todayUnobscured).toBe(true); expect(geometry.headerOverlap).toBe(false);
+        await shot(`${skinId}-narrow-${width}-dashboard`);
+        await $('[data-testid="analysis-nav-tab"]').click();
+        await $('[data-testid="usage-analysis"]').waitForDisplayed();
         await overviewFits();
-        await shot(`${skinId}-narrow-${width}-overview`);
+        await shot(`${skinId}-narrow-${width}-analysis`);
+        await $('[data-testid="dashboard-nav-tab"]').click();
         await accountToggle.click();
         await $('[data-testid="account-drawer"]').waitForDisplayed();
         expect(await browser.execute(() => document.activeElement?.getAttribute('aria-label'))).toBe('关闭账号额度');

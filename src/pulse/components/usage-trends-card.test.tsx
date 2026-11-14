@@ -14,6 +14,16 @@ const daily: OverviewResponse["daily"] = [
 ];
 beforeEach(async()=>{await i18n.changeLanguage("en");await updatePulsePreferences(defaultPulsePreferences);});
 describe("Pulse full-range trends",()=>{
+  it("defers analysis inspection until a date is selected and keeps the chart keyboard reachable",async()=>{
+    const user=userEvent.setup();render(<UsageTrendsCard daily={daily} metrics={[]} cacheHitRate={.2} deferInspection initialMode="cost"/>);
+    expect(screen.queryByTestId("trend-inspector")).not.toBeInTheDocument();
+    const first=screen.getByRole("button",{name:/2026-10-25 · API estimate/});
+    expect(first).toHaveAttribute("tabindex","0");
+    fireEvent.mouseEnter(first);expect(screen.queryByTestId("trend-inspector")).not.toBeInTheDocument();
+    await user.click(first);expect(screen.getByTestId("trend-inspector")).toHaveTextContent("2026-10-25");
+    await user.click(screen.getByRole("button",{name:/2026-10-26 · API estimate/}));
+    expect(screen.getByTestId("trend-inspector")).toHaveTextContent("—");
+  });
   it("keeps unknown quota samples distinct from zero and follows the selected table metric",async()=>{
     const user=userEvent.setup();render(<UsageTrendsCard daily={daily} metrics={[]} cacheHitRate={.2}/>);
     await user.click(screen.getByRole("group",{name:"Trend view"}).querySelectorAll("button")[2]);

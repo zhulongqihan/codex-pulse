@@ -128,7 +128,7 @@ function toUpdateProgressState(progress: UpdateDownloadProgress): UpdateProgress
   };
 }
 
-export function useUsageDashboard() {
+export function useUsageDashboard({ accountVisible = false }: { accountVisible?: boolean } = {}) {
   const { t, i18n } = useTranslation();
   const [integrationTheme, setIntegrationTheme] = useState(() => document.documentElement.dataset.theme);
   useEffect(() => {
@@ -151,7 +151,7 @@ export function useUsageDashboard() {
   const [isWindowActivating, setIsWindowActivating] = useState(false);
   const [windowActivationStatus, setWindowActivationStatus] = useState<CodexWindowActivationStatus | null>(null);
   const [windowActivationError, setWindowActivationError] = useState<string | null>(null);
-  const forecast = useCodexForecast(view === "dashboard", i18n.language);
+  const forecast = useCodexForecast(accountVisible, i18n.language);
   const [isScanning, setIsScanning] = useState(true);
   const [hasScanned, setHasScanned] = useState(false);
   const [scanError, setScanError] = useState<string | null>(null);

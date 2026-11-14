@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { formatDuration } from "@/lib/usage-dashboard";
 import dayjs from "dayjs";
 
-export type DashboardView = "dashboard" | "models" | "projects" | "daily" | "monthly" | "sessions" | "settings" | "logs";
+export type DashboardView = "dashboard" | "analysis" | "models" | "projects" | "daily" | "monthly" | "sessions" | "settings" | "logs";
 
 type DashboardHeaderProps = {
   updateInfo: UpdateCheckResponse | null;

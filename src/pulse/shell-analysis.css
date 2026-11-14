@@ -1,0 +1,12 @@
+/* Account recovery remains available from the shell without occupying Home. */
+.pulse-account-subscription { margin-block: 14px; font-size: 12px; line-height: 1.65; color: rgb(var(--muted-foreground)); overflow-wrap: anywhere; }
+.pulse-account-subscription p { margin-block: 5px; }
+.pulse-account-subscription strong { color: rgb(var(--foreground)); }
+.pulse-account-recovery { display: grid; gap: 16px; margin-top: 20px; }
+.pulse-account-recovery > h3 { font-size: 14px; font-weight: 650; margin: 0; }
+.pulse-account-recovery > div { box-shadow: none; }
+.pulse-account-recovery .lg\:grid-cols-\[minmax\(0\,3fr\)_minmax\(0\,7fr\)\] { grid-template-columns: minmax(0, 1fr); }
+.pulse-account-recovery [data-testid="reset-area"], .pulse-account-recovery [data-testid="global-reset-forecast"] dl { grid-template-columns: minmax(0, 1fr); }
+.pulse-account-recovery [data-testid="reset-credits-empty"], .pulse-account-recovery [data-testid="reset-credits-skeleton"] { border-left: 0; border-top: 1px solid rgb(var(--border)); padding-left: 0; padding-top: 10px; }
+.pulse-account-recovery button, .pulse-account-recovery a { overflow-wrap: anywhere; }
+@media (min-width: 1101px) { .pulse-app .pulse-account-rail { width: 340px; padding-inline: 20px; } }

@@ -16,6 +16,7 @@ type Series = "inputTokens" | "cachedInputTokens" | "outputTokens" | "fiveHourPe
 type UsageTrendsCardProps = {
   daily: Day[]; metrics: MetricCardData[]; cacheHitRate: number; chartHeight?: number | string;
   className?: string; title?: string; compact?: boolean; onOpenDay?: (date: string) => void; todayDate?: string; retainedFrom?: string | null;
+  deferInspection?: boolean; initialMode?: Mode;
 };
 
 /** Export kept for embedded project charts. Missing costs remain unknown. */
@@ -40,13 +41,13 @@ export function niceScale(value: number): number {
   return ([1,2,2.5,5,10].find(step => value <= step*magnitude) ?? 10)*magnitude;
 }
 
-export function UsageTrendsCard({daily,metrics,cacheHitRate,chartHeight,className="",title,compact=false,onOpenDay,todayDate,retainedFrom}:UsageTrendsCardProps) {
+export function UsageTrendsCard({daily,metrics,cacheHitRate,chartHeight,className="",title,compact=false,onOpenDay,todayDate,retainedFrom,deferInspection=false,initialMode="tokens"}:UsageTrendsCardProps) {
   const {t} = useTranslation();
   const copy = usePulseCopy();
   const home = useHomeCopy();
   const {skinId} = usePulsePreferences();
-  const [mode,setMode] = useState<Mode>("tokens");
-  const [selectedDate,setSelectedDate] = useState<string | null>(daily.at(-1)?.date ?? null);
+  const [mode,setMode] = useState<Mode>(initialMode);
+  const [selectedDate,setSelectedDate] = useState<string | null>(deferInspection ? null : daily.at(-1)?.date ?? null);
   const [hoveredDate,setHoveredDate] = useState<string | null>(null);
   const [hidden,setHidden] = useState<Set<Series>>(() => new Set());
   const [fullscreen,setFullscreen] = useState(false);
@@ -60,9 +61,9 @@ export function UsageTrendsCard({daily,metrics,cacheHitRate,chartHeight,classNam
   const scopeRef = useRef("");
   const rangeIdentity = `${daily[0]?.date ?? ""}:${daily.at(-1)?.date ?? ""}:${daily.length}`;
   const items = useMemo(() => buildTrendBuckets(daily, detail ? daily.length || 1 : 60), [daily, detail]);
-  const selected = items.find(day => selectedDate != null && selectedDate >= day.startDate && selectedDate <= day.endDate) ?? items.at(-1);
+  const selected = items.find(day => selectedDate != null && selectedDate >= day.startDate && selectedDate <= day.endDate) ?? (deferInspection ? undefined : items.at(-1));
   const preview = items.find(day => day.date === hoveredDate);
-  const inspected = preview ?? selected;
+  const inspected = deferInspection && !selected ? undefined : preview ?? selected;
   const today = todayDate ?? currentDateInTimezone();
   const hasToday = daily.some(day => day.date === today);
   const isMeter = skinId === "meter" && !compact;
@@ -142,7 +143,7 @@ export function UsageTrendsCard({daily,metrics,cacheHitRate,chartHeight,classNam
               if(mode === "tokens" && day.totalTokens > day.inputTokens+day.outputTokens)slices.push({key:"aggregate",amount:day.totalTokens-day.inputTokens-day.outputTokens,style:"aggregate"});
               const label = day.count === 1 ? day.date : `${day.startDate} — ${day.endDate}`;
               const axisLabel = index===0 || index===items.length-1 || index % Math.max(1,Math.ceil(items.length/5))===0;
-              return <button type="button" ref={node=>{if(node)buttonsRef.current.set(day.date,node);else buttonsRef.current.delete(day.date);}} className="pulse-trend-day" key={day.date} aria-pressed={selected?.date===day.date} aria-label={`${label} · ${copy(mode === "cost" ? "estimate" : mode)} ${noRetention(day) ? t("ux.no_retained_record") : format(value)}`} tabIndex={selected?.date===day.date ? 0 : -1} data-axis-label={axisLabel ? "true" : "false"} data-preview={preview?.date===day.date ? "true" : undefined} onClick={()=>select(day)} onMouseEnter={()=>setHoveredDate(day.date)} onFocus={()=>select(day)} onKeyDown={event=>navigate(event,index)}>
+              return <button type="button" ref={node=>{if(node)buttonsRef.current.set(day.date,node);else buttonsRef.current.delete(day.date);}} className="pulse-trend-day" key={day.date} aria-pressed={selected?.date===day.date} aria-label={`${label} · ${copy(mode === "cost" ? "estimate" : mode)} ${noRetention(day) ? t("ux.no_retained_record") : format(value)}`} tabIndex={selected?.date===day.date || (!selected && index===0) ? 0 : -1} data-axis-label={axisLabel ? "true" : "false"} data-preview={preview?.date===day.date ? "true" : undefined} onClick={()=>select(day)} onMouseEnter={()=>setHoveredDate(day.date)} onFocus={()=>select(day)} onKeyDown={event=>navigate(event,index)}>
                 <span className="pulse-trend-date">{day.date.slice(5).replace("-","/")}</span><span className={`pulse-trend-bar ${mode==="quota"?"pulse-quota-bars":""}`} aria-hidden="true">
                   {slices.map(slice => <i key={slice.key} className={`pulse-series-${slice.style} ${slice.amount == null ? "is-unknown" : ""}`} style={{"--amount":`${Math.max(0,(slice.amount??0)/max)*100}%`} as CSSProperties}/>)}
                 </span>{value == null ? <span className="pulse-unknown-marker" aria-hidden="true"/> : null}<strong>{format(value)}</strong>

@@ -12,13 +12,14 @@ A quiet quota-pacing companion for Codex on Windows: view remaining quota and re
 - **Smooth client shortcut:** a shared icon and compact status without a brand word. The input-free card follows verified Microsoft Store Codex windows through Windows location events, hiding when another app is active, Codex is minimized or space is insufficient.
 - **Grounded extra indicators:** daily recorded changes and coverage in this cycle, a surplus-near-reset hint, and conditional remaining-at-reset ranges when sufficient observations exist. Missing history is not zero. Allocations are not new quota, and forecasts do not guarantee working time.
 - **Visible reset notices:** background notices show their source, expected window and unconfirmed state, with read state shared across windows. Expand explanations for expired, stale, unavailable or no-current-notice states and actual check times; a missing response is not inferred as withdrawal. Third-party global news stays separate from personal window expiry and is not presented as a personal reset confirmation.
-- **Today and current capacity first**: today's local activity stays independent of historical filters, alongside account capacity and reset times. The complete-range trend and main usage drivers appear together, with daily detail available when needed.
-- **Six work views:** dashboard, sessions, models, daily, monthly and projects, plus settings and optional diagnostics. Collapse or resize navigation and return from settings to your previous view.
+- **A focused daily dashboard:** current quota, personal reset time, pacing guidance and today's API reference cost stay together. Today's local activity remains independent of historical filters; pacing evidence and breakdowns open on demand.
+- **Separate Usage analysis:** open selected-period totals, complete trends and project/model distributions from the sidebar, select a date for detail, and export the same range as XLSX or Markdown.
+- **Seven work views:** dashboard, usage analysis, sessions, models, daily, monthly and projects, plus settings and optional diagnostics. Collapse or resize navigation and return from settings to your previous view.
 - **Complete date ranges:** nine presets, all retained history and custom inclusive ranges. Daily averages use calendar days. The monthly view independently queries the current month to date and the previous 11 calendar months, distinguishing missing retention, partial retention and zero activity.
 - **Tokens and reference costs:** input, cached input, output, cache hit rate, model unit prices and a searchable price catalog. Charts provide date selection, legends, units, a data table and fullscreen viewing. Compare models, dates and projects identified by their complete paths.
 - **Main-list session search:** search loaded sessions by title, ID, model or project while retaining matching agent groups. Combine with project filters and clear the query to restore the original list, without rescanning logs. Project-detail and replay searches remain available.
 - **Complete threads and read-only replay:** distinguish daily usage from a full thread. Inspect parent/child agents, messages, recorded reasoning summaries, tool results, patches, images, questions, searches and waits. Navigate turns, search content, inspect raw JSONL, copy identifiers and locate source files.
-- **Account and reset information:** show account, workspace, subscription, quota windows, countdowns, Credits and reset credits actually returned by the official service. Read-only refresh is separate from confirmed window activation. Reset announcements, history, calendar, forecasts and feeds expose source and freshness.
+- **Account and resets on demand:** the existing account entry shows identity, workspace, subscription, quota windows, Credits, reset credits and reset details without repeating them across the dashboard. Read-only refresh is separate from confirmed window activation. Reset announcements, history, calendar, forecasts and feeds expose source and freshness.
 - **Optional per-session Credits:** off by default; query only the real thread IDs currently being viewed, without sending conversation bodies. Preserve exact decimals, negative adjustments, cached values, cooldowns and unavailable states.
 - **Local sources and maintenance:** incremental scanning, compressed archives, one selected native/WSL environment, targeted session/project rescans, diagnostics and cache rebuilding.
 - **Desktop companions:** a configurable tray information panel and an independent draggable, pinnable, expandable quota-pacing widget. Launch at sign-in and automatic refresh are supported.
@@ -26,7 +27,7 @@ A quiet quota-pacing companion for Codex on Windows: view remaining quota and re
 - **Two styles and six languages:** Clear/Meter, light/dark/system, density and motion are independent preferences that preserve your working state. Supports Simplified Chinese, Traditional Chinese, English, Japanese, Korean and German.
 - **Exports and updates:** XLSX/Markdown contain range summary, daily, model and project statistics. Pulse updates verify the release signature, product, platform and package digest, preserving data and restoring the previous executable if startup fails.
 
-0.9.2 clears outdated quota-refresh errors after recovery, prevents an older failure from replacing a newer result, and clears local snapshot-read errors when reading recovers. Actual failures still retain the previous reading and retry cooldown. Upgrades retain local data, preferences and same-account observations. Read the [release notes](docs/releases/v0.9.2.md#english).
+0.10.0 separates the daily dashboard from Usage analysis: see quota, reset time, pacing and today's reference cost first, then open complete historical analysis when needed. Account and reset details open on demand. Upgrades retain local data, preferences and same-account observations, with compatible accounting rules and export formats. Read the [release notes](docs/releases/v0.10.0.md#english).
 
 ## Interactive pace preview
 
@@ -42,7 +43,7 @@ Try the [roomy quota](https://zhulongqihan.github.io/codex-pulse/?demo=1&coachSc
 |---|---|
 | ![Clear with synthetic data](docs/screenshots/clear-overview.png) | ![Meter with synthetic data](docs/screenshots/meter-overview.png) |
 
-Both styles share the same capabilities. Clear uses lightweight comparisons and continuous tables; Meter emphasizes one dark trend field. The overview fits the selected range, with daily detail, a data table, full screen, and keyboard controls available when needed.
+Both styles share the same capabilities. The dashboard prioritizes quota and today's reference cost; Usage analysis in the sidebar retains complete-range trends, distributions and exports. Clear uses lightweight comparisons and continuous tables; Meter emphasizes one dark trend field. Daily detail, a data table, fullscreen viewing and keyboard controls remain available.
 
 ## Run on Windows
 

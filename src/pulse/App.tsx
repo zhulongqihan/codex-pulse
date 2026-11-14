@@ -4,7 +4,8 @@ import { CodexForecastCard } from "@/components/codex-forecast-card";
 import { CodexLimitsCard, CodexSidebarLimits } from "@/components/codex-limits-card";
 import { CodexResetHistoryModal } from "@/components/codex-reset-history";
 import { DailyUsageTable } from "@/components/daily-usage-table";
-import { DashboardHeroCard } from "@/components/dashboard-hero-card";
+import { DashboardHeroCard, UsageAnalysisView } from "@/components/dashboard-hero-card";
+import { AccountSubscriptionFacts } from "@/components/account-subscription-facts";
 import { AppSidebar, clampSidebarWidth } from "@/components/app-sidebar";
 import { DashboardHeader, type DashboardView } from "@/components/dashboard-header";
 import { LoadingState } from "@/components/loading-state";
@@ -37,9 +38,11 @@ import { Sparkles, X, ChevronDown, ChevronUp, AlertTriangle, ArrowLeft, UserRoun
 import { Button } from "@/components/ui/button";
 import { useTranslation } from "react-i18next";
 import "./shell-ux.css";
+import "./shell-analysis.css";
 import { usePaceDetailsRequest } from "@/hooks/use-pace-details-request";
 
 const QUICK_START_DISMISSED = "codexpulse.quickstart.dismissed.v1";
+const ACCOUNT_EXPANDED = "codexpulse.account.expanded.v1";
 function useCompactWindow() {
   const read = () => window.matchMedia?.("(max-width: 1100px)").matches ?? window.innerWidth <= 1100;
   const [compact, setCompact] = useState(read);
@@ -58,10 +61,11 @@ export default function App() {
   const copy = usePulseCopy();
   const shellCopy = useShellCopy();
   const preferences = usePulsePreferences();
-  const [accountExpanded, setAccountExpanded] = useState(true);
+  const [accountExpanded, setAccountExpanded] = useState(() => { try { return localStorage.getItem(ACCOUNT_EXPANDED) === "true"; } catch { return false; } });
   const compactWindow = useCompactWindow();
   const [accountDrawerOpen, setAccountDrawerOpen] = useState(false);
   const [accountFocusRequested, setAccountFocusRequested] = useState(false);
+  const [accountDetailsRequested, setAccountDetailsRequested] = useState(false);
   const [settingsInitialSection, setSettingsInitialSection] = useState<SettingsSection>("appearance");
   const [settingsEntry, setSettingsEntry] = useState(0);
   const [showQuickStart, setShowQuickStart] = useState(() => { try { return localStorage.getItem(QUICK_START_DISMISSED) !== "true"; } catch { return true; } });
@@ -70,7 +74,7 @@ export default function App() {
   const [desktopNotice, setDesktopNotice] = useState<string | null>(null);
   const [desktopError, setDesktopError] = useState<string | null>(null);
   const contentScroll = useRef<HTMLDivElement>(null);
-  const savedScroll = useRef(0);
+  const savedScroll = useRef<Partial<Record<DashboardView, number>>>({});
   const visitedViews = useRef(new Set<DashboardView>(["dashboard"]));
   const [showNotes, setShowNotes] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
@@ -183,7 +187,9 @@ export default function App() {
     handleTrayMenuShowChange,
     trayCountdownUnits,
     handleTrayCountdownUnitChange,
-  } = useUsageDashboard();
+  } = useUsageDashboard({ accountVisible: compactWindow ? accountDrawerOpen : accountExpanded });
+
+  useEffect(() => { try { localStorage.setItem(ACCOUNT_EXPANDED, String(accountExpanded)); } catch { /* The panel remains usable without storage. */ } }, [accountExpanded]);
 
   const [paceDetailsRequested, setPaceDetailsRequested] = useState(false);
   const [paceObservationsExpanded, setPaceObservationsExpanded] = useState(false);
@@ -212,8 +218,7 @@ export default function App() {
     setSelectedSession(null);
     setIsResetHistoryOpen(false);
     setAccountDrawerOpen(false);
-    setAccountExpanded(true);
-    savedScroll.current = 0;
+    savedScroll.current.dashboard = 0;
     setPaceObservationsExpanded(true);
     setPaceDetailsRequested(true);
     void handleViewChange("dashboard");
@@ -279,17 +284,17 @@ export default function App() {
   visitedViews.current.add(view);
   const previousView = useRef(view);
   useLayoutEffect(() => {
-    if (contentScroll.current) {
-      if (view === "settings") contentScroll.current.scrollTop = 0;
-      else if (previousView.current === "settings") contentScroll.current.scrollTop = savedScroll.current;
+    if (contentScroll.current && previousView.current !== view) {
+      contentScroll.current.scrollTop = savedScroll.current[view] ?? 0;
     }
     previousView.current = view;
   }, [view]);
   useEffect(() => { if (!compactWindow) setAccountDrawerOpen(false); }, [compactWindow]);
   const navigate = (nextView: DashboardView) => {
+    if (nextView !== view) savedScroll.current[view] = contentScroll.current?.scrollTop ?? 0;
     if (nextView === "settings" && view !== "settings") {
       setSettingsReturnView(view);
-      savedScroll.current = contentScroll.current?.scrollTop ?? 0;
+      savedScroll.current.settings = 0;
     }
     if (nextView !== "settings" && view !== "settings") {
       setSelectedProjectForModal(null);
@@ -308,6 +313,7 @@ export default function App() {
       if (view === "settings" || view === "logs") navigate("dashboard");
     }
   };
+  const closeAccountDrawer = () => { setAccountDrawerOpen(false); setAccountDetailsRequested(false); };
   useEffect(() => {
     if (!accountFocusRequested || compactWindow || view === "settings" || view === "logs") return;
     let frame = 0;
@@ -330,6 +336,42 @@ export default function App() {
     setIsResetHistoryOpen(false);
     showAccount();
   };
+  const accountDetails = useRef<() => void>(() => {});
+  accountDetails.current = () => {
+    accountRecovery.current();
+    setAccountDetailsRequested(true);
+  };
+  useEffect(() => {
+    const openHash = () => { if (location.hash === "#pulse-account-details") accountDetails.current(); };
+    const openLink = (event: MouseEvent) => {
+      const anchor = event.target instanceof Element ? event.target.closest<HTMLAnchorElement>("a[href]") : null;
+      if (!anchor) return;
+      const target = new URL(anchor.href, location.href);
+      if (target.origin !== location.origin || target.pathname !== location.pathname || target.hash !== "#pulse-account-details") return;
+      event.preventDefault();
+      accountDetails.current();
+    };
+    openHash();
+    window.addEventListener("hashchange", openHash);
+    document.addEventListener("click", openLink);
+    return () => { window.removeEventListener("hashchange", openHash); document.removeEventListener("click", openLink); };
+  }, []);
+  useEffect(() => {
+    if (!accountDetailsRequested) return;
+    let frame = 0;
+    const focus = () => {
+      cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(() => {
+        const target = document.getElementById("pulse-account-details");
+        if (!target || !document.hasFocus()) return;
+        target.scrollIntoView({ block: "start", behavior: "auto" });
+        target.focus({ preventScroll: true });
+        if (document.activeElement === target) setAccountDetailsRequested(false);
+      });
+    };
+    focus(); window.addEventListener("focus", focus);
+    return () => { cancelAnimationFrame(frame); window.removeEventListener("focus", focus); };
+  }, [accountDetailsRequested, accountExpanded, accountDrawerOpen, compactWindow, view]);
   useEffect(() => {
     let disposed = false;
     let stop: (() => void) | undefined;
@@ -339,7 +381,7 @@ export default function App() {
     }).catch(() => { /* Browser previews do not have native companion events. */ });
     return () => { disposed = true; stop?.(); };
   }, []);
-  const openHelp = () => { setShowQuickStart(true); setHelpExpanded(true); navigate("dashboard"); savedScroll.current = 0; if (contentScroll.current) contentScroll.current.scrollTop = 0; };
+  const openHelp = () => { setShowQuickStart(true); setHelpExpanded(true); savedScroll.current.dashboard = 0; navigate("dashboard"); if (contentScroll.current && view === "dashboard") contentScroll.current.scrollTop = 0; };
   const dismissQuickStart = () => { setShowQuickStart(false); setHelpExpanded(false); try { localStorage.setItem(QUICK_START_DISMISSED, "true"); } catch { /* The help remains available without storage. */ } };
   async function runDesktopAction(action: "widget" | "shortcuts") {
     if (desktopAction) return;
@@ -356,14 +398,20 @@ export default function App() {
   const accountPanel = <>
     <div className="pulse-account-identity"><UserRound size={20} aria-hidden="true"/><div><strong>{codexLimits?.account ?? copy("unknown")}</strong><p>{codexLimits?.membershipLevel ?? "—"}{codexLimits?.workspaceName ? ` · ${codexLimits.workspaceName}` : ""}</p></div></div>
     <CodexSidebarLimits compact={false} limits={codexLimits} error={codexLimitsError} isLimitsRefreshing={isLimitsRefreshing} isWindowActivating={isWindowActivating} windowActivationStatus={windowActivationStatus} windowActivationError={windowActivationError} onRefreshLimits={() => void handleLimitsRefresh()} onActivateWindow={() => void handleActivateCodexWindow()}/>
+    <AccountSubscriptionFacts limits={codexLimits}/>
     <p className="pulse-source-note">{copy("accountNote")}</p>
-    <button type="button" className="pulse-text-button" onClick={() => paceDetails.current()}>{copy("details")} →</button>
+    <section id="pulse-account-details" className="pulse-account-details pulse-account-recovery" tabIndex={-1} aria-labelledby="pulse-account-details-heading">
+      <h3 id="pulse-account-details-heading">{copy("details")}</h3>
+      <CodexLimitsCard limits={codexLimits} isLimitsLoading={isLimitsLoading} limitsError={codexLimitsError} isResetLoading={isResetLoading} resetError={resetError} onRetryReset={() => void handleResetHistoryRefresh()} latestReset={latestCodexReset} recentResets={recentCodexResets}
+        onOpenResetHistory={() => { closeAccountDrawer(); if (view === "settings") navigate(settingsReturnView === "logs" && !showLogsTab ? "dashboard" : settingsReturnView); setIsResetHistoryOpen(true); }} onOpenResetCredits={() => void handleOpenResetCredits()}/>
+      <CodexForecastCard {...forecast} resets={recentCodexResets} onRefresh={() => void forecast.refresh()}/>
+    </section>
   </>;
 
   return (
     <div className="pulse-app relative flex h-screen flex-col overflow-hidden bg-background text-foreground">
       <header className="pulse-topbar">
-        <div className="pulse-brand"><PulseBrandMark size={28}/><strong>Pulse</strong>{document.documentElement.dataset.demo === "true" ? <span className="pulse-demo-label">{copy("sample")}</span> : null}<span className="pulse-page-label">{t(`common.${view === "models" ? "model" : view === "projects" ? "project" : view}`)}</span></div>
+        <div className="pulse-brand"><PulseBrandMark size={28}/><strong>Pulse</strong>{document.documentElement.dataset.demo === "true" ? <span className="pulse-demo-label">{copy("sample")}</span> : null}<span className="pulse-page-label">{view === "analysis" ? shellCopy("analysis") : t(`common.${view === "models" ? "model" : view === "projects" ? "project" : view}`)}</span></div>
         <div className="pulse-global-actions"><PulseStyleSwitcher/>
           <button type="button" data-testid="open-widget" className="pulse-shell-action pulse-widget-action" disabled={desktopAction !== null} aria-busy={desktopAction === "widget"} onClick={() => void runDesktopAction("widget")}><MonitorUp size={16}/><span>{shellCopy(desktopAction === "widget" ? "widgetBusy" : preferences.widgetVisible ? "widgetVisible" : "widget")}</span></button>
           <button type="button" data-testid="account-toggle" className="pulse-shell-action" aria-label={shellCopy("account")} aria-expanded={compactWindow ? accountDrawerOpen : accountExpanded && view !== "settings" && view !== "logs"} aria-controls={compactWindow ? "pulse-account-drawer" : "pulse-account-rail"} onClick={() => compactWindow || view === "settings" || view === "logs" ? showAccount() : setAccountExpanded(value => !value)}><UserRound size={17}/><span>{shellCopy("account")}</span>{compactWindow && quotaSummary ? <small className="pulse-account-summary">{quotaSummary} {shellCopy("remaining")}</small> : null}</button>
@@ -402,6 +450,7 @@ export default function App() {
       ) : null}
       <div
         ref={contentScroll}
+        onScroll={event => { savedScroll.current[view] = event.currentTarget.scrollTop; }}
         className="min-h-0 flex-1 overflow-y-auto pulse-main-scroll"
         aria-hidden={view !== "settings" && (selectedProjectForModal || selectedSession || isResetHistoryOpen) ? "true" : undefined}
         inert={view !== "settings" && (selectedProjectForModal || selectedSession || isResetHistoryOpen) ? true : undefined}
@@ -566,13 +615,13 @@ export default function App() {
             <Activity mode={view === "dashboard" ? "visible" : "hidden"}>
             <div className="space-y-5">
               {showQuickStart && !compactWindow ? <PulseGettingStarted expanded={helpExpanded} onExpand={() => setHelpExpanded(value => !value)} localReady={!!overview?.updatedAt || diagnostics?.status === "ready"} accountReady={!!codexLimits} source={diagnostics?.codexHome} busy={desktopAction !== null} notice={desktopNotice} error={desktopError} onSource={() => openSettings("source")} onAccount={showAccount} onWidget={() => void runDesktopAction("widget")} onShortcuts={() => void runDesktopAction("shortcuts")} onDismiss={dismissQuickStart}/> : null}
-              {!showDashboard || !overview ? <PulseCoachOverview onDetails={() => paceDetails.current()} onRecover={showAccount} observationsExpanded={paceObservationsExpanded}/> : null}
+              {!showDashboard || !overview ? <PulseCoachOverview summary={!paceObservationsExpanded} onDetails={() => paceDetails.current()} onRecover={showAccount} observationsExpanded={paceObservationsExpanded}/> : null}
               {showDashboard && overview ? <DashboardHeroCard
                 overview={overview}
                   todayOverview={todayOverview}
                   todayUnavailable={!isLoading && !todayOverview}
                   todayStale={isTodayStale}
-                  onOpenToday={() => { const today = new Intl.DateTimeFormat("sv-SE", { timeZone: todayOverview?.timezone || overview.timezone }).format(new Date()); setSelectedSessionDate(today); void handleRangeChange("1d"); void handleViewChange("sessions"); }}
+                  onOpenToday={() => { const today = new Intl.DateTimeFormat("sv-SE", { timeZone: todayOverview?.timezone || overview.timezone }).format(new Date()); setSelectedProjectFilter(null); setSelectedSessionDate(today); navigate("sessions"); }}
                 range={range}
                 isBusy={isLoading || isRefreshing || isResetting || isExporting !== null}
                 isExporting={isExporting}
@@ -581,30 +630,21 @@ export default function App() {
                 onExport={(format) => void handleExport(format)}
                 metrics={metrics}
                 codexLimits={codexLimits}
-                coach={<PulseCoachOverview onDetails={() => paceDetails.current()} onRecover={showAccount} observationsExpanded={paceObservationsExpanded}/>}
-                coachFirst={compactWindow}
-                onOpenDay={(date) => { setSelectedSessionDate(date); void handleViewChange("sessions"); }}
+                coach={<PulseCoachOverview summary={!paceObservationsExpanded} onDetails={() => paceDetails.current()} onRecover={showAccount} observationsExpanded={paceObservationsExpanded}/>}
+                coachFirst
+                onOpenAnalysis={() => navigate("analysis")}
+                onOpenDay={(date) => { setSelectedProjectFilter(null); setSelectedSessionDate(date); navigate("sessions"); }}
               /> : null}
 
               {showQuickStart && compactWindow ? <PulseGettingStarted expanded={helpExpanded} onExpand={() => setHelpExpanded(value => !value)} localReady={!!overview?.updatedAt || diagnostics?.status === "ready"} accountReady={!!codexLimits} source={diagnostics?.codexHome} busy={desktopAction !== null} notice={desktopNotice} error={desktopError} onSource={() => openSettings("source")} onAccount={showAccount} onWidget={() => void runDesktopAction("widget")} onShortcuts={() => void runDesktopAction("shortcuts")} onDismiss={dismissQuickStart}/> : null}
 
-              <section id="pulse-account-details" className="pulse-account-details" tabIndex={-1} aria-labelledby="pulse-account-details-heading">
-                <h2 id="pulse-account-details-heading">{copy("details")}</h2>
-                <CodexLimitsCard
-                  limits={codexLimits}
-                  isLimitsLoading={isLimitsLoading}
-                  limitsError={codexLimitsError}
-                  isResetLoading={isResetLoading}
-                  resetError={resetError}
-                  onRetryReset={() => void handleResetHistoryRefresh()}
-                  latestReset={latestCodexReset}
-                  recentResets={recentCodexResets}
-                  onOpenResetHistory={() => setIsResetHistoryOpen(true)}
-                  onOpenResetCredits={() => void handleOpenResetCredits()}
-                />
-              </section>
-              <CodexForecastCard {...forecast} resets={recentCodexResets} onRefresh={() => void forecast.refresh()} />
             </div>
+            </Activity>
+          ) : null}
+
+          {visitedViews.current.has("analysis") && overview ? (
+            <Activity mode={view === "analysis" ? "visible" : "hidden"}>
+              <UsageAnalysisView overview={overview} range={range} isBusy={isLoading || isRefreshing || isResetting || isExporting !== null} isExporting={isExporting} exportError={exportError} onRangeChange={handleRangeChange} onExport={(format) => void handleExport(format)} metrics={metrics} onOpenDay={date => { setSelectedProjectFilter(null); setSelectedSessionDate(date); navigate("sessions"); }}/>
             </Activity>
           ) : null}
 
@@ -651,8 +691,9 @@ export default function App() {
                 range={range}
                 daily={overview.daily}
                 onRowClick={(date) => {
+                  setSelectedProjectFilter(null);
                   setSelectedSessionDate(date);
-                  void handleViewChange("sessions");
+                  navigate("sessions");
                 }}
               />
             </div>
@@ -752,7 +793,7 @@ export default function App() {
             setSelectedProjectForModal(null);
             setSelectedProjectFilter(projectPath);
             setSelectedSessionDate(null);
-            void handleViewChange("sessions");
+            navigate("sessions");
           }}
         />
         </div>
@@ -781,7 +822,7 @@ export default function App() {
         {accountPanel}
       </aside> : null}
       </div>
-      {compactWindow && accountDrawerOpen ? <PulseAccountDrawer onClose={() => setAccountDrawerOpen(false)}>{accountPanel}</PulseAccountDrawer> : null}
+      {compactWindow && accountDrawerOpen ? <PulseAccountDrawer onClose={closeAccountDrawer}>{accountPanel}</PulseAccountDrawer> : null}
       <footer className="pulse-statusbar"><span>{copy("local")}{diagnostics?.filesFound != null ? <> · {diagnostics.filesFound} {t("session.file", {defaultValue: "logs"})}</> : null}</span><span title={diagnostics?.codexHome}>{diagnostics?.runtime ?? "Codex"}</span><span data-testid="statistics-timezone" title={overview ? t("reading_context.statistics_dates", { zone: overview.timezone }) : undefined}>{overview ? t("reading_context.statistics_short", { zone: overview.timezone }) : ""}</span><span className="pulse-statusbar-end">{copy("motion")} {copy(preferences.motionLevel)}</span></footer>
     </div>
   );

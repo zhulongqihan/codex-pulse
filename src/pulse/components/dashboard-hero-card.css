@@ -1,0 +1,49 @@
+.pulse-dashboard-home { min-width: 0; }
+.pulse-dashboard-home.pulse-home-overview .pulse-dashboard-today { display: block; padding: 28px 0 30px; border-bottom: 0; }
+.pulse-dashboard-today-heading { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px 12px; margin-bottom: 20px; }
+.pulse-dashboard-today-heading h2 { font-size: 18px; font-weight: 650; line-height: 1.4; }
+.pulse-dashboard-today-heading time, .pulse-dashboard-today-heading .pulse-time-context { color: rgb(var(--muted-foreground)); font-size: 12px; }
+.pulse-dashboard-today-heading .pulse-time-context { margin-left: auto; }
+.pulse-dashboard-today-readings { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 20px 30px; }
+.pulse-dashboard-today-values { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 22px 36px; min-width: 0; }
+.pulse-dashboard-today-values dt, .pulse-analysis-totals dt { color: rgb(var(--muted-foreground)); font-size: 13px; line-height: 1.6; }
+.pulse-dashboard-today-values dd { font-size: 32px; font-weight: 600; line-height: 1.4; letter-spacing: -.025em; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; margin-top: 6px; }
+.pulse-dashboard-today-values > div:first-child dd { font-size: 39px; }
+.pulse-dashboard-today-values small { display: block; max-width: 38ch; color: rgb(var(--muted-foreground)); font-size: 12px; line-height: 1.6; margin-top: 6px; }
+.pulse-dashboard-home .pulse-dashboard-today-actions { display: grid; grid-column: auto; grid-row: auto; justify-self: auto; justify-items: end; gap: 9px; max-width: 220px; text-align: right; }
+.pulse-dashboard-today-actions button { min-height: 36px; height: auto; white-space: normal; text-wrap: balance; }
+.pulse-dashboard-home .pulse-today-breakdown { margin-top: 22px; }
+.pulse-dashboard-home .pulse-today-breakdown summary, .pulse-usage-analysis .pulse-period-details summary { font-size: 12px; line-height: 1.6; padding: 4px 0; }
+.pulse-dashboard-home .pulse-today-breakdown summary:focus-visible, .pulse-usage-analysis .pulse-period-details summary:focus-visible { outline: 2px solid rgb(var(--ring)); outline-offset: 4px; border-radius: 2px; }
+.pulse-dashboard-analysis-entry { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 14px 28px; padding-top: 23px; border-top: 1px solid rgb(var(--border)); }
+.pulse-dashboard-analysis-entry h2 { font-size: 14px; font-weight: 550; line-height: 1.5; }
+.pulse-dashboard-analysis-entry p { margin-top: 5px; color: rgb(var(--muted-foreground)); font-size: 12px; line-height: 1.7; max-width: 65ch; }
+.pulse-dashboard-analysis-entry > button { min-height: 36px; flex-shrink: 0; }
+.pulse-usage-analysis { min-width: 0; }
+.pulse-analysis-heading { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 18px 28px; align-items: flex-start; margin-bottom: 26px; }
+.pulse-analysis-heading h1 { font-size: 25px; font-weight: 650; letter-spacing: -.02em; line-height: 1.4; }
+.pulse-analysis-heading p { color: rgb(var(--muted-foreground)); font-size: 12px; line-height: 1.7; margin-top: 7px; overflow-wrap: anywhere; }
+.pulse-analysis-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 9px; }
+.pulse-analysis-actions > button { min-height: 36px; height: auto; }
+.pulse-analysis-totals { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 16px 30px; align-items: flex-end; }
+.pulse-analysis-totals > dl { display: flex; flex-wrap: wrap; gap: 16px 36px; }
+.pulse-analysis-totals > dl > div + div { border-left: 1px solid rgb(var(--border)); padding-left: 36px; }
+.pulse-analysis-totals dd { font-size: 30px; font-weight: 600; letter-spacing: -.02em; line-height: 1.45; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; margin-top: 3px; }
+.pulse-analysis-totals > p { max-width: 38ch; color: rgb(var(--muted-foreground)); font-size: 12px; line-height: 1.7; margin-bottom: 4px; }
+.pulse-analysis-pricing { margin-top: 12px; color: rgb(var(--muted-foreground)); font-size: 12px; line-height: 1.6; }
+.pulse-usage-analysis .pulse-period-details { padding-top: 14px; }
+.pulse-analysis-trend { margin-top: 24px; border-top: 1px solid rgb(var(--border)); padding-top: 21px; }
+.pulse-usage-analysis .pulse-distribution { margin-top: 26px; padding-top: 22px; }
+.pulse-usage-analysis .pulse-distribution .pulse-section-heading { gap: 8px 16px; margin-bottom: 12px; }
+.pulse-usage-analysis .pulse-rank-row { grid-template-columns: minmax(110px, 1.1fr) minmax(60px, 2fr) minmax(70px, auto) 46px; gap: 12px; padding-block: 12px; }
+.pulse-analysis-export-error { display: flex; flex-wrap: wrap; gap: 4px 10px; border: 1px solid rgb(var(--error) / .3); border-radius: 6px; background: rgb(var(--error) / .05); padding: 10px 12px; margin-bottom: 18px; font-size: 13px; line-height: 1.6; overflow-wrap: anywhere; white-space: pre-wrap; }
+@container app-content (max-width: 620px) {
+  .pulse-dashboard-today-readings { grid-template-columns: minmax(0, 1fr); gap: 18px; }
+  .pulse-dashboard-home .pulse-dashboard-today-actions { max-width: none; width: 100%; justify-items: start; text-align: left; }
+  .pulse-dashboard-today-values { gap: 18px; }
+  .pulse-dashboard-today-heading .pulse-time-context { flex-basis: 100%; margin-left: 0; }
+  .pulse-analysis-heading { margin-bottom: 22px; }
+  .pulse-analysis-totals > dl { gap: 15px 23px; }
+  .pulse-analysis-totals > dl > div + div { padding-left: 23px; }
+  .pulse-usage-analysis .pulse-rank-row { grid-template-columns: minmax(80px, 1fr) minmax(30px, .8fr) minmax(62px, auto) 42px; gap: 8px; }
+}
