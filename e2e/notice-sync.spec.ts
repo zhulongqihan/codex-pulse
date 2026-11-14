@@ -1,4 +1,4 @@
-import { browser, expect } from '@wdio/globals';
+import { $, browser, expect } from '@wdio/globals';
 import { mkdirSync, readFileSync, renameSync, rmdirSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 
@@ -83,14 +83,27 @@ describe('Notice read state across real native WebViews', () => {
     record('persistedLedger', persisted);
     await invoke('widget_action', { action: 'show' });
     record('hiddenWidgetReopened', await all(0));
-    for (const label of windows) { await browser.switchToWindow(label); await browser.refresh(); }
-    // Reload returns Main to its focused summary. Reopen the actual details
-    // control before comparing the durable notice across all three WebViews.
+    for (const label of windows) {
+      await browser.switchToWindow(label);
+      await browser.execute(() => {
+        (window as typeof window & { noticeSyncReloadPending?: boolean }).noticeSyncReloadPending = true;
+      });
+      await browser.refresh();
+      // The embedded driver returns as soon as it requests a reload. Wait for
+      // the old document to leave before accepting any controls as ready.
+      await browser.waitUntil(() => browser.execute(() =>
+        !(window as typeof window & { noticeSyncReloadPending?: boolean }).noticeSyncReloadPending
+        && document.readyState === 'complete'), { timeoutMsg: `${label}: reloaded document did not finish loading` });
+    }
+    // Wait for the loaded dashboard: its summary replaces the initial loading
+    // summary. Reopen its details before comparing all three durable notices.
     await browser.switchToWindow('main');
-    const paceDetails = $('.pulse-summary-bottom button');
+    const paceDetailsSelector = '[data-testid="dashboard-hero"] .pulse-summary-bottom button';
+    const paceDetails = $(paceDetailsSelector);
     await paceDetails.waitForDisplayed();
+    await expect(paceDetails).toHaveAttribute('aria-expanded', 'false');
     await paceDetails.click();
-    await expect(paceDetails).toHaveAttribute('aria-expanded', 'true');
+    await expect($(paceDetailsSelector)).toHaveAttribute('aria-expanded', 'true');
     record('webViewsReloaded', await all(0));
   });
 });
