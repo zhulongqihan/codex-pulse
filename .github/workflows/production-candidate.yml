@@ -71,7 +71,7 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw 'Version check failed' }
           pnpm source:check
           if ($LASTEXITCODE -ne 0) { throw 'Public source check failed' }
-          pnpm exec tauri build --no-bundle --no-sign -- --locked
+          node ./node_modules/@tauri-apps/cli/tauri.js build --no-bundle --no-sign -- --locked
           if ($LASTEXITCODE -ne 0) { throw 'Production build failed' }
           ./scripts/package-portable.ps1 -SkipBuild
       - name: Record exact source, package hashes and publisher-signature status
