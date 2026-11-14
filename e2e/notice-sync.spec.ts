@@ -84,6 +84,13 @@ describe('Notice read state across real native WebViews', () => {
     await invoke('widget_action', { action: 'show' });
     record('hiddenWidgetReopened', await all(0));
     for (const label of windows) { await browser.switchToWindow(label); await browser.refresh(); }
+    // Reload returns Main to its focused summary. Reopen the actual details
+    // control before comparing the durable notice across all three WebViews.
+    await browser.switchToWindow('main');
+    const paceDetails = $('.pulse-summary-bottom button');
+    await paceDetails.waitForDisplayed();
+    await paceDetails.click();
+    await expect(paceDetails).toHaveAttribute('aria-expanded', 'true');
     record('webViewsReloaded', await all(0));
   });
 });
