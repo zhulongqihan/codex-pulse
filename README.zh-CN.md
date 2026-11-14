@@ -32,11 +32,11 @@
 
 0.11.0 明确下载前的兼容和数据访问边界，补充可交互的合成工作情境、按已返回额度安排首次使用的下一步，并在设置中加入帮助与反馈。升级保留本地数据、偏好和同账号观测，统计口径与导出格式保持兼容。查看[本版更新说明](docs/releases/v0.11.0.md)。
 
-## 节奏卡片交互预览
+## 工作情境与节奏卡片预览
 
 | 清爽 Clear | 刻度 Meter |
 |---|---|
-| ![清爽额度配速卡片，合成数据](docs/screenshots/pace-clear.png) | ![刻度额度配速卡片，合成数据](docs/screenshots/pace-meter.png) |
+| ![清爽工作情境，合成示意，非官方客户端截图](docs/screenshots/work-context-clear.png) | ![刻度工作情境，合成示意，非官方客户端截图](docs/screenshots/work-context-meter.png) |
 
 直接试用 [余量宽裕](https://zhulongqihan.github.io/codex-pulse/?demo=1&coachScenario=roomy#pulse-pace)、[用量偏快](https://zhulongqihan.github.io/codex-pulse/?demo=1&coachScenario=fast#pulse-pace)、[重置预告](https://zhulongqihan.github.io/codex-pulse/?demo=1&coachScenario=notice#pulse-pace)和[数据陈旧](https://zhulongqihan.github.io/codex-pulse/?demo=1&coachScenario=stale#pulse-pace)。这里运行已实现的界面组件，读数和预告全部为合成示例。
 
@@ -146,6 +146,10 @@ pnpm exec wdio run ./wdio.pulse.conf.ts
 欢迎告诉我们哪里好用、哪里不顺手，以及你希望增加什么。无需提交代码，也能参与改进：
 
 在软件 **设置 → 帮助与反馈** 中可查看使用说明、打开体验讨论或问题表单。可选反馈摘要会先展示完整内容，由你决定是否复制和发送；不会自动附加真实账号、额度、项目路径、会话或原始错误日志。使用 GitHub 发言需要登录；仅查看网页演示无需账号。
+
+| 清爽 Clear | 刻度 Meter |
+|---|---|
+| ![清爽帮助与反馈，合成数据](docs/screenshots/help-clear.png) | ![刻度帮助与反馈，合成数据](docs/screenshots/help-meter.png) |
 
 - [报告问题](https://github.com/zhulongqihan/codex-pulse/issues/new?template=bug_report.yml)：附软件版本、复现步骤和预期／实际表现。
 - [提出功能建议](https://github.com/zhulongqihan/codex-pulse/issues/new?template=feature_request.yml)，或在 [讨论区](https://github.com/zhulongqihan/codex-pulse/discussions) 分享使用体验、想法和问题。

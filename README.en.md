@@ -32,11 +32,11 @@ A quiet quota-pacing companion for Codex on Windows: view remaining quota and re
 
 0.11.0 makes download compatibility and data access clearer, adds an interactive synthetic work scenario, guides first use according to returned quota, and provides Help & feedback in settings. Upgrades retain local data, preferences and same-account observations, with compatible accounting rules and export formats. Read the [release notes](docs/releases/v0.11.0.md#english).
 
-## Interactive pace preview
+## Work context and interactive pace preview
 
 | Clear | Meter |
 |---|---|
-| ![Clear quota-pacing card with synthetic data](docs/screenshots/pace-clear.png) | ![Meter quota-pacing card with synthetic data](docs/screenshots/pace-meter.png) |
+| ![Clear work-context illustration, synthetic data, not an official client screenshot](docs/screenshots/work-context-clear.png) | ![Meter work-context illustration, synthetic data, not an official client screenshot](docs/screenshots/work-context-meter.png) |
 
 Try the [roomy quota](https://zhulongqihan.github.io/codex-pulse/?demo=1&coachScenario=roomy#pulse-pace), [high pace](https://zhulongqihan.github.io/codex-pulse/?demo=1&coachScenario=fast#pulse-pace), [reset notice](https://zhulongqihan.github.io/codex-pulse/?demo=1&coachScenario=notice#pulse-pace), and [stale data](https://zhulongqihan.github.io/codex-pulse/?demo=1&coachScenario=stale#pulse-pace) states. These run the implemented interface components with synthetic readings and notices only.
 
@@ -146,6 +146,10 @@ After Checks passes for an exact main commit, maintainers can manually build an 
 Tell us what works well, what feels awkward, and what you would like to see next. You do not need to write code to help:
 
 Open **Settings → Help & feedback** for usage guidance, experience discussions or the bug form. The optional feedback summary displays its complete content before you choose whether to copy and send it; it does not automatically include real accounts, quota, project paths, conversations or raw error logs. Posting on GitHub requires sign-in; the browser demo does not.
+
+| Clear | Meter |
+|---|---|
+| ![Clear Help and feedback with synthetic data](docs/screenshots/help-clear.png) | ![Meter Help and feedback with synthetic data](docs/screenshots/help-meter.png) |
 
 - [Report a bug](https://github.com/zhulongqihan/codex-pulse/issues/new?template=bug_report.yml) with the app version, reproduction steps, and expected/actual behavior.
 - [Suggest a feature](https://github.com/zhulongqihan/codex-pulse/issues/new?template=feature_request.yml), or share experiences, ideas, and questions in [Discussions](https://github.com/zhulongqihan/codex-pulse/discussions).
