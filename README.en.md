@@ -45,6 +45,14 @@ Try the [roomy quota](https://zhulongqihan.github.io/codex-pulse/?demo=1&coachSc
 
 Both styles share the same capabilities. The dashboard prioritizes quota and today's reference cost; Usage analysis in the sidebar retains complete-range trends, distributions and exports. Clear uses lightweight comparisons and continuous tables; Meter emphasizes one dark trend field. Daily detail, a data table, fullscreen viewing and keyboard controls remain available.
 
+### Separate Usage analysis
+
+Open historical trends and distributions from **Usage analysis** in the sidebar. Today's dashboard remains independent; the range selector, chart and exports use the same period.
+
+| Clear | Meter |
+|---|---|
+| ![Clear Usage analysis with synthetic data](docs/screenshots/clear-analysis.png) | ![Meter Usage analysis with synthetic data](docs/screenshots/meter-analysis.png) |
+
 ## Run on Windows
 
 1. Download `CodexPulse-<version>-windows-x64.zip` and its `.sha256` file from the [latest release](https://github.com/zhulongqihan/codex-pulse/releases/latest).

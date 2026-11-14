@@ -45,6 +45,14 @@
 
 两版共用业务能力。仪表盘优先展示额度与今日参考成本；左侧“用量分析”保留完整时段趋势、分布与导出。清爽使用轻量比较图与连续表格，刻度突出一块深色趋势区域；逐日细看、数据表、全屏和键盘操作保持可达。
 
+### 独立用量分析
+
+从左侧“用量分析”查看历史趋势与消耗分布；仪表盘中的今天保持独立。日期范围、图表与导出使用同一时段。
+
+| 清爽 Clear | 刻度 Meter |
+|---|---|
+| ![清爽用量分析，合成数据](docs/screenshots/clear-analysis.png) | ![刻度用量分析，合成数据](docs/screenshots/meter-analysis.png) |
+
 ## Windows 启动
 
 1. 在 [发布页](https://github.com/zhulongqihan/codex-pulse/releases/latest) 下载 `CodexPulse-<版本>-windows-x64.zip` 和对应 `.sha256` 文件。
