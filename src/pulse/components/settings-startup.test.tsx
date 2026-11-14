@@ -7,6 +7,7 @@ import i18n from "@/i18n";
 import { paceCopy } from "@/lib/pulse-pace-copy";
 import { integrationSettingsCopy } from "@/lib/integration-settings-copy";
 import { pulseCopy } from "@/lib/pulse-copy";
+import { feedbackCopy } from "@/lib/feedback-copy";
 import { SettingsPage } from "./settings-page";
 
 vi.mock("@tauri-apps/api/core", () => ({ isTauri: () => false, invoke: vi.fn() }));
@@ -135,5 +136,20 @@ describe("login startup and the existing titlebar setting", () => {
     maintenance.focus();await userEvent.keyboard("{Home}");expect(screen.getByRole("tab",{name:"Appearance & language"})).toHaveFocus();
     await userEvent.keyboard("{ArrowRight}{ArrowRight}");expect(screen.getByRole("tab",{name:"Desktop & Codex"})).toHaveFocus();
     expect(screen.getByTestId("installation-check")).toBeVisible();await userEvent.keyboard("{End}");expect(screen.getByRole("tab",{name:i18n.t("settings.nav_third_party")})).toHaveFocus();
+  });
+  it.each(["en", "zh", "zh-Hant", "ja", "ko", "de"])("makes help and feedback a named settings section in %s", async language => {
+    await i18n.changeLanguage(language);
+    render(<SettingsPage {...props()}/>);
+    const label = feedbackCopy(language).title;
+    const help = screen.getByRole("tab", { name: label });
+    expect(help).toHaveAttribute("aria-controls", "settings-section-help");
+    await userEvent.click(help);
+    expect(screen.getByRole("tabpanel", { name: label })).toBeVisible();
+    expect(screen.getByRole("heading", { name: label })).toBeVisible();
+    expect(screen.getByRole("button", { name: feedbackCopy(language).share })).toBeVisible();
+    help.focus();
+    await userEvent.keyboard("{ArrowLeft}");
+    expect(screen.getByRole("tab", { name: i18n.t("settings.nav_maintenance") })).toHaveFocus();
+    expect(screen.getByTestId("pulse-feedback")).not.toBeVisible();
   });
 });

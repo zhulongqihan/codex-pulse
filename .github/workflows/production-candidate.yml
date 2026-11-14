@@ -1,0 +1,93 @@
+name: Production candidate
+
+on:
+  workflow_dispatch:
+    inputs:
+      source_commit:
+        description: Full 40-character main commit with successful Checks
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  candidate:
+    name: Unsigned Windows production candidate
+    runs-on: windows-latest
+    timeout-minutes: 60
+    env:
+      CI: "true"
+      npm_config_cache: ${{ github.workspace }}/.local/cache/npm
+      TEMP: ${{ github.workspace }}/.local/tmp
+      TMP: ${{ github.workspace }}/.local/tmp
+    steps:
+      - name: Prepare workspace temporary directory
+        shell: pwsh
+        run: New-Item -ItemType Directory -Force $env:TEMP | Out-Null
+      # Gate tooling is pinned to the workflow's own commit, not the requested source.
+      - name: Check out workflow tooling
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.workflow_sha }}
+          path: .ci-tooling
+          persist-credentials: false
+      - name: Set up Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "24.15.0"
+      - name: Require exact main push Checks and an unreleased version
+        id: gate
+        shell: pwsh
+        env:
+          SOURCE_COMMIT: ${{ inputs.source_commit }}
+          GH_TOKEN: ${{ github.token }}
+        run: node .ci-tooling/scripts/production-candidate.mjs verify "$env:RUNNER_TEMP/production-source.json"
+      - name: Check out verified production source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ steps.gate.outputs.source_sha }}
+          path: source
+          persist-credentials: false
+      - name: Set up pnpm
+        shell: pwsh
+        run: npm install --global pnpm@10.20.0
+      - name: Set up Rust
+        shell: pwsh
+        run: |
+          rustup toolchain install 1.94.1 --profile minimal
+          rustup default 1.94.1
+      - name: Install locked frontend dependencies
+        working-directory: source
+        shell: pwsh
+        run: pnpm install --frozen-lockfile --store-dir .local/cache/pnpm
+      - name: Build and package without e2e features or signing secrets
+        working-directory: source
+        shell: pwsh
+        run: |
+          . ./scripts/build-env.ps1
+          pnpm version:check
+          if ($LASTEXITCODE -ne 0) { throw 'Version check failed' }
+          pnpm source:check
+          if ($LASTEXITCODE -ne 0) { throw 'Public source check failed' }
+          pnpm exec tauri build --no-bundle --no-sign -- --locked
+          if ($LASTEXITCODE -ne 0) { throw 'Production build failed' }
+          ./scripts/package-portable.ps1 -SkipBuild
+      - name: Record exact source, package hashes and publisher-signature status
+        shell: pwsh
+        run: node .ci-tooling/scripts/production-candidate.mjs metadata source "$env:RUNNER_TEMP/production-source.json"
+      - name: Upload this run's candidate and build metadata
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: unsigned-production-${{ steps.gate.outputs.source_sha }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            source/release/CodexPulse-${{ steps.gate.outputs.version }}-windows-x64.exe
+            source/release/CodexPulse-${{ steps.gate.outputs.version }}-windows-x64.exe.sha256
+            source/release/CodexPulse-${{ steps.gate.outputs.version }}-windows-x64.zip
+            source/release/CodexPulse-${{ steps.gate.outputs.version }}-windows-x64.zip.sha256
+            source/release/candidate-build.json
+          if-no-files-found: error
+          include-hidden-files: false
+          overwrite: false
+          retention-days: 30

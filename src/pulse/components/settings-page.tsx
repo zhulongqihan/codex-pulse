@@ -5,6 +5,8 @@ import { CloseBehaviorNote } from "./close-behavior";
 import { PulseInstallationSettings } from "./pulse-installation-settings";
 import { integrationSettingsCopy } from "@/lib/integration-settings-copy";
 import { PulsePaceSettings } from "./pulse-pace-settings";
+import { PulseFeedback } from "./pulse-feedback";
+import { feedbackCopy } from "@/lib/feedback-copy";
 import { usePulseCopy } from "@/lib/pulse-copy";
 import { useShellCopy } from "@/lib/shell-copy";
 import { quotaWindowLabel } from "@/lib/quota-windows";
@@ -79,9 +81,9 @@ const TRAY_OPTION_KEYS = {
   cost: "cost",
 } as const;
 
-export type SettingsSection = "appearance" | "source" | "general" | "desktop" | "menuBar" | "maintenance" | "third_party";
+export type SettingsSection = "appearance" | "source" | "general" | "desktop" | "menuBar" | "maintenance" | "help" | "third_party";
 
-const SETTINGS_SECTIONS: SettingsSection[] = ["appearance", "general", "desktop", "source", "menuBar", "maintenance", "third_party"];
+const SETTINGS_SECTIONS: SettingsSection[] = ["appearance", "general", "desktop", "source", "menuBar", "maintenance", "help", "third_party"];
 
 export function SettingsPage({
   initialSection = "appearance",
@@ -171,7 +173,7 @@ export function SettingsPage({
 
   const renderSectionTab = (section: SettingsSection) => {
     const selected = activeSection === section;
-    const label = section === "desktop" || section === "appearance" ? entryCopy(section) : section === "menuBar" ? entryCopy("tray") : section === "source" ? copy(section) : t(`settings.nav_${section}`);
+    const label = section === "help" ? feedbackCopy(currentLanguage).title : section === "desktop" || section === "appearance" ? entryCopy(section) : section === "menuBar" ? entryCopy("tray") : section === "source" ? copy(section) : t(`settings.nav_${section}`);
     const sectionId = `settings-section-${section}`;
 
     return (
@@ -657,6 +659,7 @@ export function SettingsPage({
               </CardContent>
             </Card>
           </section>
+          <section role="tabpanel" hidden={activeSection !== "help"} id="settings-section-help" aria-labelledby="settings-tab-help" className="pulse-settings-tab-panel"><PulseFeedback/></section>
         </div>
       </div>
     </div>

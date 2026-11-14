@@ -4,8 +4,24 @@ import { describe, expect, it, vi } from "vitest";
 import i18n from "@/i18n";
 import { readingGuidanceCopy } from "@/lib/reading-guidance-copy";
 import { PulseGettingStarted } from "./pulse-getting-started";
+import { firstUseCopy } from "@/lib/first-use";
 
 describe("optional practical usage help", () => {
+  it("puts account recovery first until a quota window is returned, then offers the widget", async () => {
+    await i18n.changeLanguage("en");
+    const callbacks = { onExpand: vi.fn(), onSource: vi.fn(), onAccount: vi.fn(), onWidget: vi.fn(), onShortcuts: vi.fn(), onDismiss: vi.fn() };
+    const props = { ...callbacks, localReady: true, accountReady: false, busy: false, notice: null, error: null, expanded: false };
+    const { rerender } = render(<PulseGettingStarted {...props}/>);
+    fireEvent.click(screen.getByTestId("first-use-next"));
+    expect(callbacks.onAccount).toHaveBeenCalledOnce();
+    expect(callbacks.onWidget).not.toHaveBeenCalled();
+    rerender(<PulseGettingStarted {...props} accountReady/>);
+    expect(screen.getByTestId("first-use-guidance")).toHaveTextContent(firstUseCopy("en", "missing"));
+    rerender(<PulseGettingStarted {...props} accountReady quotaAvailable/>);
+    expect(screen.getByTestId("first-use-guidance")).toHaveTextContent(firstUseCopy("en", "ready"));
+    fireEvent.click(screen.getByTestId("first-use-next"));
+    expect(callbacks.onWidget).toHaveBeenCalledOnce();
+  });
   it.each(["en", "zh", "zh-Hant", "ja", "ko", "de"])("keeps initial help small and makes task guidance available in %s", async language => {
     await i18n.changeLanguage(language);
     const callbacks = { onExpand: vi.fn(), onSource: vi.fn(), onAccount: vi.fn(), onWidget: vi.fn(), onShortcuts: vi.fn(), onDismiss: vi.fn() };

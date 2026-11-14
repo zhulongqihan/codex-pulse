@@ -43,6 +43,7 @@ jobs:
           pnpm version:check
           pnpm source:check
           pnpm test:tooling
+          node --test scripts/production-candidate.test.mjs
       - name: Set up Rust
         run: |
           rustup toolchain install 1.94.1 --profile minimal

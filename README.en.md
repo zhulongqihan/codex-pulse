@@ -1,10 +1,12 @@
-# Codex Pulse — See the Pace Behind Your Quota
+# Codex Pulse — A Windows Quota-Pacing Companion
 
 A quiet quota-pacing companion for Codex on Windows: view remaining quota and reset time together, compare consumption with the window's time progress, and plan upcoming tasks. Includes **Clear** and **Meter**, a full usage workspace, and session replay.
 
 **[简体中文](README.md)** · **[Download for Windows](https://github.com/zhulongqihan/codex-pulse/releases/latest)** · [Product and interactive preview](https://zhulongqihan.github.io/codex-pulse/) · [Full workspace demo](https://zhulongqihan.github.io/codex-pulse/?demo=1) · [Screenshots](https://zhulongqihan.github.io/codex-pulse/gallery.html) · [Issues](https://github.com/zhulongqihan/codex-pulse/issues)
 
 > Independent open-source software, not affiliated with OpenAI. Public screenshots and browser demonstrations use synthetic data only.
+
+**Before downloading:** the app requires Windows 10/11 x64 and WebView2. The corner-following indicator supports the Microsoft Store edition of Codex only. Subscription quota requires an existing Codex ChatGPT sign-in; API-key mode can use local analysis. The desktop app reads the existing sign-in locally to query official account services, reads local logs without changing them, and does not upload conversations. The current EXE has no Windows Authenticode publisher signature; Pulse's update-manifest signature is a separate mechanism. [Downloads, data access and signatures](docs/TRUST.md#english).
 
 ## Features
 
@@ -26,8 +28,9 @@ A quiet quota-pacing companion for Codex on Windows: view remaining quota and re
 - **Codex desktop entry:** a local MCP plugin shows quota, today's summary, cycle observations and sourced notices in a desktop client with MCP Apps support. Open the dashboard, widget or consumption details. The six-language panel follows Pulse preferences by default, with optional panel-only Clear/Meter selection; see the [installation guide](docs/CODEX_INTEGRATION.en.md).
 - **Two styles and six languages:** Clear/Meter, light/dark/system, density and motion are independent preferences that preserve your working state. Supports Simplified Chinese, Traditional Chinese, English, Japanese, Korean and German.
 - **Exports and updates:** XLSX/Markdown contain range summary, daily, model and project statistics. Pulse updates verify the release signature, product, platform and package digest, preserving data and restoring the previous executable if startup fails.
+- **Help and feedback:** find usage guidance, experience discussions and bug reporting in settings. Preview a minimal summary of visible environment and selected options before copying it; account data, logs and conversations are not uploaded automatically.
 
-0.10.0 separates the daily dashboard from Usage analysis: see quota, reset time, pacing and today's reference cost first, then open complete historical analysis when needed. Account and reset details open on demand. Upgrades retain local data, preferences and same-account observations, with compatible accounting rules and export formats. Read the [release notes](docs/releases/v0.10.0.md#english).
+0.11.0 makes download compatibility and data access clearer, adds an interactive synthetic work scenario, guides first use according to returned quota, and provides Help & feedback in settings. Upgrades retain local data, preferences and same-account observations, with compatible accounting rules and export formats. Read the [release notes](docs/releases/v0.11.0.md#english).
 
 ## Interactive pace preview
 
@@ -59,6 +62,8 @@ Open historical trends and distributions from **Usage analysis** in the sidebar.
 2. Extract the complete archive into a writable folder, such as `F:\Apps\CodexPulse`. Run **Start-Codex-Pulse.cmd** or **CodexPulse.exe**.
 3. Requires Windows 10/11 x64 and [Microsoft Edge WebView2 Evergreen Runtime](https://developer.microsoft.com/microsoft-edge/webview2/). The portable archive does not bundle that system runtime. Node.js and Rust are not required.
 4. Confirm your Codex Home in settings, then choose appearance, local log scan interval and widget preferences. Account queries require an existing ChatGPT sign-in; API key mode does not expose subscription quotas.
+
+**First success:** once the account returns quota and reset information, you can start using Pulse. A weekly window alone is valid. Forecasts need sufficient continuous observations and may remain unavailable; their absence does not mean installation failed. If quota is missing, check sign-in and connection in the account panel. Local log analysis remains independently usable. Initial help can be dismissed and reopened from the toolbar.
 
 To add desktop and Start menu entries, use the app's shortcut action or run **Create-Codex-Pulse-Shortcuts.cmd** from the portable package. Recreate the shortcuts after moving the application directory.
 
@@ -134,9 +139,13 @@ pnpm exec wdio run ./wdio.pulse.conf.ts
 
 Archives and digests are written to `release/`. For a synthetic browser preview, run `pnpm dev` and open `http://127.0.0.1:5173/?demo=1`.
 
+After Checks passes for an exact main commit, maintainers can manually build an [unsigned production candidate with source and hash metadata](docs/PRODUCTION_CANDIDATES.md). It is separate from a formal release and Windows publisher signing.
+
 ## Feedback and participation
 
 Tell us what works well, what feels awkward, and what you would like to see next. You do not need to write code to help:
+
+Open **Settings → Help & feedback** for usage guidance, experience discussions or the bug form. The optional feedback summary displays its complete content before you choose whether to copy and send it; it does not automatically include real accounts, quota, project paths, conversations or raw error logs. Posting on GitHub requires sign-in; the browser demo does not.
 
 - [Report a bug](https://github.com/zhulongqihan/codex-pulse/issues/new?template=bug_report.yml) with the app version, reproduction steps, and expected/actual behavior.
 - [Suggest a feature](https://github.com/zhulongqihan/codex-pulse/issues/new?template=feature_request.yml), or share experiences, ideas, and questions in [Discussions](https://github.com/zhulongqihan/codex-pulse/discussions).

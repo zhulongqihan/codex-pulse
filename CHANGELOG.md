@@ -4,6 +4,26 @@ User-facing changes are grouped by release, following [Keep a Changelog](https:/
 
 ## [Unreleased]
 
+## [0.11.0] - 2026-11-14
+
+### Added / 新增
+
+- Add Help & feedback in settings with usage guidance, explicit discussion/bug links and a previewable allowlisted summary that is copied only on request.
+- 设置新增“帮助与反馈”，集中使用帮助、讨论和问题入口；白名单摘要先预览，再由用户主动复制。
+- Show a clearly labelled synthetic work scenario for the Codex-following card, including expansion, collapse and hiding when another app is selected.
+- 官网增加明确标注的合成工作情境，演示跟随卡片的展开、收起和切到其他应用时隐藏。
+
+### Improved / 改进
+
+- Put compatibility, desktop data access, first usable readings and Windows publisher-signature status before the download decision.
+- 在下载前说明兼容条件、桌面数据访问、首次有效读数与Windows发布者签名现状。
+- Guide users to account details when an account responds without quota windows; retain weekly-only and zero-remaining readings as valid.
+- 账号响应但未返回额度窗口时先引导查看详情；只有周窗口或零余量仍视为有效读数。
+- Retain local data, appearance preferences, accounting rules, exports and same-account observations on upgrade.
+- 升级保留本地数据、外观偏好、统计口径、导出与同账号观测。
+
+[完整中英说明 / Full release notes](docs/releases/v0.11.0.md)
+
 ## [0.10.0] - 2026-11-14
 
 ### Added / 新增
@@ -249,7 +269,8 @@ User-facing changes are grouped by release, following [Keep a Changelog](https:/
 
 Earlier releases remain available in [GitHub Releases](https://github.com/zhulongqihan/codex-pulse/releases). / 更早版本保留在 GitHub Releases。
 
-[Unreleased]: https://github.com/zhulongqihan/codex-pulse/compare/v0.10.0...HEAD
+[Unreleased]: https://github.com/zhulongqihan/codex-pulse/compare/v0.11.0...HEAD
+[0.11.0]: https://github.com/zhulongqihan/codex-pulse/releases/tag/v0.11.0
 [0.10.0]: https://github.com/zhulongqihan/codex-pulse/releases/tag/v0.10.0
 [0.9.2]: https://github.com/zhulongqihan/codex-pulse/releases/tag/v0.9.2
 [0.9.1]: https://github.com/zhulongqihan/codex-pulse/releases/tag/v0.9.1

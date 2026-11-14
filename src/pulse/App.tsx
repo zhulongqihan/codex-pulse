@@ -16,6 +16,7 @@ import { ProjectUsageCard } from "@/components/project-usage-card";
 import { SettingsPage, type SettingsSection } from "@/components/settings-page";
 import { PulseAccountDrawer } from "@/components/pulse-account-drawer";
 import { PulseGettingStarted } from "@/components/pulse-getting-started";
+import { hasReturnedQuota } from "@/lib/first-use";
 import { PulseBrandMark } from "@/components/pulse-brand-mark";
 import { PulseCoachOverview } from "@/components/pulse-coach-overview";
 import { UpdateRecoveryNotice } from "@/components/update-recovery-notice";
@@ -614,7 +615,7 @@ export default function App() {
           {visitedViews.current.has("dashboard") ? (
             <Activity mode={view === "dashboard" ? "visible" : "hidden"}>
             <div className="space-y-5">
-              {showQuickStart && !compactWindow ? <PulseGettingStarted expanded={helpExpanded} onExpand={() => setHelpExpanded(value => !value)} localReady={!!overview?.updatedAt || diagnostics?.status === "ready"} accountReady={!!codexLimits} source={diagnostics?.codexHome} busy={desktopAction !== null} notice={desktopNotice} error={desktopError} onSource={() => openSettings("source")} onAccount={showAccount} onWidget={() => void runDesktopAction("widget")} onShortcuts={() => void runDesktopAction("shortcuts")} onDismiss={dismissQuickStart}/> : null}
+              {showQuickStart && !compactWindow ? <PulseGettingStarted expanded={helpExpanded} onExpand={() => setHelpExpanded(value => !value)} localReady={!!overview?.updatedAt || diagnostics?.status === "ready"} accountReady={!!codexLimits} quotaAvailable={hasReturnedQuota(codexLimits)} source={diagnostics?.codexHome} busy={desktopAction !== null} notice={desktopNotice} error={desktopError} onSource={() => openSettings("source")} onAccount={showAccount} onWidget={() => void runDesktopAction("widget")} onShortcuts={() => void runDesktopAction("shortcuts")} onDismiss={dismissQuickStart}/> : null}
               {!showDashboard || !overview ? <PulseCoachOverview summary={!paceObservationsExpanded} onDetails={() => paceDetails.current()} onRecover={showAccount} observationsExpanded={paceObservationsExpanded}/> : null}
               {showDashboard && overview ? <DashboardHeroCard
                 overview={overview}
@@ -636,7 +637,7 @@ export default function App() {
                 onOpenDay={(date) => { setSelectedProjectFilter(null); setSelectedSessionDate(date); navigate("sessions"); }}
               /> : null}
 
-              {showQuickStart && compactWindow ? <PulseGettingStarted expanded={helpExpanded} onExpand={() => setHelpExpanded(value => !value)} localReady={!!overview?.updatedAt || diagnostics?.status === "ready"} accountReady={!!codexLimits} source={diagnostics?.codexHome} busy={desktopAction !== null} notice={desktopNotice} error={desktopError} onSource={() => openSettings("source")} onAccount={showAccount} onWidget={() => void runDesktopAction("widget")} onShortcuts={() => void runDesktopAction("shortcuts")} onDismiss={dismissQuickStart}/> : null}
+              {showQuickStart && compactWindow ? <PulseGettingStarted expanded={helpExpanded} onExpand={() => setHelpExpanded(value => !value)} localReady={!!overview?.updatedAt || diagnostics?.status === "ready"} accountReady={!!codexLimits} quotaAvailable={hasReturnedQuota(codexLimits)} source={diagnostics?.codexHome} busy={desktopAction !== null} notice={desktopNotice} error={desktopError} onSource={() => openSettings("source")} onAccount={showAccount} onWidget={() => void runDesktopAction("widget")} onShortcuts={() => void runDesktopAction("shortcuts")} onDismiss={dismissQuickStart}/> : null}
 
             </div>
             </Activity>

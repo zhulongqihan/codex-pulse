@@ -1,5 +1,7 @@
 # Security and privacy
 
+For user-facing download, data-access and publisher-signature information, see [Downloads, data access and signatures](docs/TRUST.md#english).
+
 ## Reporting a vulnerability
 
 Use this repository's **Security → Report a vulnerability** option when private vulnerability reporting is available. If it is unavailable, open a minimal issue requesting a private contact method; leave exploit details and private data out of the public issue.

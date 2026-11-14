@@ -1,0 +1,22 @@
+.pulse-feedback { max-width: 72ch; color: rgb(var(--foreground)); }
+.pulse-feedback header h2 { margin: 0 0 8px; font-size: 1.25rem; line-height: 1.4; font-weight: 650; }
+.pulse-feedback p { margin: 0; color: rgb(var(--muted-foreground)); font-size: .875rem; line-height: 1.65; overflow-wrap: anywhere; }
+.pulse-feedback-links { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 20px; }
+.pulse-feedback-links button { height: auto; min-height: 44px; max-width: 100%; white-space: normal; text-align: start; }
+.pulse-feedback .pulse-feedback-note { margin-top: 12px; }
+.pulse-feedback [role="status"], .pulse-feedback [role="alert"] { margin-top: 12px; }
+.pulse-feedback-open-error code { display: block; margin-top: 6px; font-size: .8125rem; line-height: 1.6; overflow-wrap: anywhere; user-select: text; }
+.pulse-feedback-guide { margin-top: 24px; padding-top: 20px; border-top: 1px solid rgb(var(--border)); }
+.pulse-feedback-guide > summary { cursor: pointer; width: fit-content; max-width: 100%; min-height: 44px; align-content: center; padding: 8px 0; font-size: .875rem; font-weight: 600; }
+.pulse-feedback-context { margin-top: 24px; padding-top: 24px; border-top: 1px solid rgb(var(--border)); }
+.pulse-feedback-context h3 { margin: 0 0 8px; font-size: 1rem; line-height: 1.5; font-weight: 650; }
+.pulse-feedback-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; margin: 20px 0 16px; }
+.pulse-feedback label { display: flex; min-width: 0; flex-direction: column; gap: 8px; font-size: .875rem; }
+.pulse-feedback select, .pulse-feedback textarea { width: 100%; min-width: 0; border: 1px solid rgb(var(--border)); border-radius: 4px; padding: 10px 12px; color: rgb(var(--foreground)); background: rgb(var(--surface)); font: inherit; }
+.pulse-feedback select { min-height: 44px; }
+.pulse-feedback textarea { resize: vertical; line-height: 1.6; overflow-wrap: anywhere; white-space: pre-wrap; }
+.pulse-feedback-preview { margin-bottom: 16px; }
+.pulse-feedback-context > button { height: auto; min-height: 44px; max-width: 100%; white-space: normal; text-align: start; }
+.pulse-feedback :is(button, summary, select, textarea):focus-visible { outline: 2px solid rgb(var(--primary)); outline-offset: 3px; }
+.pulse-feedback ::selection { background: rgb(var(--primary)); color: rgb(var(--primary-foreground)); }
+@media (max-width: 620px) { .pulse-feedback-fields { grid-template-columns: minmax(0, 1fr); } }

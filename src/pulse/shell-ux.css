@@ -20,6 +20,10 @@
 .pulse-setup-status strong { color: rgb(var(--foreground)); font-weight: 550; margin-right: 2px; }
 .pulse-setup-actions > button { display: inline-flex; align-items: center; gap: 6px; color: rgb(var(--primary)); padding: 3px 0; text-align: left; }
 .pulse-setup-actions > button:hover { text-decoration: underline; text-underline-offset: 3px; }
+.pulse-setup-actions > button[data-testid="first-use-next"] { min-height: 36px; font-weight: 600; }
+@media (max-width: 760px) {
+  .pulse-setup-status > button, .pulse-setup-actions > button { min-height: 44px; }
+}
 .pulse-setup-hint, .pulse-action-notice { color: rgb(var(--muted-foreground)); font-size: 12px; margin-top: 9px; line-height: 1.6; }
 .pulse-app .pulse-settings-layout { display: grid; grid-template-columns: 168px minmax(0,1fr); gap: 20px; }
 .pulse-settings-layout > [role="tablist"] { display: flex; flex-direction: column; align-self: start; gap: 5px; position: sticky; top: 0; padding: 0; }

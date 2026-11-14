@@ -9,3 +9,63 @@
 @media(min-width:1600px){.pulse-site-hero{padding-top:95px;padding-bottom:110px}}@media(max-width:1050px){.pulse-site-header{padding:23px 32px}.pulse-site main{padding:0 32px}.pulse-site-hero{grid-template-columns:minmax(0,1fr) 380px;gap:35px;padding-top:40px}.pulse-site-intro h1{font-size:43px}.pulse-site-actions{gap:14px}.pulse-site-difference,.pulse-site-faq{gap:40px;grid-template-columns:minmax(0,.75fr) minmax(0,1.25fr)}.pulse-site-difference dl>div{grid-template-columns:110px minmax(0,1fr);gap:16px}.pulse-site-install ol{gap:30px}.pulse-site-footer{padding-left:32px;padding-right:32px}}
 @media(max-width:760px){.pulse-site-header{padding:18px 22px;min-height:82px;gap:14px}.pulse-site-brand{gap:8px}.pulse-site-brand strong{font-size:17px}.pulse-site-brand>span{display:none}.pulse-site-header nav{gap:12px}.pulse-site-header nav>a{font-size:12px}.pulse-site-header nav>a:nth-child(2){display:none}.pulse-site main{padding:0 24px}.pulse-site-hero{grid-template-columns:1fr;gap:40px;padding:38px 0 48px}.pulse-site-intro h1{font-size:clamp(36px,8vw,48px);max-width:15ch;margin-bottom:20px}.pulse-site-lead{font-size:16px;line-height:1.85}.pulse-site-actions{margin-top:24px;gap:16px}.pulse-site-actions>a{font-size:13px}.pulse-site-requirement{font-size:11px}.pulse-site-privacy{margin-top:23px!important}.pulse-site-preview{width:100%;max-width:470px;margin:auto}.pulse-site-difference,.pulse-site-faq{grid-template-columns:1fr;gap:27px;padding:37px 0}.pulse-site-difference>h2{max-width:24ch}.pulse-site-difference dl>div{grid-template-columns:1fr;gap:6px;padding-bottom:23px}.pulse-site-difference dl>div:last-child{padding-bottom:0}.pulse-site-install{padding:37px 0}.pulse-site-install ol{grid-template-columns:1fr;gap:23px;margin-top:24px}.pulse-site-install h3{margin-bottom:5px}.pulse-site-faq{padding-bottom:48px}.pulse-site-footer{padding:23px 24px;align-items:flex-start;flex-direction:column;gap:17px}.pulse-site-footer>div{gap:24px}.pulse-site-frame{height:466px}.pulse-site-preview-heading{gap:8px}.pulse-site-preview-heading h2{font-size:16px}}
 @media(prefers-reduced-motion:reduce){.pulse-site *{scroll-behavior:auto!important}}
+
+/* The synthetic host explains placement; the badge and card are real app components. */
+.pulse-site *{transition-property:none}.pulse-site a,.pulse-site button,.pulse-site summary{transition-property:background-color,color,border-color}
+.pulse-site-hero{grid-template-columns:minmax(0,1fr) minmax(0,500px);gap:56px;align-items:start}
+.pulse-site:lang(zh-CN) .pulse-site-intro h1{max-width:none;word-break:keep-all;overflow-wrap:normal}
+.pulse-site-intro .pulse-site-requirement{margin-top:22px!important;align-items:flex-start;line-height:1.7;font-size:12px}
+.pulse-site-requirement svg{flex-shrink:0;margin-top:3px}
+.pulse-site-support,.pulse-site-first-success{font-size:13px;line-height:1.8;color:var(--site-muted);margin-top:12px!important}
+.pulse-site-download-facts{font-size:12px;line-height:1.8;color:var(--site-muted);margin-top:12px!important}.pulse-site-download-facts a{color:var(--site-accent);text-decoration:underline}
+.pulse-site-first-success{margin-top:16px!important}
+.pulse-site-trust-link,.pulse-site-usage-link{display:inline-flex;align-items:center;gap:8px;min-height:44px;font-size:13px;font-weight:600;color:var(--site-accent)!important}
+.pulse-site-intro .pulse-site-privacy{margin-top:22px!important}
+.pulse-site-languages button{min-width:44px;min-height:44px}
+.pulse-site-header nav>a{min-height:44px;white-space:nowrap;flex-shrink:0}
+.pulse-site-preview-heading .pulse-style-switch button{min-height:44px;min-width:44px}
+.pulse-site-contexts{display:flex;gap:6px;flex-wrap:wrap;margin:16px 0 10px}
+.pulse-site-contexts button,.pulse-site-scenarios button{min-height:44px;border-radius:6px;padding:8px 11px;font-size:12px}
+.pulse-site-contexts button{border:1px solid var(--site-line);background:transparent;color:var(--site-muted)}
+.pulse-site-contexts button[aria-pressed=true]{background:var(--site-tint);color:var(--site-accent);border-color:var(--site-accent)}
+.pulse-site-work-scene{min-width:0;overflow:hidden;background:var(--site-paper);border:1px solid var(--site-line);border-radius:14px}
+.pulse-site-window-bar{display:flex;align-items:center;justify-content:space-between;gap:12px;min-height:59px;padding:8px 12px;border-bottom:1px solid var(--site-line);background:var(--site-tint)}
+.pulse-site-window-bar>span{font-size:11px;line-height:1.5;color:var(--site-muted);max-width:21ch}
+.pulse-site-window-bar>div{flex-shrink:0;width:150px}
+.pulse-site-window-bar .pulse-pace-badge{height:44px;white-space:normal;line-height:1.35}
+.pulse-site-window-bar .pulse-pace-badge>span{white-space:normal;text-overflow:clip}
+.pulse-site-work-sample{padding:16px}
+.pulse-site-work-sample>button{display:grid;grid-template-columns:24px minmax(0,1fr);gap:5px 10px;min-height:66px;width:100%;padding:8px;border:0;background:transparent;text-align:left;color:var(--site-ink);border-radius:6px}
+.pulse-site-work-sample>button:hover{background:var(--site-bg)}
+.pulse-site-work-sample>button>svg{grid-row:1/3;align-self:start;color:var(--site-accent);margin-top:3px}
+.pulse-site-work-sample strong{font-size:13px;line-height:1.6;font-weight:600}
+.pulse-site-work-sample span,.pulse-site-work-sample>p{font-size:12px;line-height:1.75;color:var(--site-muted)}
+.pulse-site-work-scene.is-away .pulse-site-work-sample{min-height:310px;display:flex;align-items:center;justify-content:center;padding:32px}
+.pulse-site-live-card{margin:0 16px 16px;min-width:0}
+.pulse-site-card-tools{display:flex;align-items:center;justify-content:space-between;min-height:44px;border-top:1px solid var(--site-line);font-size:11px;color:var(--site-muted)}
+.pulse-site-card-tools>button{display:grid;place-items:center;min-width:44px;min-height:44px;border:0;border-radius:6px;background:transparent;color:var(--site-muted)}
+.pulse-site-card-tools>button:hover{background:var(--site-tint)}
+.pulse-site-live-card .pulse-pace-card{height:340px;max-height:340px;border-radius:12px}
+.pulse-site-live-card .pulse-pace-header h2{font-size:13px;font-weight:600;letter-spacing:0;line-height:1.5}
+.pulse-site-live-card .pulse-pace-header>div{flex-wrap:wrap;gap:5px 8px}
+.pulse-site-live-card .pulse-pace-header .pulse-brand-mark{width:20px;height:20px}
+.pulse-site-live-card .pulse-pace-card button{min-height:44px}
+.pulse-site-live-card .pulse-pace-scroll{scrollbar-color:var(--pace-muted) var(--pace-bg)}
+.pulse-site-preview .pulse-site-scene-status{font-size:12px;line-height:1.7;min-height:40px;margin-top:10px}
+.pulse-site-scenarios{margin-top:8px}
+.pulse-site-preview .pulse-site-synthetic{font-size:12px;line-height:1.8}
+.pulse-site-preview .pulse-site-next-detail{font-size:12px;margin-top:0;line-height:1.8}
+.pulse-site-usage-link{margin-top:8px}
+.pulse-site-trust{display:grid;grid-template-columns:minmax(0,.85fr) minmax(0,1.15fr);gap:80px;padding:52px 0 56px;border-top:1px solid var(--site-line);scroll-margin-top:24px}
+.pulse-site-trust>h2{max-width:18ch}
+.pulse-site-trust h3{font-size:16px;font-weight:650;line-height:1.6;margin:0 0 8px}
+.pulse-site-trust p{font-size:14px;line-height:1.9;color:var(--site-muted)}
+.pulse-site-trust p+h3{margin-top:25px}
+.pulse-site-trust p+p{margin-top:10px}
+.pulse-site-trust-actions{display:flex;flex-wrap:wrap;gap:4px 20px;margin-top:15px}
+.pulse-site-trust-actions a{display:inline-flex;align-items:center;gap:7px;min-height:44px;color:var(--site-accent);font-size:13px}
+.pulse-site-faq summary{min-height:44px;align-content:center}
+.pulse-site-footer a{display:inline-flex;min-height:44px;align-items:center}
+@media(max-width:1100px){.pulse-site-hero{grid-template-columns:minmax(0,1fr) minmax(0,430px);gap:32px}.pulse-site-intro h1{font-size:43px}.pulse-site-trust{gap:40px;grid-template-columns:minmax(0,.75fr) minmax(0,1.25fr)}}
+@media(max-width:850px){.pulse-site-hero{grid-template-columns:1fr;gap:32px}.pulse-site-preview{width:100%;max-width:560px;margin:auto}.pulse-site-intro h1{max-width:18ch!important}.pulse-site-trust{grid-template-columns:1fr;gap:25px}.pulse-site-trust>h2{max-width:25ch}.pulse-site-intro .pulse-site-privacy{max-width:70ch!important}}
+@media(max-width:760px){.pulse-site-trust{padding:37px 0}.pulse-site-live-card{margin:0 10px 10px}.pulse-site-live-card .pulse-pace-card{height:350px;max-height:350px}.pulse-site-window-bar{gap:8px;padding:8px 10px}.pulse-site-window-bar>span{max-width:15ch}.pulse-site-window-bar>div{width:140px}.pulse-site-work-sample{padding:12px}.pulse-site-header{flex-wrap:wrap}.pulse-site-header nav{gap:6px}.pulse-site-header nav>a{font-size:11px}.pulse-site-brand strong{font-size:16px}.pulse-site-languages button{padding:4px 6px}}

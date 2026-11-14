@@ -1,10 +1,12 @@
-# Codex Pulse — 看见个人额度的消耗节奏
+# Codex Pulse — Windows 额度配速伴侣
 
 给 Windows 上的 Codex 一个随手可看的额度配速提示：余量、重置时间、消耗与时间进度一起看，知道何时可从容安排任务、何时该留些余量。提供 **清爽 Clear** 与 **刻度 Meter**、完整用量工作台与会话回放。
 
 **[English](README.en.md)** · **[下载 Windows 版](https://github.com/zhulongqihan/codex-pulse/releases/latest)** · [产品与交互演示](https://zhulongqihan.github.io/codex-pulse/) · [完整工作台演示](https://zhulongqihan.github.io/codex-pulse/?demo=1) · [截图](https://zhulongqihan.github.io/codex-pulse/gallery.html) · [反馈](https://github.com/zhulongqihan/codex-pulse/issues)
 
 > 独立开源项目，不隶属于 OpenAI。公开截图与网页演示仅使用合成数据。
+
+**下载前确认：**本体支持 Windows 10/11 x64，需要 WebView2。右上角跟随提示仅支持 Windows 商店版 Codex；订阅额度需要已有的 Codex ChatGPT 登录，API Key 模式可使用本机分析。桌面版会在本机读取既有登录以查询官方账号服务，只读本机日志、不上传会话。当前 EXE 尚无 Windows Authenticode 发布者签名，应用更新清单验签是另一种机制。[下载、数据访问与签名说明](docs/TRUST.md)。
 
 ## 功能
 
@@ -26,8 +28,9 @@
 - **Codex 客户端入口**：通过本地 MCP 插件，在支持 MCP Apps 的桌面客户端中查看额度、今日汇总、本轮观测与带来源的预告，并打开主窗／浮窗或消耗详情。面板支持六种语言，默认跟随 Pulse 外观，也可单独选择清爽／刻度；[安装说明](docs/CODEX_INTEGRATION.md)。
 - **两版外观与六种语言**：清爽／刻度、浅色／深色／系统、密度与动效分别选择；切换保留正在查看的数据。支持简体中文、繁体中文、English、日本語、한국어、Deutsch。
 - **导出与更新**：XLSX／Markdown 包含所选范围的汇总、日期、模型和项目。自有更新源验证签名、品牌、平台与包摘要，更新失败保留数据并恢复原程序。
+- **帮助与反馈**：设置内集中查看使用帮助、分享体验或报告问题。反馈摘要只包含可见的最少环境与用户选择项，先预览再复制，不自动上传账号、日志或会话。
 
-0.10.0 将日常仪表盘与用量分析分开：先看额度、重置、配速和今日参考成本，需要时再进入完整历史分析；账号与重置详情按需查看。升级保留本地数据、偏好和同账号观测，统计口径与导出格式保持兼容。查看[本版更新说明](docs/releases/v0.10.0.md)。
+0.11.0 明确下载前的兼容和数据访问边界，补充可交互的合成工作情境、按已返回额度安排首次使用的下一步，并在设置中加入帮助与反馈。升级保留本地数据、偏好和同账号观测，统计口径与导出格式保持兼容。查看[本版更新说明](docs/releases/v0.11.0.md)。
 
 ## 节奏卡片交互预览
 
@@ -59,6 +62,8 @@
 2. 完整解压到可写目录，例如 `F:\Apps\CodexPulse`，双击 **Start-Codex-Pulse.cmd** 或 **CodexPulse.exe**。
 3. 需要 Windows 10/11 x64 和 [Microsoft Edge WebView2 Evergreen Runtime](https://developer.microsoft.com/microsoft-edge/webview2/)。便携包不包含该系统运行时，不需要 Node.js 或 Rust。
 4. 在设置中确认 Codex Home，选择外观、本机日志扫描间隔与悬浮窗。账号查询需要已有的 ChatGPT 登录；API Key 模式不提供订阅额度。
+
+**第一次成功：**能看到账号实际返回的余量及重置信息，即可开始使用；只有周窗口也有效。预测需要足够的连续观测，可能暂时不出现，不应据此判断安装失败。账号没有返回额度时，到账号面板检查登录与连接；本机日志分析仍可单独使用。首次帮助可关闭，并从工具栏重新打开。
 
 需要桌面与开始菜单入口时，可使用程序内的创建快捷方式操作，或运行便携包中的 **Create-Codex-Pulse-Shortcuts.cmd**。移动程序目录后，重新创建即可修复入口。
 
@@ -134,9 +139,13 @@ pnpm exec wdio run ./wdio.pulse.conf.ts
 
 便携包与摘要输出到 `release/`。仅查看网页合成演示：`pnpm dev` 后打开 `http://127.0.0.1:5173/?demo=1`。
 
+维护者还可在精确 main 提交的检查通过后，手动构建带来源与哈希记录的[未签名生产候选](docs/PRODUCTION_CANDIDATES.md)；它不等同于正式 Release 或 Windows 发布者签名。
+
 ## 反馈与参与
 
 欢迎告诉我们哪里好用、哪里不顺手，以及你希望增加什么。无需提交代码，也能参与改进：
+
+在软件 **设置 → 帮助与反馈** 中可查看使用说明、打开体验讨论或问题表单。可选反馈摘要会先展示完整内容，由你决定是否复制和发送；不会自动附加真实账号、额度、项目路径、会话或原始错误日志。使用 GitHub 发言需要登录；仅查看网页演示无需账号。
 
 - [报告问题](https://github.com/zhulongqihan/codex-pulse/issues/new?template=bug_report.yml)：附软件版本、复现步骤和预期／实际表现。
 - [提出功能建议](https://github.com/zhulongqihan/codex-pulse/issues/new?template=feature_request.yml)，或在 [讨论区](https://github.com/zhulongqihan/codex-pulse/discussions) 分享使用体验、想法和问题。
