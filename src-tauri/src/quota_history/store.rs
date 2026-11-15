@@ -93,6 +93,9 @@ struct Baseline {
     cycle: i64,
     last_segment: i64,
 }
+// Official absolute reset seconds can jitter. Compare against the persisted cycle
+// anchor, rather than each latest reading, so small changes cannot accumulate.
+const RESET_JITTER_MILLIS: u64 = 2_000;
 pub(super) fn observe(
     connection: &mut Connection,
     identity: &str,
@@ -135,6 +138,14 @@ pub(super) fn observe(
             continue;
         }
         let previous=tx.query_row("SELECT minutes,reset,at,used,epoch,cycle,last_segment FROM baselines WHERE identity=?1 AND kind=?2",params![identity,kind],|r|Ok(Baseline{minutes:r.get(0)?,reset:r.get(1)?,at:r.get(2)?,used:r.get(3)?,epoch:r.get(4)?,cycle:r.get(5)?,last_segment:r.get(6)?})).optional().map_err(err)?;
+        let reset = previous
+            .as_ref()
+            .filter(|p| {
+                p.minutes == minutes
+                    && p.reset > at
+                    && p.reset.abs_diff(reset) <= RESET_JITTER_MILLIS
+            })
+            .map_or(reset, |p| p.reset);
         if let Some(previous) = &previous {
             if at < previous.at {
                 continue;

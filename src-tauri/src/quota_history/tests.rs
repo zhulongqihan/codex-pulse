@@ -73,6 +73,255 @@ fn same_day_remaining_80_to_72_records_eight_points_in_real_sqlite() {
         .unwrap();
     assert!(count > 0);
 }
+
+fn reset_limits(at: &str, used: f64, reset: &str) -> CodexLimitsResponse {
+    let mut response = limits(at, used);
+    response.session.as_mut().unwrap().resets_at = Some(reset.into());
+    response
+}
+
+#[test]
+fn reset_jitter_preserves_known_consumption_and_coverage_for_both_window_kinds() {
+    for kind in ["session", "weekly"] {
+        let dir = Temp::new();
+        let mut ledger = dir.ledger();
+        for (at, used, reset) in [
+            ("2026-01-01T10:00:00Z", 20.0, "2026-01-03T00:00:00Z"),
+            ("2026-01-01T10:01:00Z", 28.0, "2026-01-03T00:00:01Z"),
+        ] {
+            let mut response = reset_limits(at, used, reset);
+            if kind == "weekly" {
+                let mut window = response.session.take().unwrap();
+                window.window_minutes = Some(10080);
+                response.weekly = Some(window);
+            }
+            ledger.observe(Some(A), &response).unwrap();
+        }
+        let result = ledger.query(Some(A), RANGE).unwrap();
+        assert_eq!(result.daily[0].kind, kind);
+        assert_eq!(result.daily[0].consumed_percent_points, Some(8.0));
+        assert_eq!(result.daily[0].covered_minutes, 1.0);
+        assert_eq!(result.daily[0].cycle_count, 1);
+        assert!(ledger
+            .export_segments(Some(A), RANGE)
+            .unwrap()
+            .iter()
+            .all(|s| s.resets_at == "2026-01-03T00:00:00.000Z"));
+    }
+}
+
+#[test]
+fn reset_jitter_unchanged_readings_keep_the_persisted_anchor_through_restarts() {
+    let dir = Temp::new();
+    for (at, reset) in [
+        ("2026-01-01T10:00:00Z", "2026-01-03T00:00:00Z"),
+        ("2026-01-01T10:01:00Z", "2026-01-03T00:00:01Z"),
+        ("2026-01-01T10:02:00Z", "2026-01-02T23:59:59Z"),
+        ("2026-01-01T10:03:00Z", "2026-01-03T00:00:02Z"),
+        ("2026-01-01T10:04:00Z", "2026-01-02T23:59:58Z"),
+    ] {
+        let mut ledger = dir.ledger();
+        ledger
+            .observe(Some(A), &reset_limits(at, 20.0, reset))
+            .unwrap();
+    }
+    let ledger = dir.ledger();
+    let result = ledger.query(Some(A), RANGE).unwrap();
+    assert_eq!(result.daily[0].consumed_percent_points, Some(0.0));
+    assert_eq!(result.daily[0].status, "unchanged");
+    assert_eq!(result.daily[0].cycle_count, 1);
+    assert_eq!(result.daily[0].sample_count, 5);
+    assert_eq!(result.daily[0].covered_minutes, 4.0);
+    let segments = ledger.export_segments(Some(A), RANGE).unwrap();
+    assert_eq!(segments.len(), 2);
+    assert!(segments
+        .iter()
+        .all(|s| s.resets_at == "2026-01-03T00:00:00.000Z"));
+}
+
+#[test]
+fn reset_jitter_cannot_accumulate_into_unbounded_drift() {
+    let dir = Temp::new();
+    for (at, used, reset) in [
+        ("2026-01-01T10:00:00Z", 20.0, "2026-01-03T00:00:00Z"),
+        ("2026-01-01T10:01:00Z", 21.0, "2026-01-03T00:00:01Z"),
+        ("2026-01-01T10:02:00Z", 22.0, "2026-01-03T00:00:02Z"),
+        ("2026-01-01T10:03:00Z", 30.0, "2026-01-03T00:00:03Z"),
+    ] {
+        let mut ledger = dir.ledger();
+        ledger
+            .observe(Some(A), &reset_limits(at, used, reset))
+            .unwrap();
+    }
+    let ledger = dir.ledger();
+    let result = ledger.query(Some(A), RANGE).unwrap();
+    assert_eq!(result.daily[0].consumed_percent_points, Some(2.0));
+    assert_eq!(result.daily[0].cycle_count, 2);
+    assert_eq!(result.daily[0].covered_minutes, 2.0);
+    let segments = ledger.export_segments(Some(A), RANGE).unwrap();
+    let last = segments.last().unwrap();
+    assert_eq!(last.reason, "cycle_changed");
+    assert_eq!(last.resets_at, "2026-01-03T00:00:03.000Z");
+    assert_eq!(last.consumed_percent_points, None);
+}
+
+#[test]
+fn reset_jitter_duplicates_do_not_conflict_but_used_conflicts_keep_the_first_reading() {
+    let dir = Temp::new();
+    let mut ledger = dir.ledger();
+    observe(&mut ledger, "2026-01-01T10:00:00Z", 20.0);
+    assert!(!ledger
+        .observe(
+            Some(A),
+            &reset_limits("2026-01-01T10:00:00Z", 20.0, "2026-01-03T00:00:01Z",)
+        )
+        .unwrap());
+    ledger
+        .observe(
+            Some(A),
+            &reset_limits("2026-01-01T10:01:00Z", 28.0, "2026-01-02T23:59:59Z"),
+        )
+        .unwrap();
+    assert!(!ledger
+        .observe(
+            Some(A),
+            &reset_limits("2026-01-01T10:01:00Z", 28.0, "2026-01-03T00:00:01Z",)
+        )
+        .unwrap());
+    assert!(ledger
+        .observe(
+            Some(A),
+            &reset_limits("2026-01-01T10:01:00Z", 80.0, "2026-01-03T00:00:01Z",)
+        )
+        .unwrap());
+    observe(&mut ledger, "2026-01-01T10:02:00Z", 30.0);
+    let result = ledger.query(Some(A), RANGE).unwrap();
+    assert_eq!(result.daily[0].consumed_percent_points, Some(10.0));
+    assert_eq!(result.daily[0].sample_count, 3);
+    assert_eq!(result.daily[0].cycle_count, 1);
+    assert_eq!(result.daily[0].gap_count, 1);
+    assert_eq!(
+        ledger
+            .export_segments(Some(A), RANGE)
+            .unwrap()
+            .iter()
+            .filter(|s| s.reason == "conflict")
+            .count(),
+        1
+    );
+}
+
+#[test]
+fn reset_jitter_after_the_old_reset_expires_does_not_bridge_cycles() {
+    for at in ["2026-01-01T10:00:00Z", "2026-01-01T10:00:00.500Z"] {
+        let dir = Temp::new();
+        let mut ledger = dir.ledger();
+        ledger
+            .observe(
+                Some(A),
+                &reset_limits("2026-01-01T09:59:00Z", 20.0, "2026-01-01T10:00:00Z"),
+            )
+            .unwrap();
+        ledger
+            .observe(Some(A), &reset_limits(at, 28.0, "2026-01-01T10:00:01Z"))
+            .unwrap();
+        let result = ledger.query(Some(A), RANGE).unwrap();
+        assert_eq!(result.daily[0].consumed_percent_points, None);
+        assert_eq!(result.daily[0].covered_minutes, 0.0);
+        assert_eq!(result.daily[0].cycle_count, 2);
+        assert_eq!(
+            ledger
+                .export_segments(Some(A), RANGE)
+                .unwrap()
+                .last()
+                .unwrap()
+                .reason,
+            "cycle_changed"
+        );
+    }
+}
+
+#[test]
+fn reset_jitter_does_not_hide_counter_decreases_or_recording_epochs() {
+    for resumed in [false, true] {
+        let dir = Temp::new();
+        let mut ledger = dir.ledger();
+        observe(&mut ledger, "2026-01-01T10:00:00Z", 20.0);
+        observe(&mut ledger, "2026-01-01T10:01:00Z", 28.0);
+        if resumed {
+            ledger.set_enabled(false).unwrap();
+            ledger.set_enabled(true).unwrap();
+        }
+        ledger
+            .observe(
+                Some(A),
+                &reset_limits(
+                    "2026-01-01T10:02:00Z",
+                    if resumed { 60.0 } else { 10.0 },
+                    "2026-01-03T00:00:01Z",
+                ),
+            )
+            .unwrap();
+        ledger
+            .observe(
+                Some(A),
+                &reset_limits(
+                    "2026-01-01T10:03:00Z",
+                    if resumed { 62.0 } else { 12.0 },
+                    "2026-01-02T23:59:59Z",
+                ),
+            )
+            .unwrap();
+        let result = ledger.query(Some(A), RANGE).unwrap();
+        assert_eq!(result.daily[0].consumed_percent_points, Some(10.0));
+        assert_eq!(result.daily[0].covered_minutes, 2.0);
+        assert_eq!(result.daily[0].cycle_count, 1);
+        let segments = ledger.export_segments(Some(A), RANGE).unwrap();
+        assert_eq!(
+            segments[2].reason,
+            if resumed {
+                "recording_resumed"
+            } else {
+                "counter_decreased"
+            }
+        );
+        assert_eq!(segments[2].consumed_percent_points, None);
+    }
+}
+
+#[test]
+fn reset_jitter_preserves_same_day_gaps_and_unallocated_midnight_deltas() {
+    for (start, end, cross_day) in [
+        ("2026-01-01T10:00:00Z", "2026-01-01T12:01:00Z", false),
+        ("2026-01-01T23:59:00Z", "2026-01-02T00:01:00Z", true),
+    ] {
+        let dir = Temp::new();
+        let mut ledger = dir.ledger();
+        observe(&mut ledger, start, 20.0);
+        ledger
+            .observe(Some(A), &reset_limits(end, 28.0, "2026-01-03T00:00:01Z"))
+            .unwrap();
+        let result = ledger.query(Some(A), RANGE).unwrap();
+        assert!(result.daily.iter().all(|d| d.covered_minutes == 0.0));
+        assert!(result.daily.iter().all(|d| d.cycle_count == 1));
+        let segments = ledger.export_segments(Some(A), RANGE).unwrap();
+        assert_eq!(segments[1].consumed_percent_points, Some(8.0));
+        if cross_day {
+            assert_eq!(result.unallocated_count, 1);
+            assert!(result
+                .daily
+                .iter()
+                .all(|d| d.consumed_percent_points.is_none()));
+            assert_eq!(segments[1].reason, "cross_day");
+            assert_eq!(segments[1].date, None);
+        } else {
+            assert_eq!(result.daily[0].consumed_percent_points, Some(8.0));
+            assert_eq!(result.daily[0].gap_count, 1);
+            assert_eq!(segments[1].reason, "same_day_gap");
+        }
+    }
+}
+
 #[test]
 fn duplicate_out_of_order_and_same_millisecond_conflicts_never_double_count() {
     let dir = Temp::new();
