@@ -58,6 +58,8 @@ async function physicalKey(key: string) {
   // sole foreground process with this run's exact debug-e2e image path.
   const virtualKey = { Enter: 0x0d, ' ': 0x20, ArrowRight: 0x27, Home: 0x24 }[key];
   if (virtualKey === undefined) throw new Error('Unsupported quota native test key');
+  const expectedBinary = realpathSync(process.env.PULSE_TITLEBAR_EXPECTED_APP_BINARY!);
+  const harnessBinary = realpathSync(resolve(process.env.CARGO_TARGET_DIR || 'src-tauri/target', 'debug/codex-pulse.exe'));
   const script = `
 $ErrorActionPreference = 'Stop'
 $ProgressPreference = 'SilentlyContinue'
@@ -80,7 +82,8 @@ public static class PulseQuotaNativeKey {
 }
 '@
 $expected = [IO.Path]::GetFullPath($env:PULSE_TITLEBAR_EXPECTED_APP_BINARY)
-if ([IO.Path]::GetPathRoot($expected) -ne ('F:' + [IO.Path]::DirectorySeparatorChar) -or [IO.Path]::GetFileName([IO.Path]::GetDirectoryName($expected)) -ne 'debug' -or [IO.Path]::GetFileName($expected) -ne 'codex-pulse.exe') { throw 'Expected a debug-e2e image on F drive' }
+$harnessBinary = [IO.Path]::GetFullPath($env:PULSE_QUOTA_HARNESS_APP_BINARY)
+if (-not [String]::Equals($expected, $harnessBinary, [StringComparison]::OrdinalIgnoreCase)) { throw 'Expected this harness debug-e2e image' }
 $matchesImage = @(Get-Process -Name 'codex-pulse' -ErrorAction SilentlyContinue | Where-Object { $_.Path -and [String]::Equals([IO.Path]::GetFullPath($_.Path), $expected, [StringComparison]::OrdinalIgnoreCase) })
 if ($matchesImage.Count -ne 1) { throw 'Expected exactly one owned debug-e2e process' }
 [uint32]$foregroundProcess = 0
@@ -90,7 +93,7 @@ if (-not [PulseQuotaNativeKey]::Press([uint16]$env:PULSE_QUOTA_NATIVE_VIRTUAL_KE
 `;
   const result = spawnSync(join(process.env.WINDIR || 'C:/Windows', 'System32/WindowsPowerShell/v1.0/powershell.exe'),
     ['-NoProfile', '-NonInteractive', '-EncodedCommand', Buffer.from(script, 'utf16le').toString('base64')],
-    { env: { ...process.env, PULSE_QUOTA_NATIVE_VIRTUAL_KEY: String(virtualKey) }, encoding: 'utf8', windowsHide: true, timeout: 15000 });
+    { env: { ...process.env, PULSE_TITLEBAR_EXPECTED_APP_BINARY: expectedBinary, PULSE_QUOTA_HARNESS_APP_BINARY: harnessBinary, PULSE_QUOTA_NATIVE_VIRTUAL_KEY: String(virtualKey) }, encoding: 'utf8', windowsHide: true, timeout: 15000 });
   if (result.status !== 0) throw new Error(`Guarded native key input failed: ${result.stderr || result.error?.message}`);
 }
 
@@ -100,7 +103,7 @@ describe('Official quota history in the real offline Tauri app', () => {
     const data = process.env.PULSE_DATA_DIR!;
     const home = process.env.PULSE_CODEX_HOME!;
     expect(process.env.PULSE_OFFLINE).toBe('1');
-    expect(resolve(fixtureRoot)).toMatch(/^F:[\\/]/i);
+    expect(insideFixture(fixtureRoot, resolve('.local/native-parity'))).toBe(true);
     expect(insideFixture(data, fixtureRoot)).toBe(true);
     expect(insideFixture(home, fixtureRoot)).toBe(true);
     expect(process.env.CODEX_HOME).toBe(home);
