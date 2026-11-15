@@ -10,6 +10,8 @@
 
 Pulse 只读你选择的 Codex 日志，用于统计与回放；日志可能含提示词、工具结果、项目路径和其他私人内容。程序将自己的数据库、索引、偏好、诊断日志、额度观测及 WebView 缓存保存在程序旁的 `data`，或你指定的 `PULSE_DATA_DIR`。这些文件也可能含私人资料，不会自动上传或云同步。索引和缓存可能重建、更新或淘汰；需要长期保留的资料请另行备份，按自己的需要选择保留或移除。
 
+每日官方额度使用独立的 `quota-history.db` 长期保存最小读数、时间、覆盖与本地身份哈希；不保存访问令牌、刷新令牌或会话正文，不随日志缓存重建删除。记录默认开启，Pulse 运行时即使窗口隐藏也会后台只读采样；退出或休眠时停止。可在设置的数据来源分区关闭新记录，旧历史保留。备份或移动资料前请先退出 Pulse，并保留完整 `data`。
+
 账号查询在本机 Rust 进程中读取既有 Codex ChatGPT 登录。凭据不传给 Pulse 界面、导出或可选反馈摘要；访问官方服务时，请求仍需向官方发送访问令牌与适用的账号标识。登录和令牌续期由官方 Codex 管理，不应把密码、认证文件或原始会话发送给维护者。
 
 ### 哪些操作会联网
@@ -57,6 +59,8 @@ Updated: 2026-11-14. Codex Pulse is an independent open-source project maintaine
 ### Data kept locally
 
 Pulse reads your selected Codex logs without modifying them for statistics and replay. Logs may contain prompts, tool results, project paths and other private material. Pulse keeps its own database, indexes, preferences, diagnostics, quota observations and WebView cache in the adjacent `data` folder or your chosen `PULSE_DATA_DIR`. These files can also contain private information and are not automatically uploaded or cloud-synchronized. Indexes and caches may be rebuilt, refreshed or evicted. Back up information you need to retain, and choose which local files to keep or remove.
+
+Daily official quota history retains minimal readings, times, coverage and a local identity hash in a separate `quota-history.db`. It stores no access tokens, refresh tokens or conversation bodies and is not deleted by log-cache rebuilds. Recording is enabled by default while Pulse is running, including with hidden windows; quitting or sleep stops it. Disable new recording in Settings → Data source without removing history. Quit Pulse and retain the complete `data` folder before backup or relocation.
 
 The local Rust process reads an existing Codex ChatGPT sign-in for account queries. Credentials are not passed to Pulse's renderer, exports or optional feedback summary. Authenticated requests still send the access token and applicable account identifier to the official service. The official Codex client manages sign-in and renewal. Do not send passwords, authentication files or raw conversations to the maintainer.
 

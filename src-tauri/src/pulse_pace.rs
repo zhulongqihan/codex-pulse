@@ -191,7 +191,7 @@ fn parse_at(text: &str) -> Option<i64> {
         .map(|at| at.timestamp())
 }
 
-fn stable_identity(auth: &CodexAuth, environment: &CodexEnvironment) -> Option<String> {
+pub(crate) fn stable_identity(auth: &CodexAuth, environment: &CodexEnvironment) -> Option<String> {
     if !auth.is_chatgpt {
         return None;
     }

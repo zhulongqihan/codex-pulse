@@ -19,6 +19,8 @@ WebView2 下载：https://developer.microsoft.com/microsoft-edge/webview2/
 搬迁后在设置→桌面与 Codex检查快捷方式、登录启动与本地插件绑定，查看影响后按项修复；检测不改系统，未配置入口不会自动启用。宿主缓存的旧插件可能仍需从 Codex 插件页重新安装。
 自定义数据位置：启动前设置 PULSE_DATA_DIR 为绝对路径。
 查询额度需要已有 ChatGPT 登录；来源与账号数据不可用时仍可查看本地统计。
+
+每日额度默认在 Pulse 运行时后台记录，隐藏窗口仍继续；退出或休眠时停止。设置→数据来源可关闭新记录，旧历史保留。用量分析→官方额度记录可查看并独立导出；未知不补零，跨日未分配变化单列。搬迁或备份时先退出，再保留完整 `data`，包括独立的 `quota-history.db`。
 再次启动会找回同一 data 目录的已有窗口。关闭主窗口会隐藏到托盘；关闭桌面浮窗只隐藏浮窗，可从设置重新显示；右上角卡片的关闭只收起卡片；使用托盘的“退出”才会完全结束程序。浮窗图钉显示当前可执行的“置顶”或“取消置顶”。
 重置服务加载失败可单独重试，无需重新扫描日志。
 使用说明、体验讨论和问题表单在设置→帮助与反馈。可选摘要先预览再主动复制，不自动上传账号、额度、路径或会话。
@@ -50,6 +52,8 @@ Account queries require an existing ChatGPT sign-in. Local statistics work indep
 Opening the app again restores the existing window for the same data folder. Closing the main window hides it to the tray. Closing the desktop widget only hides it; show it again from settings. Closing the expanded corner card only collapses it. Choose Quit in the tray menu to exit completely. The widget pin names the current Pin or Unpin action.
 Retry a failed reset service directly without rescanning local logs.
 Find usage guidance, discussions and the bug form in Settings → Help & feedback. The optional summary is previewed before you choose to copy it; accounts, quota, paths and conversations are not uploaded automatically.
+
+Daily quota recording is enabled while Pulse is running, including with hidden windows; quitting or sleep stops it. Disable new recording under Settings → Data source without deleting history. Open Usage analysis → Official quota history for separate records and exports; unknown days are not zero-filled, and cross-day changes stay unallocated. Quit before backup or relocation and retain the complete `data` folder, including the separate `quota-history.db`.
 
 The current EXE has no Windows Authenticode publisher signature. Update-manifest signatures and package digests are separate mechanisms, not Windows publisher authentication. Do not disable system protection; retain policy-block messages and follow your device/organization policy.
 The desktop app uses the existing local sign-in to contact official account services, reads original logs without changing them, and adds no telemetry or conversation upload. Pricing and notices have their own external sources.

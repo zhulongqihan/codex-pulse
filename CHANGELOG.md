@@ -4,7 +4,16 @@ User-facing changes are grouped by release, following [Keep a Changelog](https:/
 
 ## [Unreleased]
 
-## [0.11.1] - 2026-11-14
+## [0.12.0] - 2026-11-15
+
+### Added / 新增
+
+- Retain daily official quota observations for weekly and short windows in a separate local history, including reset cycles, gaps, coverage and unallocated cross-day changes.
+- 独立保存周额度与短时额度的每日官方观测历史，保留重置周期、断档、覆盖和跨日未分配变化。
+- Record while the desktop process is running even when its windows are hidden; add an independent recording switch, today's summary, a history view and separate XLSX/Markdown exports.
+- 桌面进程运行时即使隐藏窗口也继续记录；新增独立记录开关、今日摘要、历史视图及独立 XLSX／Markdown 导出。
+- Keep unknown observations distinct from zero and import only verifiable older partial observations without double counting.
+- 未知不补零，仅导入能够验证的旧版部分观测，并防止重复累计。
 
 ### Fixed / 修复
 
@@ -15,7 +24,7 @@ User-facing changes are grouped by release, following [Keep a Changelog](https:/
 - Retain complete copying, full-content search, raw JSONL and turn navigation. Clearing a search restores the user's preview or expanded state.
 - 保留完整复制、全文搜索、原始 JSONL 与回合导航；清除搜索后恢复用户原先的预览或展开状态。
 
-[完整中英说明 / Full release notes](docs/releases/v0.11.1.md)
+[完整中英说明 / Full release notes](docs/releases/v0.12.0.md)
 
 ## [0.11.0] - 2026-11-14
 
@@ -282,8 +291,8 @@ User-facing changes are grouped by release, following [Keep a Changelog](https:/
 
 Earlier releases remain available in [GitHub Releases](https://github.com/zhulongqihan/codex-pulse/releases). / 更早版本保留在 GitHub Releases。
 
-[Unreleased]: https://github.com/zhulongqihan/codex-pulse/compare/v0.11.1...HEAD
-[0.11.1]: https://github.com/zhulongqihan/codex-pulse/releases/tag/v0.11.1
+[Unreleased]: https://github.com/zhulongqihan/codex-pulse/compare/v0.12.0...HEAD
+[0.12.0]: https://github.com/zhulongqihan/codex-pulse/releases/tag/v0.12.0
 [0.11.0]: https://github.com/zhulongqihan/codex-pulse/releases/tag/v0.11.0
 [0.10.0]: https://github.com/zhulongqihan/codex-pulse/releases/tag/v0.10.0
 [0.9.2]: https://github.com/zhulongqihan/codex-pulse/releases/tag/v0.9.2

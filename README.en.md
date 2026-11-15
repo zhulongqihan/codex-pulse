@@ -11,6 +11,7 @@ A quiet quota-pacing companion for Codex on Windows: view remaining quota and re
 ## Features
 
 - **Shared quota pacing:** the corner card, desktop widget and workspace share remaining quota, personal reset time, plain-language advice and daily/hourly reference allocations. Basic readings do not depend on a depletion forecast, and accounts returning only a weekly window remain useful.
+- **Daily official quota history:** retain weekly and short-window observed consumption across resets, with daily coverage, gaps, cycle details and separate exports in Usage analysis.
 - **Smooth client shortcut:** a shared icon and compact status without a brand word. The input-free card follows verified Microsoft Store Codex windows through Windows location events, hiding when another app is active, Codex is minimized or space is insufficient.
 - **Grounded extra indicators:** daily recorded changes and coverage in this cycle, a surplus-near-reset hint, and conditional remaining-at-reset ranges when sufficient observations exist. Missing history is not zero. Allocations are not new quota, and forecasts do not guarantee working time.
 - **Visible reset notices:** background notices show their source, expected window and unconfirmed state, with read state shared across windows. Expand explanations for expired, stale, unavailable or no-current-notice states and actual check times; a missing response is not inferred as withdrawal. Third-party global news stays separate from personal window expiry and is not presented as a personal reset confirmation.
@@ -30,7 +31,7 @@ A quiet quota-pacing companion for Codex on Windows: view remaining quota and re
 - **Exports and updates:** XLSX/Markdown contain range summary, daily, model and project statistics. Pulse updates verify the release signature, product, platform and package digest, preserving data and restoring the previous executable if startup fails.
 - **Help and feedback:** find usage guidance, experience discussions and bug reporting in settings. Preview a minimal summary of visible environment and selected options before copying it; account data, logs and conversations are not uploaded automatically.
 
-0.11.1 opens long replay messages as previews and renders their complete Markdown only on request. Full-text copying and search, raw JSONL and turn navigation remain available, alongside Help & feedback, first-use guidance and synthetic work scenarios. Upgrades retain local data, preferences and same-account observations, with compatible accounting rules and export formats. Read the [release notes](docs/releases/v0.11.1.md#english).
+0.12.0 adds daily official quota history with background read-only sampling while Pulse is running. Hiding the main window or widget keeps recording; quitting or sleeping stops it. History uses a separate local ledger, and recording can be disabled in settings. Replay retains long-message previews, complete copying and search. Read the [release notes](docs/releases/v0.12.0.md#english).
 
 ## Work context and interactive pace preview
 
@@ -55,6 +56,22 @@ Open historical trends and distributions from **Usage analysis** in the sidebar.
 | Clear | Meter |
 |---|---|
 | ![Clear Usage analysis with synthetic data](docs/screenshots/clear-analysis.png) | ![Meter Usage analysis with synthetic data](docs/screenshots/meter-analysis.png) |
+
+## Daily official quota history
+
+The dashboard shows today's observed consumption. Open **Usage analysis → Official quota history** to choose a date range and actual quota window, inspect daily bars and equivalent tables, open cycle evidence, or export a separate XLSX/Markdown file. One query covers up to 366 days; older history remains stored and can be reached with another custom range.
+
+| Clear | Meter |
+|---|---|
+| ![Clear daily official quota history, synthetic data](docs/screenshots/clear-quota-history.png) | ![Meter daily official quota history, synthetic data](docs/screenshots/meter-quota-history.png) |
+
+Recording is enabled by default and can be changed under **Settings → Data source**. While Pulse is running, it reads the selected account approximately every 60 seconds, with backoff for failures and rate limits. Hiding the main window, widget or corner indicator does not stop recording. Quitting or system sleep stops sampling; no system service or model request is added.
+
+Values are **percentage points**: remaining quota moving from 80% to 72% records 8 points. Weekly and short windows have different denominators and stay separate. Several cycles in one day can exceed 100 points. Account readings can include activity on other devices.
+
+Unknown days, a single baseline, unchanged readings and gaps remain distinct. Changes spanning midnight stay unallocated instead of being assigned or spread across days; missing samples are never zero-filled. A comparable same-day gap retains its endpoint change without claiming continuous coverage. The ledger timezone is fixed on first use and shown explicitly; later system or local-log timezone changes do not rewrite historical dates.
+
+Only verifiable older partial observations with matching identity, window and timezone can be imported. Unrecorded history cannot be reconstructed. This is observed account data, not an official daily bill, and it is not added to local tokens, API reference costs or quota snapshots found in logs.
 
 ## Run on Windows
 
@@ -86,6 +103,7 @@ The Models page explains missing historical quota samples rather than presenting
 | Measurement | Source and limits |
 |---|---|
 | Local tokens and conversations | Retained Codex logs, grouped in the statistical time zone shown in the interface; deleted records or unsynced history from other devices cannot be reconstructed |
+| Daily official quota history | Comparable changes in the current account readings, grouped in the fixed ledger timezone; unknown days stay unknown, cross-day changes stay separate, and history survives resets |
 | Account capacity and Credits | Fields actually returned by the official account service; these may include other devices; missing fields remain unknown |
 | Quota pacing and conditional forecasts | Pacing compares the remaining quota and time in the same actual window. Forecasts additionally require at least 15 minutes and significant observed consumption; quantization and recent variation widen the range, and local tokens are never converted to quota |
 | API reference costs | Model reference prices, **not subscription bills, Credits charges or extra fees**; missing prices remain unknown, while genuinely free models show zero |
@@ -108,6 +126,7 @@ Time progress is derived from the official window duration and reset time, indep
 - Development defaults to `.local/data`. `PULSE_DATA_DIR` selects an absolute writable app-data directory; `PULSE_CODEX_HOME` selects the read-only log source.
 - Original session files are read-only. Replay reads messages and tool records; the app's indexes and caches are private material and should not be published without review.
 - The Rust process reads the existing sign-in to query official account services. Credentials are not exposed to the renderer, exports or public logs. The official Codex client remains responsible for sign-in and token renewal.
+- Daily quota history uses separate `quota-history.db` and `quota-recording-preferences.json` files. Rebuilding the log cache does not delete this ledger, and disabling recording retains history. Quit Pulse before moving or backing up the complete `data` folder.
 - Pace observations use the same data folder and retain only a local identity hash; renderer and MCP snapshots expose neither the hash nor credentials.
 - Pulse adds no telemetry and does not upload local conversations. Per-session Credits send only the viewed thread IDs. Pricing and reset information have separate external sources.
 - Upgrading retains old data files and imports compatible appearance, language, refresh and widget preferences. The old executable-selection setting remains in its original configuration file.

@@ -6,6 +6,7 @@ import type { TrayPopoverData } from "../pulse/lib/tray-popover";
 import type { PulsePreferences } from "../pulse/lib/pulse-appearance";
 import { paceStates, syntheticCoachSnapshot, syntheticPaceSnapshot, type PaceSnapshot, type PaceWindow } from "../pulse/lib/pulse-pace";
 import { account, catalog, forecast, monthly, now, overview, projectAnalytics, projectDaySessions, projectSessionDays, replay, resets, retainedFrom, sessions, today } from "./fixtures";
+import { createQuotaHistoryDemo } from "./quota-history-fixtures";
 
 const unavailable = () => { throw new Error("此操作需要 Codex Pulse 桌面版。合成演示不会访问本机文件、账号或执行模型请求。 / Available in the desktop app only."); };
 const stamp = () => new Date().toISOString();
@@ -29,6 +30,7 @@ const preferences: PulsePreferences = { skinId: "clear", theme: "system", motion
 let tray: TrayPopoverData | null = null;
 let widget: TrayPopoverData | null = null;
 const creditScopes = new Map<string, { revision: number; active: boolean }>();
+const quotaHistory = createQuotaHistoryDemo(now);
 
 function initialSnapshot(): TrayPopoverData {
   const limits = coachAccount(); const day = overview("1d").totals;
@@ -56,6 +58,17 @@ function downloadMarkdown(range: string, path: string) {
   return { path: link.download, format: "markdown", range, exportedAt: stamp() };
 }
 
+function downloadQuotaMarkdown(range: string, path: string) {
+  const text = quotaHistory.markdown(range);
+  const link = document.createElement("a");
+  const objectUrl = URL.createObjectURL(new Blob([text], { type: "text/markdown;charset=utf-8" }));
+  link.href = objectUrl;
+  link.download = path.split(/[\\/]/).at(-1) || "CodexPulse-quota-demo.md";
+  link.click();
+  setTimeout(() => URL.revokeObjectURL(objectUrl), 1000);
+  return { path: link.download, format: "markdown", range, exportedAt: stamp() };
+}
+
 /** Explicit browser-only opt-in. A real Tauri window can never be replaced by demo IPC. */
 export function installDemoBridge() {
   if (isTauri() || new URLSearchParams(location.search).get("demo") !== "1") return;
@@ -78,6 +91,15 @@ export function installDemoBridge() {
       case "fetch_project_day_sessions": return projectDaySessions(args.project, args.date, args.query ?? "");
       case "fetch_model_pricing_catalog": case "refresh_model_pricing": return catalog();
       case "fetch_codex_limits": return coachAccount();
+      case "get_quota_recording_preferences": return quotaHistory.preferences();
+      case "set_quota_recording_enabled": {
+        const saved = quotaHistory.setEnabled(args.enabled);
+        await emit("quota-history-updated");
+        return saved;
+      }
+      case "fetch_quota_history": return quotaHistory.query(args.range);
+      case "fetch_quota_history_day": return quotaHistory.queryDay(args.date, args.kind, args.windowMinutes, args.before);
+      case "export_quota_history": return args.format === "markdown" ? downloadQuotaMarkdown(args.range, args.path) : unavailable();
       case "fetch_update_recovery_result": return null;
       case "fetch_codex_quota_forecast": return forecast();
       case "fetch_latest_codex_reset": return resets[0];

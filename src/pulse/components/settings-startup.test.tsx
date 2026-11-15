@@ -8,9 +8,10 @@ import { paceCopy } from "@/lib/pulse-pace-copy";
 import { integrationSettingsCopy } from "@/lib/integration-settings-copy";
 import { pulseCopy } from "@/lib/pulse-copy";
 import { feedbackCopy } from "@/lib/feedback-copy";
+import { quotaHistoryCopy } from "@/lib/quota-history-copy";
 import { SettingsPage } from "./settings-page";
 
-vi.mock("@tauri-apps/api/core", () => ({ isTauri: () => false, invoke: vi.fn() }));
+vi.mock("@tauri-apps/api/core", () => ({ isTauri: () => false, invoke: vi.fn(async (command: string) => command === "get_quota_recording_preferences" ? { schemaVersion: 1, enabled: true, timezone: "UTC" } : undefined) }));
 vi.mock("./pulse-codex-integration", () => ({ PulseCodexIntegration: () => null }));
 vi.mock("./pulse-source-settings", () => ({ PulseSourceSettings: () => null }));
 
@@ -38,6 +39,16 @@ beforeEach(async () => {
 });
 
 describe("login startup and the existing titlebar setting", () => {
+  it.each(["zh", "zh-Hant", "en", "ja", "ko", "de"])("places recording settings only in Data source in %s", async language => {
+    await i18n.changeLanguage(language);
+    render(<SettingsPage {...props({ initialSection: "general" })}/>);
+    const label = quotaHistoryCopy(language, "record");
+    expect(screen.queryByRole("switch", { name: label })).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole("tab", { name: pulseCopy(language, "source") }));
+    const source = screen.getByRole("tabpanel", { name: pulseCopy(language, "source") });
+    expect(within(source).getByRole("switch", { name: label })).toBeVisible();
+    expect(screen.getAllByRole("switch", { name: label })).toHaveLength(1);
+  });
   it("keeps downloading separate from applying an update on restart", async () => {
     const updateInfo={hasUpdate:true,currentVersion:"0.7.1",latestVersion:"0.7.2",latestTag:"v0.7.2",releaseName:"0.7.2",releaseNotes:"",releaseUrl:"https://github.com/zhulongqihan/codex-pulse/releases/tag/v0.7.2",etag:null,notModified:false};
     const handlers=props({updateInfo});const {rerender}=render(<SettingsPage {...handlers}/>);

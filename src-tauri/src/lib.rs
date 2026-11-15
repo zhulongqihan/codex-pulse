@@ -24,6 +24,9 @@ mod pulse_titlebar;
 mod pulse_update;
 mod pulse_update_result;
 mod quota_scope;
+mod quota_history_commands;
+mod quota_history_export;
+mod quota_history;
 mod scanner;
 mod session_credits;
 mod session_file;
@@ -1056,6 +1059,9 @@ pub fn run() {
             }
             let codex_home_path = app_data_dir.join("codex-home.json");
             usage_diagnostics::load_selection(&codex_home_path);
+            if quota_history::configure(&app_data_dir).is_err() {
+                log::warn!("Official quota history is unavailable; existing files are preserved");
+            }
             let pricing_cache_path = app_data_dir.join("codex-pricing-cache.json");
             app.manage(AppState {
                 database_path: database_path.clone(),
@@ -1172,6 +1178,11 @@ pub fn run() {
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
+            quota_history_commands::get_quota_recording_preferences,
+            quota_history_commands::set_quota_recording_enabled,
+            quota_history_commands::fetch_quota_history,
+            quota_history_commands::fetch_quota_history_day,
+            quota_history_commands::export_quota_history,
             pulse_desktop::get_pulse_preferences,
             pulse_desktop::get_legacy_preferences,
             pulse_desktop::set_pulse_preferences,

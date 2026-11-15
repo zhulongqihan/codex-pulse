@@ -5,6 +5,8 @@ import { CodexLimitsCard, CodexSidebarLimits } from "@/components/codex-limits-c
 import { CodexResetHistoryModal } from "@/components/codex-reset-history";
 import { DailyUsageTable } from "@/components/daily-usage-table";
 import { DashboardHeroCard, UsageAnalysisView } from "@/components/dashboard-hero-card";
+import { QuotaHistorySummary, QuotaHistoryView } from "@/components/quota-history";
+import { quotaHistoryCopy } from "@/lib/quota-history-copy";
 import { AccountSubscriptionFacts } from "@/components/account-subscription-facts";
 import { AppSidebar, clampSidebarWidth } from "@/components/app-sidebar";
 import { DashboardHeader, type DashboardView } from "@/components/dashboard-header";
@@ -61,6 +63,10 @@ export default function App() {
   const { t, i18n } = useTranslation();
   const copy = usePulseCopy();
   const shellCopy = useShellCopy();
+  const quotaCopy = (key: "local" | "title") => quotaHistoryCopy(i18n.resolvedLanguage ?? i18n.language, key);
+  const [analysisSource, setAnalysisSource] = useState<"local" | "official">("local");
+  const officialAnalysisVisited = useRef(false);
+  if (analysisSource === "official") officialAnalysisVisited.current = true;
   const preferences = usePulsePreferences();
   const [accountExpanded, setAccountExpanded] = useState(() => { try { return localStorage.getItem(ACCOUNT_EXPANDED) === "true"; } catch { return false; } });
   const compactWindow = useCompactWindow();
@@ -617,6 +623,7 @@ export default function App() {
             <div className="space-y-5">
               {showQuickStart && !compactWindow ? <PulseGettingStarted expanded={helpExpanded} onExpand={() => setHelpExpanded(value => !value)} localReady={!!overview?.updatedAt || diagnostics?.status === "ready"} accountReady={!!codexLimits} quotaAvailable={hasReturnedQuota(codexLimits)} source={diagnostics?.codexHome} busy={desktopAction !== null} notice={desktopNotice} error={desktopError} onSource={() => openSettings("source")} onAccount={showAccount} onWidget={() => void runDesktopAction("widget")} onShortcuts={() => void runDesktopAction("shortcuts")} onDismiss={dismissQuickStart}/> : null}
               {!showDashboard || !overview ? <PulseCoachOverview summary={!paceObservationsExpanded} onDetails={() => paceDetails.current()} onRecover={showAccount} observationsExpanded={paceObservationsExpanded}/> : null}
+              {!showDashboard || !overview ? <QuotaHistorySummary onOpenHistory={() => { setAnalysisSource("official"); navigate("analysis"); }}/> : null}
               {showDashboard && overview ? <DashboardHeroCard
                 overview={overview}
                   todayOverview={todayOverview}
@@ -633,6 +640,7 @@ export default function App() {
                 codexLimits={codexLimits}
                 coach={<PulseCoachOverview summary={!paceObservationsExpanded} onDetails={() => paceDetails.current()} onRecover={showAccount} observationsExpanded={paceObservationsExpanded}/>}
                 coachFirst
+                quotaHistory={<QuotaHistorySummary onOpenHistory={() => { setAnalysisSource("official"); navigate("analysis"); }}/>}
                 onOpenAnalysis={() => navigate("analysis")}
                 onOpenDay={(date) => { setSelectedProjectFilter(null); setSelectedSessionDate(date); navigate("sessions"); }}
               /> : null}
@@ -643,9 +651,14 @@ export default function App() {
             </Activity>
           ) : null}
 
-          {visitedViews.current.has("analysis") && overview ? (
+          {visitedViews.current.has("analysis") ? (
             <Activity mode={view === "analysis" ? "visible" : "hidden"}>
-              <UsageAnalysisView overview={overview} range={range} isBusy={isLoading || isRefreshing || isResetting || isExporting !== null} isExporting={isExporting} exportError={exportError} onRangeChange={handleRangeChange} onExport={(format) => void handleExport(format)} metrics={metrics} onOpenDay={date => { setSelectedProjectFilter(null); setSelectedSessionDate(date); navigate("sessions"); }}/>
+              <div className="pulse-analysis-source-tabs" role="group" aria-label={shellCopy("analysis")}>
+                <button type="button" aria-pressed={analysisSource === "local"} onClick={() => setAnalysisSource("local")}>{quotaCopy("local")}</button>
+                <button type="button" aria-pressed={analysisSource === "official"} onClick={() => setAnalysisSource("official")}>{quotaCopy("title")}</button>
+              </div>
+              {officialAnalysisVisited.current ? <Activity mode={analysisSource === "official" ? "visible" : "hidden"}><QuotaHistoryView/></Activity> : null}
+              <Activity mode={analysisSource === "local" ? "visible" : "hidden"}>{overview ? <UsageAnalysisView overview={overview} range={range} isBusy={isLoading || isRefreshing || isResetting || isExporting !== null} isExporting={isExporting} exportError={exportError} onRangeChange={handleRangeChange} onExport={(format) => void handleExport(format)} metrics={metrics} onOpenDay={date => { setSelectedProjectFilter(null); setSelectedSessionDate(date); navigate("sessions"); }}/> : <p className="pulse-empty">{t("common.no_data")}</p>}</Activity>
             </Activity>
           ) : null}
 

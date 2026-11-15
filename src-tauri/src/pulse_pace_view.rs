@@ -178,6 +178,9 @@ pub(crate) fn invalidate_scope() {
     let mut gate = POLL_GATE.lock().unwrap_or_else(|error| error.into_inner());
     gate.invalidate();
 }
+pub(crate) fn refresh_failed() -> bool {
+    POLL_GATE.lock().unwrap_or_else(|error| error.into_inner()).failed
+}
 /// Store/cache are already committed; release this lock before emitting update events.
 pub(crate) fn account_observation_finished(error: Option<&str>) {
     POLL_GATE
@@ -234,8 +237,8 @@ impl VisibilityProbe {
         self.visible
     }
 }
-fn needs_observations(titlebar: bool, widget: bool, main: bool) -> bool {
-    titlebar || widget || main
+fn needs_observations(titlebar: bool, widget: bool, main: bool, recording: bool) -> bool {
+    titlebar || widget || main || recording
 }
 
 /// All new pace refreshes share one cooldown. Identity checks never make a network request.
@@ -248,6 +251,10 @@ pub fn start_sampler(app: tauri::AppHandle) {
         let mut visibility = VisibilityProbe::new(Instant::now());
         loop {
             std::thread::sleep(Duration::from_secs(5));
+            // Retry local writes without adding an authenticated request or bypassing cooldown.
+            if crate::quota_history::retry_pending().unwrap_or(false) {
+                let _ = app.emit("quota-history-updated", ());
+            }
             if std::env::var("PULSE_OFFLINE").as_deref() == Ok("1") {
                 continue;
             }
@@ -279,7 +286,7 @@ pub fn start_sampler(app: tauri::AppHandle) {
                     })
                 })
             };
-            if !needs_observations(titlebar, widget, main) {
+            if !needs_observations(titlebar, widget, main, crate::quota_history::recording_enabled()) {
                 continue;
             }
             guarded_observation();
@@ -293,10 +300,16 @@ mod tests {
     use super::*;
     #[test]
     fn visible_main_or_widget_keeps_sampling_when_titlebar_is_disabled() {
-        assert!(needs_observations(false, false, true));
-        assert!(needs_observations(false, true, false));
-        assert!(needs_observations(true, false, false));
-        assert!(!needs_observations(false, false, false));
+        assert!(needs_observations(false, false, true, false));
+        assert!(needs_observations(false, true, false, false));
+        assert!(needs_observations(true, false, false, false));
+        assert!(!needs_observations(false, false, false, false));
+    }
+    #[test]
+    fn recording_continues_with_all_windows_hidden_and_disabled_recording_still_respects_display_demand() {
+        assert!(needs_observations(false, false, false, true));
+        assert!(!needs_observations(false, false, false, false));
+        assert!(needs_observations(false, true, false, false));
     }
     #[test]
     fn visibility_queries_are_cached_between_due_sampling_checks() {

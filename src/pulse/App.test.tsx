@@ -209,6 +209,21 @@ function mockLoadedDashboard() {
 }
 
 describe("App", () => {
+  it("opens official quota history when local usage overview is unavailable", async () => {
+    invokeMock.mockImplementation(async (command: string, args?: { range?: string }) => {
+      if (command === "fetch_quota_history") return { schemaVersion: 1, identityRevision: 0, scopeAvailable: true, enabled: true, timezone: "UTC", storageStatus: "ready", readStatus: "ready", updatedAt: null, startDate: "2026-11-15", endDate: "2026-11-15", daily: [], summaries: [], unallocatedCount: 0 };
+      if (command === "fetch_codex_limits") return limits(80);
+      if (command === "scan_usage") return scan(0);
+      if (command === "check_for_updates") return { hasUpdate: false };
+      if (command === "fetch_overview") throw new Error("Local logs unavailable");
+      throw new Error(`Unexpected invoke: ${command} ${args?.range ?? ""}`);
+    });
+    render(<App/>);
+    await userEvent.click(await screen.findByRole("button", { name: "View quota history" }));
+    expect(await screen.findByTestId("quota-history-view")).toBeVisible();
+    expect(screen.queryByTestId("usage-analysis")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Official quota history" })).toHaveAttribute("aria-pressed", "true");
+  });
   it("keeps Home focused and remembers the account rail choice across restarts", async () => {
     mockLoadedDashboard();
     const first = render(<App/>);
@@ -255,6 +270,19 @@ describe("App", () => {
     await userEvent.click(screen.getByRole("button", { name: "Back" }));
     expect(screen.getByTestId("analysis-nav-tab")).toHaveAttribute("aria-selected", "true");
     expect(main.scrollTop).toBe(640);
+  });
+
+  it("keeps each analysis source's controls when switching between local and official history", async () => {
+    mockLoadedDashboard(); render(<App/>); await screen.findByTestId("dashboard-hero");
+    await userEvent.click(screen.getByTestId("analysis-nav-tab"));
+    const distribution = within(screen.getByTestId("usage-analysis").querySelector<HTMLElement>(".pulse-distribution")!);
+    await userEvent.click(distribution.getByRole("button", { name: "Model" }));
+    await userEvent.click(screen.getByRole("button", { name: "Official quota history" }));
+    await userEvent.selectOptions(screen.getByRole("combobox", { name: "Quota history date range" }), "7d");
+    await userEvent.click(screen.getByRole("button", { name: "Local Tokens & estimated cost" }));
+    expect(within(screen.getByTestId("usage-analysis")).getByRole("button", { name: "Model" })).toHaveAttribute("aria-pressed", "true");
+    await userEvent.click(screen.getByRole("button", { name: "Official quota history" }));
+    expect(screen.getByRole("combobox", { name: "Quota history date range" })).toHaveValue("7d");
   });
 
   it.each([760, 1440])("opens and focuses the legacy account-details link at %ipx", async width => {
@@ -2624,7 +2652,7 @@ describe("App", () => {
     expect(resetHistoryInvokeMock).toHaveBeenCalledWith({ days: 30 });
     expect(resetHistoryInvokeMock).toHaveBeenCalledTimes(1);
     expect(invokeMock).not.toHaveBeenCalledWith("refresh_pulse_pace");
-    const bootstrapCalls = invokeMock.mock.calls.filter(([command]) => command !== "fetch_pulse_pace");
+    const bootstrapCalls = invokeMock.mock.calls.filter(([command]) => !["fetch_pulse_pace", "fetch_quota_history", "get_quota_recording_preferences"].includes(command));
     expect(bootstrapCalls.slice(0, 6)).toEqual([
       ["fetch_codex_limits"], ["fetch_overview", { range: "30d" }],
       ["fetch_overview", { range: "1d" }], ["scan_usage"],

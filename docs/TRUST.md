@@ -17,7 +17,7 @@ Codex Pulse 是独立 MIT 开源项目，不隶属于 OpenAI。请从 [zhulongqi
 
 原始 Codex 日志保持只读；本机分析和回放读取已留存的记录，不能恢复已删除或其他设备未同步的记录。应用自己的索引、缓存与偏好保存在程序旁 `data`，其中也可能含私人会话资料，请勿直接公开。
 
-账号查询在本机 Rust 进程中使用既有登录，向官方账号服务请求额度；凭据不交给界面、导出或反馈摘要。登录与续期仍在官方 Codex 中完成，Pulse 不要求把密码或认证文件发给维护者。可选逐会话 Credits 默认关闭，开启后只发送正在查看的真实线程 ID，不发送正文。价格和重置信息有各自的外部来源；这不是完全离线的软件。
+账号查询在本机 Rust 进程中使用既有登录，向官方账号服务请求额度；凭据不交给界面、导出或反馈摘要。登录与续期仍在官方 Codex 中完成，Pulse 不要求把密码或认证文件发给维护者。每日额度记录默认在程序运行时后台只读采样，隐藏窗口仍继续；可在设置的数据来源分区关闭新记录，退出或休眠时停止。历史只留本地，不是官方逐日账单。可选逐会话 Credits 默认关闭，开启后只发送正在查看的真实线程 ID，不发送正文。价格和重置信息有各自的外部来源；这不是完全离线的软件。
 
 Pulse 不添加遥测、不上传本机会话。帮助与反馈的摘要仅由你主动预览和复制，打开 GitHub 表单也不会自动发送。请继续检查你手工填写的文字与截图；不要上传 `auth.json`、完整 `data`/`.codex` 或原始会话。
 
@@ -48,7 +48,7 @@ Codex Pulse is an independent MIT-licensed project, not affiliated with OpenAI. 
 
 Original Codex logs remain read-only. Analysis and replay use retained records and cannot recover deleted or unsynced records from other devices. The app's own indexes, cache and preferences are stored in adjacent `data`; these can include private conversation material and should not be published as a whole.
 
-The local Rust process uses the existing sign-in to query official account services. Credentials are not passed to the renderer, exports or feedback summary. The official Codex client remains responsible for sign-in and renewal; Pulse never asks you to send passwords or authentication files to its maintainer. Optional per-session Credits are off by default and send only the viewed real thread IDs, not conversation bodies. Pricing and reset information have their own external sources. The desktop app is not entirely offline.
+The local Rust process uses the existing sign-in to query official account services. Credentials are not passed to the renderer, exports or feedback summary. The official Codex client remains responsible for sign-in and renewal; Pulse never asks you to send passwords or authentication files to its maintainer. Daily quota recording defaults to background read-only sampling while Pulse is running, including with hidden windows; disable new recording under Settings → Data source. Quitting or sleep stops it. History stays local and is not an official daily bill. Optional per-session Credits are off by default and send only the viewed real thread IDs, not conversation bodies. Pricing and reset information have their own external sources. The desktop app is not entirely offline.
 
 Pulse adds no telemetry and does not upload local conversations. You explicitly preview and copy the feedback summary; opening a GitHub form does not submit it. Review your own text and screenshots too: never upload `auth.json`, entire `data`/`.codex` folders or raw conversations.
 

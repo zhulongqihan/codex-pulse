@@ -25,6 +25,7 @@ type DashboardHeroCardProps = {
   metrics: MetricCardData[]; codexLimits: CodexLimitsResponse | null;
   onOpenDay?: (date: string) => void; onOpenToday?: () => void; onOpenAnalysis?: () => void;
   coach?: ReactNode;
+  quotaHistory?: ReactNode;
   coachFirst?: boolean;
 };
 
@@ -33,7 +34,7 @@ export type UsageAnalysisViewProps = Pick<DashboardHeroCardProps,
 >;
 
 /** Today is independent of the analysis range and any selected historical day. */
-export function DashboardHeroCard({ overview, isBusy, todayOverview = null, todayUnavailable = false, todayStale = false, onOpenToday, onOpenAnalysis, coach, coachFirst = false }: DashboardHeroCardProps) {
+export function DashboardHeroCard({ overview, isBusy, todayOverview = null, todayUnavailable = false, todayStale = false, onOpenToday, onOpenAnalysis, coach, quotaHistory, coachFirst = false }: DashboardHeroCardProps) {
   const { t, i18n } = useTranslation();
   const copy = usePulseCopy();
   const home = useHomeCopy();
@@ -84,6 +85,7 @@ export function DashboardHeroCard({ overview, isBusy, todayOverview = null, toda
       </dl></details> : null}
     </section>
     {!coachFirst ? coach : null}
+    {quotaHistory}
     <section className="pulse-dashboard-analysis-entry" aria-labelledby="pulse-analysis-entry-title">
       <div><h2 id="pulse-analysis-entry-title">{dashboard("history")}</h2><p>{dashboard("historyDescription")}</p></div>
       {onOpenAnalysis ? <button type="button" className="pulse-text-button" onClick={onOpenAnalysis}>{dashboard("openAnalysis")}<ArrowRight size={15} aria-hidden="true"/></button> : null}

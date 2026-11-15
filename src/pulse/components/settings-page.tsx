@@ -6,6 +6,7 @@ import { PulseInstallationSettings } from "./pulse-installation-settings";
 import { integrationSettingsCopy } from "@/lib/integration-settings-copy";
 import { PulsePaceSettings } from "./pulse-pace-settings";
 import { PulseFeedback } from "./pulse-feedback";
+import { QuotaRecordingSettings } from "./quota-history";
 import { feedbackCopy } from "@/lib/feedback-copy";
 import { usePulseCopy } from "@/lib/pulse-copy";
 import { useShellCopy } from "@/lib/shell-copy";
@@ -624,7 +625,7 @@ export function SettingsPage({
           >
             {menuBarContent}
           </section>
-          <section role="tabpanel" hidden={activeSection !== "source"} id="settings-section-source" aria-labelledby="settings-tab-source" className="pulse-settings-tab-panel"><PulseSourceSettings diagnostics={diagnostics} onChoose={onChooseSource} onDetect={onDetectSource} busy={isDisabled}/></section>
+          <section role="tabpanel" hidden={activeSection !== "source"} id="settings-section-source" aria-labelledby="settings-tab-source" className="pulse-settings-tab-panel space-y-4"><PulseSourceSettings diagnostics={diagnostics} onChoose={onChooseSource} onDetect={onDetectSource} busy={isDisabled}/><QuotaRecordingSettings disabled={isDisabled}/></section>
           <section
             id="settings-section-maintenance"
             role="tabpanel" hidden={activeSection !== "maintenance"}

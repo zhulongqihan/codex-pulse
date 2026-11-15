@@ -30,7 +30,7 @@ if (!process.env.PULSE_TITLEBAR_CONTROL_DIR) {
 }
 
 export const config: WebdriverIO.Config = {
-  runner: 'local', specs: [['./e2e/pulse.spec.ts', './e2e/titlebar.spec.ts']], maxInstances: 1,
+  runner: 'local', specs: [['./e2e/pulse.spec.ts', './e2e/titlebar.spec.ts', './e2e/quota-history.spec.ts']], maxInstances: 1,
   capabilities: [createTauriCapabilities(appBinaryPath)],
   services: [['@wdio/tauri-service', { appBinaryPath, driverProvider: 'embedded', logLevel: 'error', captureBackendLogs: true, captureFrontendLogs: true }]],
   framework: 'mocha', reporters: ['spec'], logLevel: 'error', outputDir: output,

@@ -175,6 +175,7 @@ fn publish_success(limits: &CodexLimitsResponse) {
     if let Some(app) = LIMITS_PUBLISHER.get() {
         use tauri::Emitter;
         let _ = app.emit("codex-limits-updated", limits);
+        let _ = app.emit("quota-history-updated", ());
         let _ = app.emit("pulse-pace-updated", ());
     }
 }
@@ -303,8 +304,15 @@ fn fetch_codex_limits_with_reuse(allow_reuse: bool) -> Result<CodexLimitsRespons
                 .unwrap_or_else(|error| error.into_inner());
             publication.apply(generation, || match result {
                 Ok(limits) => {
+                    // Only this accepted, current-scope publication writes the durable ledger.
+                    // A local disk failure does not change the successful service outcome.
+                    let _ = crate::quota_history::observe(pace_identity.as_deref(), limits);
                     crate::pulse_pace::observe(pace_identity.as_deref(), limits);
-                    crate::pulse_coach::observe(pace_identity.as_deref(), limits);
+                    // Until the only legacy source is durably frozen, do not replace its
+                    // account/cycle data. Current quota, pace and notices remain available.
+                    if crate::quota_history::legacy_source_secured() {
+                        crate::pulse_coach::observe(pace_identity.as_deref(), limits);
+                    }
                     if let Ok(mut cached) = LIMITS_SUCCESS.lock() {
                         *cached = Some(LimitsSuccess {
                             identity: identity.clone(),
@@ -333,6 +341,7 @@ fn fetch_codex_limits_with_reuse(allow_reuse: bool) -> Result<CodexLimitsRespons
                             serde_json::json!({"revision":scope_revision,"error":error}),
                         );
                         let _ = app.emit("pulse-pace-updated", ());
+                        let _ = app.emit("quota-history-updated", ());
                     }
                 }
             })
