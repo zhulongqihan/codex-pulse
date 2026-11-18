@@ -5,6 +5,7 @@ import type { DashboardView } from "@/components/dashboard-header";
 import { useShellCopy } from "@/lib/shell-copy";
 
 type AppSidebarProps = {
+  presentation?: "sidebar" | "paper-tabs";
   view: DashboardView;
   onViewChange: (view: DashboardView) => void;
   collapsed: boolean;
@@ -32,7 +33,7 @@ const MAX_WIDTH = 280;
 const COLLAPSED_WIDTH = 60;
 export const clampSidebarWidth = (width: number) => Math.min(MAX_WIDTH, Math.max(MIN_WIDTH, width));
 
-export function AppSidebar({ view, onViewChange, collapsed, onToggleCollapsed, width, onWidthChange, showLogsTab, limits }: AppSidebarProps) {
+export function AppSidebar({ view, onViewChange, collapsed, onToggleCollapsed, width, onWidthChange, showLogsTab, limits, presentation = "sidebar" }: AppSidebarProps) {
   const { t } = useTranslation();
   const copy = useShellCopy();
   const pageLabel = (label: string) => label === "analysis" ? copy("analysis") : t(`common.${label}`);
@@ -63,6 +64,23 @@ export function AppSidebar({ view, onViewChange, collapsed, onToggleCollapsed, w
       window.removeEventListener("blur", finishResize);
     };
   }, [isResizing, onWidthChange]);
+
+  if (presentation === "paper-tabs") {
+    const tabs = [...pages.filter(page => page.view !== "logs" || showLogsTab), {view: "settings", label: "settings", icon: Settings}] as const;
+    return <nav className="pulse-paper-navigation" aria-label={t("header.navigation")}>
+      <div role="tablist" aria-orientation="horizontal" aria-label={t("header.navigation")}>
+        {tabs.map(({view: page, label, icon: Icon}, index) => <button key={page} type="button" role="tab" aria-selected={view === page} tabIndex={view === page ? 0 : -1} data-testid={`${page}-nav-tab`} onClick={() => onViewChange(page)} onKeyDown={event => {
+          const next = event.key === "Home" ? 0 : event.key === "End" ? tabs.length - 1
+            : event.key === "ArrowRight" ? (index + 1) % tabs.length
+            : event.key === "ArrowLeft" ? (index + tabs.length - 1) % tabs.length : null;
+          if (next === null) return;
+          event.preventDefault();
+          onViewChange(tabs[next].view);
+          event.currentTarget.parentElement?.querySelector<HTMLButtonElement>(`[data-testid="${tabs[next].view}-nav-tab"]`)?.focus();
+        }}><Icon size={16} aria-hidden="true"/><span>{pageLabel(label)}</span></button>)}
+      </div>
+    </nav>;
+  }
 
   return (
     <aside data-app-sidebar style={{ width: collapsed ? COLLAPSED_WIDTH : resizingWidth ?? width }} className="relative flex h-full shrink-0 flex-col border-r border-border/80 bg-[rgb(var(--sidebar))]">

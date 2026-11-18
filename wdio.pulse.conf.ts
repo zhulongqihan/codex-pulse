@@ -26,11 +26,13 @@ if (!process.env.PULSE_TITLEBAR_CONTROL_DIR) {
   if (result.status !== 0) throw new Error(`Cannot start the owned synthetic host: ${result.stderr}`);
   const host = JSON.parse(result.stdout.trim());
   process.env.PULSE_TITLEBAR_TEST_PID = String(host.processId);
-  process.env.PULSE_TITLEBAR_CONTROL_DIR = host.controlDirectory;
+  // Keep the original Unicode path. Windows PowerShell's stdout can use the
+  // legacy code page, so decoding its echoed path as UTF-8 corrupts it.
+  process.env.PULSE_TITLEBAR_CONTROL_DIR = join(fixtureRoot, 'titlebar-host');
 }
 
 export const config: WebdriverIO.Config = {
-  runner: 'local', specs: [['./e2e/pulse.spec.ts', './e2e/titlebar.spec.ts', './e2e/quota-history.spec.ts']], maxInstances: 1,
+  runner: 'local', specs: [['./e2e/pulse.spec.ts', './e2e/titlebar.spec.ts', './e2e/quota-history.spec.ts', './e2e/paper-theme.spec.ts']], maxInstances: 1,
   capabilities: [createTauriCapabilities(appBinaryPath)],
   services: [['@wdio/tauri-service', { appBinaryPath, driverProvider: 'embedded', logLevel: 'error', captureBackendLogs: true, captureFrontendLogs: true }]],
   framework: 'mocha', reporters: ['spec'], logLevel: 'error', outputDir: output,

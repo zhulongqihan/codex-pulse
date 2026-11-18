@@ -2,8 +2,13 @@ import { useSyncExternalStore } from "react";
 import { invoke, isTauri } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 
+export const pulseSkins = ["clear", "meter", "paper"] as const;
+export type PulseSkin = typeof pulseSkins[number];
+export type PulseWidgetSkin = "follow" | PulseSkin;
+
 export type PulsePreferences = {
-  skinId: "clear" | "meter";
+  skinId: PulseSkin;
+  widgetSkin: PulseWidgetSkin;
   theme: "system" | "light" | "dark";
   motionLevel: "off" | "gentle" | "full";
   compactMode: boolean;
@@ -15,7 +20,7 @@ export type PulsePreferences = {
 };
 
 export const defaultPulsePreferences: PulsePreferences = {
-  skinId: "clear", theme: "system", motionLevel: "gentle", compactMode: false,
+  skinId: "clear", widgetSkin: "follow", theme: "system", motionLevel: "gentle", compactMode: false,
   respectReducedMotion: true, widgetVisible: false, widgetExpanded: false, widgetAlwaysOnTop: true, titlebarEnabled: true,
 };
 const storageKey = "codexpulse.appearance.v1";
@@ -31,7 +36,8 @@ const subscribe = (subscriber: () => void) => { subscribers.add(subscriber); ret
 export function normalizePulsePreferences(value: unknown): PulsePreferences {
   const data = value && typeof value === "object" ? value as Partial<PulsePreferences> : {};
   return {
-    skinId: data.skinId === "meter" ? "meter" : "clear",
+    skinId: data.skinId === "meter" || data.skinId === "paper" ? data.skinId : "clear",
+    widgetSkin: data.widgetSkin === "clear" || data.widgetSkin === "meter" || data.widgetSkin === "paper" ? data.widgetSkin : "follow",
     theme: data.theme === "light" || data.theme === "dark" ? data.theme : "system",
     motionLevel: data.motionLevel === "off" || data.motionLevel === "full" ? data.motionLevel : "gentle",
     compactMode: data.compactMode === true,
@@ -47,7 +53,7 @@ export function applyPulsePreferences(value: PulsePreferences) {
   const root = document.documentElement;
   const dark = value.theme === "dark" || (value.theme === "system" && window.matchMedia?.("(prefers-color-scheme: dark)").matches);
   const reduced = value.respectReducedMotion && window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
-  root.dataset.skin = value.skinId;
+  root.dataset.skin = window.location.hash === "#widget" && value.widgetSkin !== "follow" ? value.widgetSkin : value.skinId;
   root.dataset.theme = dark ? "dark" : "light";
   root.dataset.motion = reduced ? "off" : value.motionLevel;
   root.dataset.density = value.compactMode ? "compact" : "comfortable";

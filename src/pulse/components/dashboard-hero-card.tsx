@@ -26,6 +26,7 @@ type DashboardHeroCardProps = {
   onOpenDay?: (date: string) => void; onOpenToday?: () => void; onOpenAnalysis?: () => void;
   coach?: ReactNode;
   quotaHistory?: ReactNode;
+  quotaLimits?: ReactNode;
   coachFirst?: boolean;
 };
 
@@ -34,7 +35,7 @@ export type UsageAnalysisViewProps = Pick<DashboardHeroCardProps,
 >;
 
 /** Today is independent of the analysis range and any selected historical day. */
-export function DashboardHeroCard({ overview, isBusy, todayOverview = null, todayUnavailable = false, todayStale = false, onOpenToday, onOpenAnalysis, coach, quotaHistory, coachFirst = false }: DashboardHeroCardProps) {
+export function DashboardHeroCard({ overview, isBusy, todayOverview = null, todayUnavailable = false, todayStale = false, onOpenToday, onOpenAnalysis, coach, quotaHistory, quotaLimits, coachFirst = false }: DashboardHeroCardProps) {
   const { t, i18n } = useTranslation();
   const copy = usePulseCopy();
   const home = useHomeCopy();
@@ -60,6 +61,7 @@ export function DashboardHeroCard({ overview, isBusy, todayOverview = null, toda
   }
 
   return <section data-testid="dashboard-hero" className="pulse-overview pulse-home-overview pulse-dashboard-home">
+    {quotaLimits ? <div className="pulse-paper-quotas">{quotaLimits}</div> : null}
     {coachFirst ? coach : null}
     <section data-testid="today-summary" className="pulse-today-summary pulse-dashboard-today" aria-labelledby="pulse-today-title" aria-busy={!todayOverview && isBusy}>
       <div className="pulse-dashboard-today-heading">

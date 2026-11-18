@@ -43,6 +43,7 @@ import { useTranslation } from "react-i18next";
 import "./shell-ux.css";
 import "./shell-analysis.css";
 import { usePaceDetailsRequest } from "@/hooks/use-pace-details-request";
+import { PaperClock } from "@/components/paper-clock";
 
 const QUICK_START_DISMISSED = "codexpulse.quickstart.dismissed.v1";
 const ACCOUNT_EXPANDED = "codexpulse.account.expanded.v1";
@@ -416,9 +417,10 @@ export default function App() {
   </>;
 
   return (
-    <div className="pulse-app relative flex h-screen flex-col overflow-hidden bg-background text-foreground">
+    <div className="pulse-app relative flex h-screen flex-col overflow-hidden bg-background text-foreground" data-view={view}>
       <header className="pulse-topbar">
-        <div className="pulse-brand"><PulseBrandMark size={28}/><strong>Pulse</strong>{document.documentElement.dataset.demo === "true" ? <span className="pulse-demo-label">{copy("sample")}</span> : null}<span className="pulse-page-label">{view === "analysis" ? shellCopy("analysis") : t(`common.${view === "models" ? "model" : view === "projects" ? "project" : view}`)}</span></div>
+        <div className="pulse-brand"><PulseBrandMark size={28}/><strong>{preferences.skinId === "paper" ? "Codex Pulse" : "Pulse"}</strong>{document.documentElement.dataset.demo === "true" ? <span className="pulse-demo-label">{copy("sample")}</span> : null}<span className="pulse-page-label">{view === "analysis" ? shellCopy("analysis") : t(`common.${view === "models" ? "model" : view === "projects" ? "project" : view}`)}</span></div>
+        {preferences.skinId === "paper" ? <PaperClock/> : null}
         <div className="pulse-global-actions"><PulseStyleSwitcher/>
           <button type="button" data-testid="open-widget" className="pulse-shell-action pulse-widget-action" disabled={desktopAction !== null} aria-busy={desktopAction === "widget"} onClick={() => void runDesktopAction("widget")}><MonitorUp size={16}/><span>{shellCopy(desktopAction === "widget" ? "widgetBusy" : preferences.widgetVisible ? "widgetVisible" : "widget")}</span></button>
           <button type="button" data-testid="account-toggle" className="pulse-shell-action" aria-label={shellCopy("account")} aria-expanded={compactWindow ? accountDrawerOpen : accountExpanded && view !== "settings" && view !== "logs"} aria-controls={compactWindow ? "pulse-account-drawer" : "pulse-account-rail"} onClick={() => compactWindow || view === "settings" || view === "logs" ? showAccount() : setAccountExpanded(value => !value)}><UserRound size={17}/><span>{shellCopy("account")}</span>{compactWindow && quotaSummary ? <small className="pulse-account-summary">{quotaSummary} {shellCopy("remaining")}</small> : null}</button>
@@ -432,6 +434,7 @@ export default function App() {
       <div data-tauri-drag-region aria-hidden="true" className="absolute inset-x-0 top-0 z-10 h-[var(--window-controls-height)] select-none" />
       {true ? (
         <AppSidebar
+          presentation={preferences.skinId === "paper" ? "paper-tabs" : "sidebar"}
           view={view}
           onViewChange={next => next === "settings" ? openSettings() : navigate(next)}
           collapsed={sidebarCollapsed}
@@ -641,6 +644,7 @@ export default function App() {
                 coach={<PulseCoachOverview summary={!paceObservationsExpanded} onDetails={() => paceDetails.current()} onRecover={showAccount} observationsExpanded={paceObservationsExpanded}/>}
                 coachFirst
                 quotaHistory={<QuotaHistorySummary onOpenHistory={() => { setAnalysisSource("official"); navigate("analysis"); }}/>}
+                quotaLimits={preferences.skinId === "paper" ? <CodexSidebarLimits limits={codexLimits} error={codexLimitsError} isLimitsRefreshing={isLimitsRefreshing} onRefreshLimits={() => void handleLimitsRefresh()} isWindowActivating={isWindowActivating} windowActivationStatus={windowActivationStatus} windowActivationError={windowActivationError} onActivateWindow={() => void handleActivateCodexWindow()}/> : undefined}
                 onOpenAnalysis={() => navigate("analysis")}
                 onOpenDay={(date) => { setSelectedProjectFilter(null); setSelectedSessionDate(date); navigate("sessions"); }}
               /> : null}

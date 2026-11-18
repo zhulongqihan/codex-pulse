@@ -25,6 +25,13 @@ describe("native empty widget size", () => {
     expect(preferredWidgetHeight(false, true, 350)).toBe(180); expect(preferredWidgetHeight(true, false, 250)).toBe(480);
     expect(preferredWidgetHeight(true, true, 100)).toBe(220); expect(preferredWidgetHeight(true, true, 320.2)).toBe(321); expect(preferredWidgetHeight(true, true, 999)).toBe(480); expect(preferredWidgetHeight(true, true, NaN)).toBe(480);
   });
+  it("uses a short paper strip while measuring extra collapsed content without altering old skins", () => {
+    expect(preferredWidgetHeight(false, false, 60, "paper")).toBe(84);
+    expect(preferredWidgetHeight(false, true, 111.2, "paper")).toBe(112);
+    expect(preferredWidgetHeight(false, true, 999, "paper")).toBe(180);
+    expect(preferredWidgetHeight(true, true, 100, "paper")).toBe(480);
+    expect(preferredWidgetHeight(false, true, 60, "meter")).toBe(180);
+  });
   it("recalculates after native prefs restore 480 and restores 480 when a real zero or stale value arrives", async () => {
     const failure = vi.fn(), view = render(<Harness failure={failure}/>); await frame(); expect(native.resize).toHaveBeenLastCalledWith(expect.objectContaining({ width: 350, height: 252 }));
     Object.defineProperty(window, "innerHeight", { value: 252, configurable: true }); native.event?.(); await frame(); expect(native.resize).toHaveBeenCalledTimes(1);

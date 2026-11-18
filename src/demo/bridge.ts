@@ -3,7 +3,7 @@ import { emit } from "@tauri-apps/api/event";
 import { mockIPC, mockWindows } from "@tauri-apps/api/mocks";
 import appManifest from "../../package.json";
 import type { TrayPopoverData } from "../pulse/lib/tray-popover";
-import type { PulsePreferences } from "../pulse/lib/pulse-appearance";
+import { normalizePulsePreferences } from "../pulse/lib/pulse-appearance";
 import { paceStates, syntheticCoachSnapshot, syntheticPaceSnapshot, type PaceSnapshot, type PaceWindow } from "../pulse/lib/pulse-pace";
 import { account, catalog, forecast, monthly, now, overview, projectAnalytics, projectDaySessions, projectSessionDays, replay, resets, retainedFrom, sessions, today } from "./fixtures";
 import { createQuotaHistoryDemo } from "./quota-history-fixtures";
@@ -26,14 +26,15 @@ function coachAccount() {
 }
 const scan = () => ({ importedDays: overview("all").daily.length, scannedAt: stamp(), timezone: "Asia/Shanghai", metrics: { totalMs: 0, pricingMs: 0, parseMs: 0, dbMs: 0, filesScanned: sessions.length, filesParsed: 0, filesReused: sessions.length, bytesRead: 0 } });
 const paths = { data: "F:/Demo/CodexPulse/data", logs: "F:/Demo/CodexPulse/data/logs", profile: "F:/Demo/CodexPulse/data/webview", temporary: "F:/Demo/CodexPulse/data/tmp", exports: "F:/Demo/CodexPulse/data/exports" };
-const preferences: PulsePreferences = { skinId: "clear", theme: "system", motionLevel: "gentle", compactMode: false, respectReducedMotion: true, widgetVisible: false, widgetExpanded: false, widgetAlwaysOnTop: true, titlebarEnabled: true };
+const appearanceStorageKey = "codexpulse.appearance.v1";
+const preferences = normalizePulsePreferences(null);
 let tray: TrayPopoverData | null = null;
 let widget: TrayPopoverData | null = null;
 const creditScopes = new Map<string, { revision: number; active: boolean }>();
 const quotaHistory = createQuotaHistoryDemo(now);
 
 function initialSnapshot(): TrayPopoverData {
-  const limits = coachAccount(); const day = overview("1d").totals;
+  const limits = coachAccount(); const usage = overview("1d"); const day = usage.totals;
   const quotas: TrayPopoverData["quotas"] = (["session", "weekly"] as const).flatMap(kind => {
     const window = limits[kind];
     if (!window) return [];
@@ -42,6 +43,13 @@ function initialSnapshot(): TrayPopoverData {
       usedText: `${window.usedPercent}%`, resetText: minutes == null ? "—" : minutes >= 1440 ? `${Math.ceil(minutes / 1440)}d` : `${minutes}m` }];
   });
   return { account: limits.account ?? null, membership: "Pro · Demo", workspace: "Synthetic workspace", updatedAt: limits.updatedAt, stale: false,
+    integration: {
+      schemaVersion: 1,
+      today: { date: today, timezone: usage.timezone, totalTokens: day.totalTokens, costUSD: day.costUSD, updatedAt: usage.updatedAt, stale: false },
+      quotas: (["session", "weekly"] as const).map(kind => ({ kind, windowMinutes: limits[kind]?.windowMinutes ?? null,
+        remainingPercent: limits[kind]?.remainingPercent ?? null, resetsAt: limits[kind]?.resetsAt ?? null })),
+      quotaUpdatedAt: limits.updatedAt, quotaStale: false,
+    },
     quotas,
     tokens: { value: (day.totalTokens / 1000).toFixed(1) + "K", exact: day.totalTokens.toLocaleString() }, cost: day.costUSD === null ? "—" : "$" + day.costUSD.toFixed(3),
     labels: { remaining: "剩余 / Remaining", today: "今日 / Today", cost: "API 估价", unavailable: "未提供", showMain: "主窗口", quit: "退出" } };
@@ -72,6 +80,8 @@ function downloadQuotaMarkdown(range: string, path: string) {
 /** Explicit browser-only opt-in. A real Tauri window can never be replaced by demo IPC. */
 export function installDemoBridge() {
   if (isTauri() || new URLSearchParams(location.search).get("demo") !== "1") return;
+  try { Object.assign(preferences, normalizePulsePreferences(JSON.parse(localStorage.getItem(appearanceStorageKey) ?? "null"))); }
+  catch { Object.assign(preferences, normalizePulsePreferences(null)); }
   document.documentElement.dataset.demo = "true";
   tray = initialSnapshot(); widget = initialSnapshot();
   const label = location.hash === "#tray" ? "tray" : location.hash === "#widget" ? "widget" : "main";
@@ -108,7 +118,13 @@ export function installDemoBridge() {
       case "get_pulse_paths": return paths;
       case "get_pulse_preferences": return preferences;
       case "get_legacy_preferences": return null;
-      case "set_pulse_preferences": Object.assign(preferences, args.patch ?? {}); await emit("pulse-preferences-changed", preferences); return preferences;
+      case "set_pulse_preferences": {
+        const saved = normalizePulsePreferences({ ...preferences, ...args.patch });
+        localStorage.setItem(appearanceStorageKey, JSON.stringify(saved));
+        Object.assign(preferences, saved);
+        await emit("pulse-preferences-changed", preferences);
+        return preferences;
+      }
       case "get_tray_popover": return tray;
       case "update_tray": tray = args.payload?.popover ?? tray; await emit("tray-popover-updated", tray); return null;
       case "get_widget_snapshot": return widget;

@@ -1,6 +1,6 @@
 # Codex Pulse — A Windows Quota-Pacing Companion
 
-A quiet quota-pacing companion for Codex on Windows: view remaining quota and reset time together, compare consumption with the window's time progress, and plan upcoming tasks. Includes **Clear** and **Meter**, a full usage workspace, and session replay.
+A quiet quota-pacing companion for Codex on Windows: view remaining quota and reset time together, compare consumption with the window's time progress, and plan upcoming tasks. Includes **Clear**, **Meter** and **Paper**, a full usage workspace, and session replay.
 
 **[简体中文](README.md)** · **[Download for Windows](https://github.com/zhulongqihan/codex-pulse/releases/latest)** · [Product and interactive preview](https://zhulongqihan.github.io/codex-pulse/) · [Full workspace demo](https://zhulongqihan.github.io/codex-pulse/?demo=1) · [Screenshots](https://zhulongqihan.github.io/codex-pulse/gallery.html) · [Issues](https://github.com/zhulongqihan/codex-pulse/issues)
 
@@ -16,8 +16,8 @@ A quiet quota-pacing companion for Codex on Windows: view remaining quota and re
 - **Grounded extra indicators:** daily recorded changes and coverage in this cycle, a surplus-near-reset hint, and conditional remaining-at-reset ranges when sufficient observations exist. Missing history is not zero. Allocations are not new quota, and forecasts do not guarantee working time.
 - **Visible reset notices:** background notices show their source, expected window and unconfirmed state, with read state shared across windows. Expand explanations for expired, stale, unavailable or no-current-notice states and actual check times; a missing response is not inferred as withdrawal. Third-party global news stays separate from personal window expiry and is not presented as a personal reset confirmation.
 - **A focused daily dashboard:** current quota, personal reset time, pacing guidance and today's API reference cost stay together. Today's local activity remains independent of historical filters; pacing evidence and breakdowns open on demand.
-- **Separate Usage analysis:** open selected-period totals, complete trends and project/model distributions from the sidebar, select a date for detail, and export the same range as XLSX or Markdown.
-- **Seven work views:** dashboard, usage analysis, sessions, models, daily, monthly and projects, plus settings and optional diagnostics. Collapse or resize navigation and return from settings to your previous view.
+- **Separate Usage analysis:** open selected-period totals, complete trends and project/model distributions, select a date for detail, and export the same range as XLSX or Markdown.
+- **Seven work views:** dashboard, usage analysis, sessions, models, daily, monthly and projects, plus settings and optional diagnostics. Clear and Meter have a collapsible, resizable sidebar; Paper uses horizontal page tabs. Return from settings to your previous view.
 - **Complete date ranges:** nine presets, all retained history and custom inclusive ranges. Daily averages use calendar days. The monthly view independently queries the current month to date and the previous 11 calendar months, distinguishing missing retention, partial retention and zero activity.
 - **Tokens and reference costs:** input, cached input, output, cache hit rate, model unit prices and a searchable price catalog. Charts provide date selection, legends, units, a data table and fullscreen viewing. Compare models, dates and projects identified by their complete paths.
 - **Main-list session search:** search loaded sessions by title, ID, model or project while retaining matching agent groups. Combine with project filters and clear the query to restore the original list, without rescanning logs. Project-detail and replay searches remain available.
@@ -26,12 +26,12 @@ A quiet quota-pacing companion for Codex on Windows: view remaining quota and re
 - **Optional per-session Credits:** off by default; query only the real thread IDs currently being viewed, without sending conversation bodies. Preserve exact decimals, negative adjustments, cached values, cooldowns and unavailable states.
 - **Local sources and maintenance:** incremental scanning, compressed archives, one selected native/WSL environment, targeted session/project rescans, diagnostics and cache rebuilding.
 - **Desktop companions:** a configurable tray information panel and an independent draggable, pinnable, expandable quota-pacing widget. Launch at sign-in and automatic refresh are supported.
-- **Codex desktop entry:** a local MCP plugin shows quota, today's summary, cycle observations and sourced notices in a desktop client with MCP Apps support. Open the dashboard, widget or consumption details. The six-language panel follows Pulse preferences by default, with optional panel-only Clear/Meter selection; see the [installation guide](docs/CODEX_INTEGRATION.en.md).
-- **Two styles and six languages:** Clear/Meter, light/dark/system, density and motion are independent preferences that preserve your working state. Supports Simplified Chinese, Traditional Chinese, English, Japanese, Korean and German.
+- **Codex desktop entry:** a local MCP plugin shows quota, today's summary, cycle observations and sourced notices in a desktop client with MCP Apps support. Open the dashboard, widget or consumption details. The six-language panel follows Pulse preferences by default, with optional panel-only Clear, Meter or Paper selection; see the [installation guide](docs/CODEX_INTEGRATION.en.md).
+- **Three styles and six languages:** choose Clear, Meter or Paper under **Settings → Appearance**. Light/dark/system, density and motion are independent preferences. Switching styles preserves your working state. The floating widget follows the workspace style by default and can use a different style under **Settings → Desktop & Codex**. Supports Simplified Chinese, Traditional Chinese, English, Japanese, Korean and German.
 - **Exports and updates:** XLSX/Markdown contain range summary, daily, model and project statistics. Pulse updates verify the release signature, product, platform and package digest, preserving data and restoring the previous executable if startup fails.
 - **Help and feedback:** find usage guidance, experience discussions and bug reporting in settings. Preview a minimal summary of visible environment and selected options before copying it; account data, logs and conversations are not uploaded automatically.
 
-0.12.0 adds daily official quota history with background read-only sampling while Pulse is running. Hiding the main window or widget keeps recording; quitting or sleeping stops it. History uses a separate local ledger, and recording can be disabled in settings. Replay retains long-message previews, complete copying and search. Read the [release notes](docs/releases/v0.12.0.md#english).
+0.13.0 adds Paper, a journal-style workspace with paper tabs and a matching floating widget. The widget can follow the workspace or use its own style. Read the [release notes](docs/releases/v0.13.0.md#english).
 
 ## Work context and interactive pace preview
 
@@ -41,29 +41,29 @@ A quiet quota-pacing companion for Codex on Windows: view remaining quota and re
 
 Try the [roomy quota](https://zhulongqihan.github.io/codex-pulse/?demo=1&coachScenario=roomy#pulse-pace), [high pace](https://zhulongqihan.github.io/codex-pulse/?demo=1&coachScenario=fast#pulse-pace), [reset notice](https://zhulongqihan.github.io/codex-pulse/?demo=1&coachScenario=notice#pulse-pace), and [stale data](https://zhulongqihan.github.io/codex-pulse/?demo=1&coachScenario=stale#pulse-pace) states. These run the implemented interface components with synthetic readings and notices only.
 
-## Clear and Meter workspaces
+## Clear, Meter and Paper workspaces
 
-| Clear | Meter |
-|---|---|
-| ![Clear with synthetic data](docs/screenshots/clear-overview.png) | ![Meter with synthetic data](docs/screenshots/meter-overview.png) |
+| Clear | Meter | Paper |
+|---|---| --- |
+| ![Clear with synthetic data](docs/screenshots/clear-overview.png) | ![Meter with synthetic data](docs/screenshots/meter-overview.png) | ![Paper dashboard with synthetic data](docs/screenshots/paper-dashboard.png) |
 
-Both styles share the same capabilities. The dashboard prioritizes quota and today's reference cost; Usage analysis in the sidebar retains complete-range trends, distributions and exports. Clear uses lightweight comparisons and continuous tables; Meter emphasizes one dark trend field. Daily detail, a data table, fullscreen viewing and keyboard controls remain available.
+All three styles share the same capabilities. The dashboard prioritizes quota and today's reference cost; Usage analysis retains complete-range trends, distributions and exports. Clear uses lightweight comparisons and continuous tables; Meter emphasizes one dark trend field, and Paper uses a bound-journal layout with page tabs and textured paper. Daily detail, a data table, fullscreen viewing and keyboard controls remain available.
 
 ### Separate Usage analysis
 
-Open historical trends and distributions from **Usage analysis** in the sidebar. Today's dashboard remains independent; the range selector, chart and exports use the same period.
+Open historical trends and distributions from **Usage analysis**. Today's dashboard remains independent; the range selector, chart and exports use the same period.
 
-| Clear | Meter |
-|---|---|
-| ![Clear Usage analysis with synthetic data](docs/screenshots/clear-analysis.png) | ![Meter Usage analysis with synthetic data](docs/screenshots/meter-analysis.png) |
+| Clear | Meter | Paper |
+|---|---| --- |
+| ![Clear Usage analysis with synthetic data](docs/screenshots/clear-analysis.png) | ![Meter Usage analysis with synthetic data](docs/screenshots/meter-analysis.png) | ![Paper Usage analysis with synthetic data](docs/screenshots/paper-analysis-local.png) |
 
 ## Daily official quota history
 
 The dashboard shows today's observed consumption. Open **Usage analysis → Official quota history** to choose a date range and actual quota window, inspect daily bars and equivalent tables, open cycle evidence, or export a separate XLSX/Markdown file. One query covers up to 366 days; older history remains stored and can be reached with another custom range.
 
-| Clear | Meter |
-|---|---|
-| ![Clear daily official quota history, synthetic data](docs/screenshots/clear-quota-history.png) | ![Meter daily official quota history, synthetic data](docs/screenshots/meter-quota-history.png) |
+| Clear | Meter | Paper |
+|---|---| --- |
+| ![Clear daily official quota history, synthetic data](docs/screenshots/clear-quota-history.png) | ![Meter daily official quota history, synthetic data](docs/screenshots/meter-quota-history.png) | ![Paper daily official quota history with synthetic data](docs/screenshots/paper-analysis-official.png) |
 
 Recording is enabled by default and can be changed under **Settings → Data source**. While Pulse is running, it reads the selected account approximately every 60 seconds, with backoff for failures and rate limits. Hiding the main window, widget or corner indicator does not stop recording. Quitting or system sleep stops sampling; no system service or model request is added.
 
@@ -178,7 +178,7 @@ Each application update goes through a user-workflow review, necessary correctio
 
 ## License and attribution
 
-MIT licensed. The Rust engine, orchestration, replay components, translations and tests reuse [Codex Usage Desktop 5.6.0](https://github.com/itvincent-git/codex-usage-desktop) by Vincent and contributors, with its original license preserved. Pulse adds its own identity, Clear/Meter interface, portable storage, floating widget and update channel.
+MIT licensed. The Rust engine, orchestration, replay components, translations and tests reuse [Codex Usage Desktop 5.6.0](https://github.com/itvincent-git/codex-usage-desktop) by Vincent and contributors, with its original license preserved. Pulse adds its own identity, Clear, Meter and Paper interfaces, portable storage, floating widget and update channel.
 
 [Changelog](CHANGELOG.md) · [Versioning and compatibility](VERSIONING.md) · [Source notices](THIRD_PARTY_NOTICES.md) · [Dependency licenses](THIRD_PARTY_LICENSES.txt) · [Contributing](CONTRIBUTING.md) · [Privacy and security reporting](SECURITY.md)
 

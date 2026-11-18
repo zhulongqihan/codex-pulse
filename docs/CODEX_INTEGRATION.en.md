@@ -46,7 +46,9 @@ The panel shows today's tokens, estimated cost, and the remaining quota and rese
 
 ## Language and appearance
 
-The panel supports Simplified Chinese, Traditional Chinese, English, Japanese, Korean and German. It follows Pulse’s language and appearance by default; rereading the snapshot picks up the latest local preferences. Choose Clear or Meter for this panel only, or Follow Pulse to resume following. This does not change global Pulse or Codex preferences. The host locale is only a fallback when Pulse provides no language; Codex still controls its container and composer.
+The panel supports Simplified Chinese, Traditional Chinese, English, Japanese, Korean and German. It follows Pulse’s language and appearance by default; rereading the snapshot picks up the latest local preferences. Choose Clear, Meter or Paper for this panel only, or Follow Pulse to resume following. This does not change global Pulse or Codex preferences. The host locale is only a fallback when Pulse provides no language; Codex still controls its container and composer.
+
+The desktop widget also follows the main Pulse workspace by default. Under **Settings → Desktop & Codex**, choose a style for the widget or return to following the workspace. The widget and the Codex panel have separate style controls.
 
 ## Data and refresh
 

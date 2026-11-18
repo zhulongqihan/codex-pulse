@@ -3,16 +3,17 @@ import { isTauri } from "@tauri-apps/api/core";
 import { LogicalSize } from "@tauri-apps/api/dpi";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 
-export function preferredWidgetHeight(expanded: boolean, empty: boolean, contentHeight: number): number {
+export function preferredWidgetHeight(expanded: boolean, empty: boolean, contentHeight: number, skin: string = "clear"): number {
+  if (skin === "paper") return expanded ? 480 : Math.max(84, Math.min(180, Number.isFinite(contentHeight) ? Math.ceil(contentHeight) : 84));
   if (!expanded) return 180;
   if (!empty || !Number.isFinite(contentHeight)) return 480;
   return Math.max(220, Math.min(480, Math.ceil(contentHeight)));
 }
 
 /** Resize only the actual widget. Browser demo preferences never resize a host window. */
-export function useWidgetContentSize(element: RefObject<HTMLElement | null>, expanded: boolean, empty: boolean, revision: string, onFailure: () => void) {
+export function useWidgetContentSize(element: RefObject<HTMLElement | null>, expanded: boolean, empty: boolean, revision: string, onFailure: () => void, skin: string = "clear") {
   useEffect(() => {
-    if (!expanded || !isTauri() || new URLSearchParams(location.search).get("demo") === "1") return;
+    if ((!expanded && skin !== "paper") || !isTauri() || new URLSearchParams(location.search).get("demo") === "1") return;
     const panel = element.current, windowHandle = getCurrentWindow();
     if (!panel || windowHandle.label !== "widget") return;
     let active = true, frame = 0, requested: number | null = null, rejected = false, resizedWhilePending = false;
@@ -20,6 +21,19 @@ export function useWidgetContentSize(element: RefObject<HTMLElement | null>, exp
     const measure = () => {
       frame = 0;
       if (!active || rejected) return;
+      if (skin === "paper") {
+        const children = [...panel.children].filter((child): child is HTMLElement => child instanceof HTMLElement && !child.classList.contains('sr-only'));
+        const style = getComputedStyle(panel);
+        const natural = children.reduce((bottom, child) => Math.max(bottom, child.getBoundingClientRect().bottom - panel.getBoundingClientRect().top), 0) + parseFloat(style.paddingBottom || '0') + parseFloat(style.marginTop || '0') + parseFloat(style.marginBottom || '0') + 2;
+        const target = preferredWidgetHeight(expanded, empty, natural, skin);
+        if (Math.abs(innerHeight - target) <= 1 || requested === target) return;
+        requested = target;
+        void windowHandle.setSize(new LogicalSize(350, target)).then(() => {
+          if (!active) return; requested = null;
+          if (resizedWhilePending) { resizedWhilePending = false; schedule(); }
+        }).catch(() => { if (active) { rejected = true; requested = null; onFailure(); } });
+        return;
+      }
       const body = panel.querySelector<HTMLElement>(".coach-body"), footer = panel.querySelector<HTMLElement>(".pulse-pace-footer");
       if (!body || !footer || !body.firstElementChild || !body.lastElementChild) return;
       const panelStyle = getComputedStyle(panel), bodyStyle = getComputedStyle(body);
@@ -45,12 +59,12 @@ export function useWidgetContentSize(element: RefObject<HTMLElement | null>, exp
     };
     const schedule = () => { if (active && !frame && !rejected) frame = requestAnimationFrame(measure); };
     const observer = new ResizeObserver(schedule);
-    const observeParts = () => { for (const child of panel.querySelectorAll(".pulse-widget-header,.pulse-widget-close-hint,.coach-body>*,.pulse-pace-footer,:scope > .pulse-error")) observer.observe(child); };
+    const observeParts = () => { for (const child of panel.querySelectorAll(".pulse-widget-header,.pulse-widget-close-hint,.coach-body>*,.pulse-pace-footer,.paper-widget-compact,.paper-widget-style,:scope > .pulse-error")) observer.observe(child); };
     observeParts();
     const mutation = new MutationObserver(() => { observeParts(); schedule(); });
     mutation.observe(panel, { childList: true });
     void windowHandle.onResized(() => { if (requested != null) resizedWhilePending = true; schedule(); }).then(cleanup => { if (active) unlisten = cleanup; else cleanup(); }).catch(() => { if (active) { rejected = true; onFailure(); } });
     schedule();
     return () => { active = false; observer.disconnect(); mutation.disconnect(); unlisten?.(); if (frame) cancelAnimationFrame(frame); };
-  }, [element, expanded, empty, revision, onFailure]);
+  }, [element, expanded, empty, revision, onFailure, skin]);
 }

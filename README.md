@@ -1,6 +1,6 @@
 # Codex Pulse — Windows 额度配速伴侣
 
-给 Windows 上的 Codex 一个随手可看的额度配速提示：余量、重置时间、消耗与时间进度一起看，知道何时可从容安排任务、何时该留些余量。提供 **清爽 Clear** 与 **刻度 Meter**、完整用量工作台与会话回放。
+给 Windows 上的 Codex 一个随手可看的额度配速提示：余量、重置时间、消耗与时间进度一起看，知道何时可从容安排任务、何时该留些余量。提供 **清爽 Clear**、**刻度 Meter** 和 **纸册 Paper**、完整用量工作台与会话回放。
 
 **[English](README.en.md)** · **[下载 Windows 版](https://github.com/zhulongqihan/codex-pulse/releases/latest)** · [产品与交互演示](https://zhulongqihan.github.io/codex-pulse/) · [完整工作台演示](https://zhulongqihan.github.io/codex-pulse/?demo=1) · [截图](https://zhulongqihan.github.io/codex-pulse/gallery.html) · [反馈](https://github.com/zhulongqihan/codex-pulse/issues)
 
@@ -16,8 +16,8 @@
 - **有依据的趣味指标**：本轮每日已观测增长与覆盖情况、临近重置的余量提示，以及数据充分时的重置余量条件区间；没有记录不当作零。分配参考不代表新增额度，预测不保证工作时长。
 - **醒目重置预告**：后台更新的新预告显示来源、预计时段和待确认状态，支持跨窗口已读去重。展开查看到期、数据过旧、暂不可用或暂无有效预告的说明及实际检查时间；未返回不推断为撤回。第三方全局消息与个人周期结束分开，不冒充本人已重置。
 - **聚焦日常的仪表盘**：当前额度、个人重置时间、配速判断与今日 API 参考成本集中在首页；本机今日用量独立于历史筛选，配速依据和构成明细按需展开。
-- **独立用量分析**：从左侧查看所选时段汇总、完整趋势和项目／模型分布，选择日期查看明细，按同一范围导出 XLSX 或 Markdown。
-- **七个工作视图**：仪表盘、用量分析、会话、模型、按日、按月、项目；另有设置与可选诊断日志。导航可折叠、调宽，设置返回原页。
+- **独立用量分析**：查看所选时段汇总、完整趋势和项目／模型分布，选择日期查看明细，按同一范围导出 XLSX 或 Markdown。
+- **七个工作视图**：仪表盘、用量分析、会话、模型、按日、按月、项目；另有设置与可选诊断日志。清爽与刻度的侧栏可折叠、调宽，纸册使用横向纸签；设置返回原页。
 - **完整范围统计**：九种日期预设、全部留存和自定义闭区间；日均按自然日计算。按月独立展示当前月至今及前 11 个自然月，区分无留存、部分留存和零活动。
 - **Token 与参考成本**：输入、缓存输入、输出、缓存命中、模型单价与价格目录。图表支持日期选择、图例、单位切换、数据表与全屏；可比较模型、日期和完整路径项目。
 - **主会话列表搜索**：按标题、会话 ID、模型或项目搜索已加载会话，命中子代理时保留相关会话组；可结合项目筛选，清空后恢复原列表，不重扫日志。项目详情和回放仍保留各自已有搜索。
@@ -26,12 +26,12 @@
 - **可选逐会话 Credits**：默认关闭；开启后仅查询正在查看的真实线程 ID，不发送正文。保留精确小数、负数调整、缓存、冷却与不可用状态。
 - **本地来源与维护**：增量扫描、压缩归档、原生／WSL 来源择一、定向会话／项目重扫、故障诊断与缓存重建。
 - **桌面伴侣**：托盘信息板与独立可拖动、置顶、展开／收起的悬浮窗；两者指标配置独立。支持登录启动和自动刷新。
-- **Codex 客户端入口**：通过本地 MCP 插件，在支持 MCP Apps 的桌面客户端中查看额度、今日汇总、本轮观测与带来源的预告，并打开主窗／浮窗或消耗详情。面板支持六种语言，默认跟随 Pulse 外观，也可单独选择清爽／刻度；[安装说明](docs/CODEX_INTEGRATION.md)。
-- **两版外观与六种语言**：清爽／刻度、浅色／深色／系统、密度与动效分别选择；切换保留正在查看的数据。支持简体中文、繁体中文、English、日本語、한국어、Deutsch。
+- **Codex 客户端入口**：通过本地 MCP 插件，在支持 MCP Apps 的桌面客户端中查看额度、今日汇总、本轮观测与带来源的预告，并打开主窗／浮窗或消耗详情。面板支持六种语言，默认跟随 Pulse 外观，也可单独选择清爽／刻度／纸册；[安装说明](docs/CODEX_INTEGRATION.md)。
+- **三种外观与六种语言**：在 **设置 → 外观** 选择清爽／刻度／纸册，浅色／深色／系统、密度与动效可独立设置。切换外观会保留当前工作状态。悬浮窗默认跟随主窗，可在 **设置 → 桌面与 Codex** 单独选择外观。支持简体中文、繁体中文、English、日本語、한국어、Deutsch。
 - **导出与更新**：XLSX／Markdown 包含所选范围的汇总、日期、模型和项目。自有更新源验证签名、品牌、平台与包摘要，更新失败保留数据并恢复原程序。
 - **帮助与反馈**：设置内集中查看使用帮助、分享体验或报告问题。反馈摘要只包含可见的最少环境与用户选择项，先预览再复制，不自动上传账号、日志或会话。
 
-0.12.0 新增每日官方额度记录，默认在 Pulse 运行时后台只读采样；关闭主窗或浮窗仍可记录，退出与休眠时停止。历史保留在独立本地账本，可在设置中关闭新记录。长消息回放继续使用预览并保留全文复制和搜索。查看[本版更新说明](docs/releases/v0.12.0.md)。
+0.13.0 新增纸册工作台，提供横向纸签、书册布局与配套浮窗。浮窗可跟随主窗，也可单独选择外观。查看[本版更新说明](docs/releases/v0.13.0.md)。
 
 ## 工作情境与节奏卡片预览
 
@@ -41,29 +41,29 @@
 
 直接试用 [余量宽裕](https://zhulongqihan.github.io/codex-pulse/?demo=1&coachScenario=roomy#pulse-pace)、[用量偏快](https://zhulongqihan.github.io/codex-pulse/?demo=1&coachScenario=fast#pulse-pace)、[重置预告](https://zhulongqihan.github.io/codex-pulse/?demo=1&coachScenario=notice#pulse-pace)和[数据陈旧](https://zhulongqihan.github.io/codex-pulse/?demo=1&coachScenario=stale#pulse-pace)。这里运行已实现的界面组件，读数和预告全部为合成示例。
 
-## 两版工作台
+## 清爽、刻度与纸册工作台
 
-| 清爽 Clear | 刻度 Meter |
-|---|---|
-| ![清爽界面，合成数据](docs/screenshots/clear-overview.png) | ![刻度界面，合成数据](docs/screenshots/meter-overview.png) |
+| 清爽 Clear | 刻度 Meter | 纸册 Paper |
+|---|---| --- |
+| ![清爽界面，合成数据](docs/screenshots/clear-overview.png) | ![刻度界面，合成数据](docs/screenshots/meter-overview.png) | ![纸册仪表盘，合成数据](docs/screenshots/paper-dashboard.png) |
 
-两版共用业务能力。仪表盘优先展示额度与今日参考成本；左侧“用量分析”保留完整时段趋势、分布与导出。清爽使用轻量比较图与连续表格，刻度突出一块深色趋势区域；逐日细看、数据表、全屏和键盘操作保持可达。
+三种外观共用相同功能。仪表盘优先展示额度与今日参考成本；“用量分析”保留完整时段趋势、分布与导出。清爽使用轻量比较图与连续表格，刻度突出深色趋势区域，纸册使用横向纸签、书册布局和纸张纹理。逐日细看、数据表、全屏和键盘操作保持可达。
 
 ### 独立用量分析
 
-从左侧“用量分析”查看历史趋势与消耗分布；仪表盘中的今天保持独立。日期范围、图表与导出使用同一时段。
+从“用量分析”查看历史趋势与消耗分布；仪表盘中的今天保持独立。日期范围、图表与导出使用同一时段。
 
-| 清爽 Clear | 刻度 Meter |
-|---|---|
-| ![清爽用量分析，合成数据](docs/screenshots/clear-analysis.png) | ![刻度用量分析，合成数据](docs/screenshots/meter-analysis.png) |
+| 清爽 Clear | 刻度 Meter | 纸册 Paper |
+|---|---| --- |
+| ![清爽用量分析，合成数据](docs/screenshots/clear-analysis.png) | ![刻度用量分析，合成数据](docs/screenshots/meter-analysis.png) | ![纸册用量分析，合成数据](docs/screenshots/paper-analysis-local.png) |
 
 ## 每日官方额度记录
 
 首页显示今日观测消耗；进入 **用量分析 → 官方额度记录**，选择日期范围与实际额度窗口，查看每日柱图、明细和分段依据，或导出独立 XLSX／Markdown。单次范围最多 366 天，历史不会因此滚动删除；更早日期可用自定义范围查询。
 
-| 清爽 Clear | 刻度 Meter |
-|---|---|
-| ![清爽每日官方额度记录，合成数据](docs/screenshots/clear-quota-history.png) | ![刻度每日官方额度记录，合成数据](docs/screenshots/meter-quota-history.png) |
+| 清爽 Clear | 刻度 Meter | 纸册 Paper |
+|---|---| --- |
+| ![清爽每日官方额度记录，合成数据](docs/screenshots/clear-quota-history.png) | ![刻度每日官方额度记录，合成数据](docs/screenshots/meter-quota-history.png) | ![纸册每日官方额度记录，合成数据](docs/screenshots/paper-analysis-official.png) |
 
 在 **设置 → 数据来源** 中可关闭或重新开启记录。默认开启，正常约每 60 秒读取当前已选择账号，错误与限流时退避；隐藏主窗、浮窗和标题栏不会停止记录。Pulse 退出或系统休眠时不采集，不新增系统服务或模型请求。
 
@@ -178,7 +178,7 @@ pnpm exec wdio run ./wdio.pulse.conf.ts
 
 ## 开源与归属
 
-基于 MIT 发布。Rust 引擎、服务编排、回放组件、翻译和测试复用了 Vincent 及贡献者的 [Codex Usage Desktop 5.6.0](https://github.com/itvincent-git/codex-usage-desktop)，并保留原许可证；Pulse 提供自己的品牌、双版界面、便携存储、悬浮窗和更新渠道。
+基于 MIT 发布。Rust 引擎、服务编排、回放组件、翻译和测试复用了 Vincent 及贡献者的 [Codex Usage Desktop 5.6.0](https://github.com/itvincent-git/codex-usage-desktop)，并保留原许可证；Pulse 提供自己的品牌、清爽、刻度与纸册界面、便携存储、悬浮窗和更新渠道。
 
 [版本记录](CHANGELOG.md) · [版本与兼容性](VERSIONING.md) · [来源与许可证](THIRD_PARTY_NOTICES.md) · [依赖许可](THIRD_PARTY_LICENSES.txt) · [贡献指南](CONTRIBUTING.md) · [隐私与安全反馈](SECURITY.md)
 

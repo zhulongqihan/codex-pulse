@@ -117,7 +117,7 @@ fn presentation_preferences(directory: &Path, published: &Value) -> Value {
     let mut result = project_presentation(published);
     result["skinId"] = json!(value["skinId"]
         .as_str()
-        .filter(|value| ["clear", "meter"].contains(value)));
+        .filter(|value| ["clear", "meter", "paper"].contains(value)));
     let theme = value["theme"]
         .as_str()
         .filter(|value| ["light", "dark", "system"].contains(value));
@@ -1157,6 +1157,25 @@ mod tests {
             &json!({"language":"must-not-export","resolvedTheme":"private"})
         )["language"]
             .is_null());
+        fs::remove_dir_all(path).unwrap();
+    }
+    #[test]
+    fn presentation_allows_paper_without_exporting_widget_overrides() {
+        let path = folder();
+        fs::write(
+            path.join("pulse-preferences.json"),
+            br#"{"skinId":"paper","theme":"light","widgetSkin":"meter"}"#,
+        )
+        .unwrap();
+        fs::write(
+            path.join("pulse-widget-appearance.json"),
+            br#"{"skinId":"meter"}"#,
+        )
+        .unwrap();
+        let value = presentation_preferences(&path, &json!({"language":"en"}));
+        assert_eq!(value["skinId"], "paper");
+        assert_eq!(value["theme"], "light");
+        assert!(value.get("widgetSkin").is_none());
         fs::remove_dir_all(path).unwrap();
     }
     #[test]

@@ -1,0 +1,225 @@
+html[data-skin="paper"] :is(.pulse-app, .pulse-account-drawer, .pulse-chart-fullscreen, [aria-labelledby="pulse-range-title"]) {
+  --journal-heading: KaiTi, STKaiti, "楷体", Georgia, serif;
+  --journal-grid: color-mix(in srgb, var(--paper-line) 44%, transparent);
+  --journal-table-heading: color-mix(in srgb, var(--paper-accent) 14%, var(--paper-surface));
+  --journal-shadow: 1px 3px 6px rgb(40 34 20 / .13);
+  --journal-graph: linear-gradient(var(--journal-grid) 1px, transparent 1px),
+    linear-gradient(90deg, var(--journal-grid) 1px, transparent 1px);
+  font-family: "Segoe UI", "Microsoft YaHei UI", "Microsoft YaHei", sans-serif;
+}
+
+html[data-skin="paper"] :is(.pulse-main-scroll, .pulse-account-rail, .pulse-account-drawer, .pulse-chart-fullscreen, [aria-labelledby="pulse-range-title"], [aria-labelledby="session-detail-title"], [aria-labelledby="modal-project-title"], [aria-labelledby="codex-reset-history-title"]) :is(h1, h2, h3, h4) {
+  font-family: var(--journal-heading);
+  letter-spacing: normal;
+  overflow-wrap: anywhere;
+}
+
+html[data-skin="paper"] .pulse-app :is(.pulse-analysis-heading h1, .pulse-quota-heading h1, .pulse-main-scroll h2.text-xl) {
+  font-size: clamp(1.55rem, 3vw, 2.1rem);
+  line-height: 1.25;
+  text-decoration: underline color-mix(in srgb, #bc774b 70%, transparent);
+  text-decoration-thickness: 2px;
+  text-underline-offset: .23em;
+}
+
+html[data-skin="paper"] :is(.pulse-app, .pulse-account-drawer, .pulse-chart-fullscreen) :is(.pulse-panel, .pulse-settings-section, .pulse-session-group, .pulse-chart-tooltip),
+html[data-skin="paper"] :is(.pulse-account-drawer, .pulse-chart-fullscreen, [aria-labelledby="pulse-range-title"], [aria-labelledby="session-detail-title"], [aria-labelledby="modal-project-title"], [aria-labelledby="codex-reset-history-title"] > div) {
+  background-color: var(--paper-surface);
+  background-image: url("./assets/paper/paper-texture.png");
+  background-size: 480px;
+  background-blend-mode: multiply;
+  border-color: var(--paper-line);
+}
+
+html[data-skin="paper"][data-theme="dark"] :is(.pulse-app, .pulse-account-drawer, .pulse-chart-fullscreen) :is(.pulse-panel, .pulse-settings-section, .pulse-session-group, .pulse-chart-tooltip),
+html[data-skin="paper"][data-theme="dark"] :is(.pulse-account-drawer, .pulse-chart-fullscreen, [aria-labelledby="pulse-range-title"], [aria-labelledby="session-detail-title"], [aria-labelledby="modal-project-title"], [aria-labelledby="codex-reset-history-title"] > div) {
+  background-blend-mode: soft-light;
+}
+
+html[data-skin="paper"] .pulse-app :is(.pulse-panel, .pulse-settings-section, .pulse-session-group),
+html[data-skin="paper"] :is(.pulse-account-drawer, [aria-labelledby="pulse-range-title"], [aria-labelledby="codex-reset-history-title"] > div) {
+  border-radius: 8px;
+  box-shadow: var(--journal-shadow);
+}
+
+html[data-skin="paper"] .pulse-app :is(.pulse-analysis-totals, .pulse-quota-total, .pulse-quota-day),
+html[data-skin="paper"] :is(.pulse-app, .pulse-chart-fullscreen) .pulse-fit-trends .pulse-day-inspector {
+  background-color: var(--paper-note);
+  border: 1px solid var(--paper-line);
+  border-radius: 5px 8px 6px 4px;
+  padding: clamp(.75rem, 2vw, 1.2rem);
+  box-shadow: var(--journal-shadow);
+}
+
+html[data-skin="paper"] .pulse-app .pulse-analysis-totals > dl > div + div {
+  border-left: 0;
+  padding-left: 0;
+}
+
+html[data-skin="paper"] .pulse-app :is(.pulse-analysis-totals > dl, .pulse-analysis-totals > dl > div, .pulse-quota-total) {
+  min-width: 0;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}
+
+html[data-skin="paper"] .pulse-app :is(.pulse-analysis-source-tabs button[aria-pressed="true"], .pulse-settings-tabs [aria-selected="true"]),
+html[data-skin="paper"] :is(.pulse-app, .pulse-chart-fullscreen) .pulse-trends .pulse-segments button[aria-pressed="true"] {
+  background-color: var(--paper-note);
+  color: var(--paper-ink);
+  box-shadow: var(--journal-shadow);
+}
+
+html[data-skin="paper"] .pulse-app :is(.pulse-analysis-actions, .pulse-analysis-source-tabs, .pulse-settings-tabs, .pulse-setting-row, .pulse-quota-export, .pulse-quota-setting-row) :is(button, a) {
+  white-space: normal;
+  overflow-wrap: anywhere;
+  height: auto;
+}
+
+html[data-skin="paper"] .pulse-app .pulse-setting-row {
+  border-color: var(--paper-line);
+}
+
+html[data-skin="paper"] .pulse-app .pulse-settings-tabs {
+  border-inline-start: 1px solid var(--paper-line);
+  padding-inline-start: .45rem;
+}
+
+html[data-skin="paper"] .pulse-app .pulse-quota-setting-row {
+  flex-wrap: wrap;
+}
+
+html[data-skin="paper"] :is(.pulse-app, .pulse-chart-fullscreen) .pulse-trend-main {
+  min-width: 0;
+  background: var(--paper-surface);
+  color: var(--paper-ink);
+}
+
+html[data-skin="paper"] :is(.pulse-app, .pulse-chart-fullscreen) .pulse-fit-trends:not(.is-compact) .pulse-trend-main {
+  border: 1px solid var(--paper-line);
+  border-radius: 8px;
+  padding: clamp(.55rem, 1.6vw, 1rem);
+}
+
+html[data-skin="paper"] :is(.pulse-app, .pulse-chart-fullscreen) .pulse-trend-main :is(.pulse-trend-resolution button, .pulse-aggregation-note) {
+  color: var(--paper-muted);
+}
+
+html[data-skin="paper"] :is(.pulse-app, .pulse-chart-fullscreen) .pulse-trend-main .pulse-trend-resolution button[aria-pressed="true"] {
+  color: var(--paper-ink);
+}
+
+html[data-skin="paper"] :is(.pulse-app, .pulse-chart-fullscreen) .pulse-fit-trends.is-overview .pulse-fit-plot::before,
+html[data-skin="paper"] .pulse-app :is(.pulse-quota-chart-scroll, [data-testid="project-daily-trend"] .recharts-wrapper) {
+  background-image: var(--journal-graph);
+  background-size: 20px 20px;
+}
+
+html[data-skin="paper"] .pulse-app .pulse-quota-chart-scroll rect {
+  fill: var(--paper-accent);
+}
+
+html[data-skin="paper"] :is(.pulse-app, .pulse-chart-fullscreen) .pulse-trends {
+  --pulse-input: #667c51;
+  --pulse-cached: #b4864b;
+  --pulse-output: #ac6763;
+}
+
+html[data-skin="paper"][data-theme="dark"] :is(.pulse-app, .pulse-chart-fullscreen) .pulse-trends {
+  --pulse-input: #a9ba89;
+  --pulse-cached: #dab375;
+  --pulse-output: #dda299;
+}
+
+html[data-skin="paper"] :is(.pulse-main-scroll, .pulse-chart-fullscreen, [aria-labelledby="modal-project-title"], [aria-labelledby="session-detail-title"]) :is(table, dl, .tabular-nums) {
+  font-variant-numeric: tabular-nums;
+}
+
+html[data-skin="paper"] :is(.pulse-main-scroll, .pulse-chart-fullscreen, [data-testid="project-modal-scroll"]) table thead :is(th, td) {
+  background-color: var(--journal-table-heading);
+  color: var(--paper-ink);
+}
+
+html[data-skin="paper"] :is(.pulse-main-scroll, .pulse-chart-fullscreen, [data-testid="project-modal-scroll"]) table tfoot :is(th, td) {
+  background-color: var(--paper-note);
+  color: var(--paper-ink);
+}
+
+html[data-skin="paper"] :is(.pulse-main-scroll, .pulse-chart-fullscreen, [data-testid="project-modal-scroll"]) table tbody tr:nth-child(even) {
+  background-color: color-mix(in srgb, var(--paper-accent) 6%, transparent);
+}
+
+html[data-skin="paper"] :is(.pulse-main-scroll, .pulse-chart-fullscreen, [data-testid="project-modal-scroll"]) table :is(th, td) {
+  border-color: var(--paper-line);
+}
+
+html[data-skin="paper"] .pulse-main-scroll .h-\[600px\] > .font-mono {
+  background-image: repeating-linear-gradient(transparent 0 19px, var(--journal-grid) 19px 20px);
+  color: var(--paper-ink);
+}
+
+html[data-skin="paper"] .pulse-main-scroll .h-\[600px\] {
+  height: clamp(18rem, 64vh, 37.5rem);
+  background-color: var(--paper-surface);
+  box-shadow: var(--journal-shadow);
+}
+
+html[data-skin="paper"] :is(.pulse-account-drawer, .pulse-account-rail, [aria-labelledby="modal-project-title"]) > header,
+html[data-skin="paper"] [aria-labelledby="session-detail-title"] > div > header,
+html[data-skin="paper"] [aria-labelledby="pulse-range-title"] > :first-child,
+html[data-skin="paper"] [aria-labelledby="codex-reset-history-title"] > div > :first-child {
+  background-color: var(--journal-table-heading);
+  border-color: var(--paper-line);
+}
+
+html[data-skin="paper"] .pulse-account-rail {
+  background-color: var(--paper-surface);
+  border-color: var(--paper-line);
+}
+
+html[data-skin="paper"] :is(.pulse-account-backdrop, [aria-labelledby="codex-reset-history-title"], body > div:has(> [aria-labelledby="pulse-range-title"])) {
+  background-color: rgb(25 32 23 / .57);
+}
+
+html[data-skin="paper"] .pulse-chart-fullscreen {
+  padding: clamp(.75rem, 3vw, 2rem);
+}
+
+html[data-skin="paper"] [data-testid="session-detail-scroll"] .session-markdown-table {
+  max-width: 100%;
+  overflow-x: auto;
+}
+
+html[data-skin="paper"] [data-testid="session-detail-scroll"] {
+  background-color: color-mix(in srgb, var(--paper-surface) 92%, transparent);
+}
+
+html[data-skin="paper"] [data-testid="session-detail-scroll"] section.scroll-mt-5 {
+  border: 1px solid var(--paper-line);
+  background-color: var(--paper-surface);
+  box-shadow: var(--journal-shadow);
+}
+
+html[data-skin="paper"] [data-testid="session-wide-navigation"] > div,
+html[data-skin="paper"] #session-compact-navigation {
+  background-color: var(--journal-table-heading);
+  border-color: var(--paper-line);
+}
+
+html[data-skin="paper"] :is([data-testid="session-wide-navigation"], #session-compact-navigation) [aria-current="location"] {
+  background-color: var(--paper-note);
+  color: var(--paper-ink);
+}
+
+html[data-skin="paper"] :is(.pulse-main-scroll, .pulse-chart-fullscreen, .pulse-account-drawer, [aria-labelledby="pulse-range-title"], [aria-labelledby="codex-reset-history-title"], [aria-labelledby="session-detail-title"], [aria-labelledby="modal-project-title"]) :is(button, a, input, select, textarea, [tabindex]):focus-visible {
+  outline: 2px solid var(--paper-accent);
+  outline-offset: 2px;
+}
+
+@container app-content (min-width: 1000px) {
+  html[data-skin="paper"] .pulse-app .pulse-usage-analysis .pulse-fit-trends:has(.pulse-day-inspector) {
+    display: grid;
+    grid-template-columns: minmax(0, 3fr) minmax(220px, 1fr);
+    align-items: start;
+    gap: clamp(1rem, 3vw, 1.75rem);
+  }
+}

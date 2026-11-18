@@ -16,6 +16,7 @@ beforeEach(() => {
   state.native = false;
   state.callback = null;
   mockIPC.mockClear();
+  localStorage.clear();
   history.replaceState(null, "", "/");
   delete document.documentElement.dataset.demo;
 });
@@ -121,6 +122,60 @@ describe("synthetic daily quota ledger", () => {
 });
 
 describe("explicit browser-only demo transport", () => {
+  it("restores saved paper and widget styles before installing the synthetic transport", async () => {
+    localStorage.setItem("codexpulse.appearance.v1", JSON.stringify({skinId:"paper",widgetSkin:"meter",theme:"dark",motionLevel:"off",compactMode:true,privateInfo:"not-a-preference"}));
+    history.replaceState(null, "", "/?demo=1");
+    installDemoBridge();
+    const value = await state.callback!("get_pulse_preferences");
+    expect(value).toMatchObject({skinId:"paper",widgetSkin:"meter",theme:"dark",motionLevel:"off",compactMode:true});
+    expect(JSON.stringify(value)).not.toContain("not-a-preference");
+  });
+
+  it("persists a selected style and restores it after reinstalling the demo bridge", async () => {
+    history.replaceState(null, "", "/?demo=1");
+    installDemoBridge();
+    expect(await state.callback!("get_pulse_preferences")).toMatchObject({skinId:"clear",widgetSkin:"follow"});
+    await state.callback!("set_pulse_preferences", {patch:{skinId:"paper",widgetSkin:"clear",theme:"dark",compactMode:true}});
+    expect(JSON.parse(localStorage.getItem("codexpulse.appearance.v1")!)).toMatchObject({skinId:"paper",widgetSkin:"clear",theme:"dark",compactMode:true});
+    installDemoBridge();
+    expect(await state.callback!("get_pulse_preferences")).toMatchObject({skinId:"paper",widgetSkin:"clear",theme:"dark",compactMode:true});
+    await state.callback!("set_pulse_preferences", {patch:{skinId:"meter"}});
+    installDemoBridge();
+    expect(await state.callback!("get_pulse_preferences")).toMatchObject({skinId:"meter",widgetSkin:"clear",theme:"dark",compactMode:true});
+  });
+
+  it("normalizes unknown saved styles and recovers malformed JSON without importing extra data", async () => {
+    history.replaceState(null, "", "/?demo=1");
+    localStorage.setItem("codexpulse.appearance.v1", JSON.stringify({skinId:"old-style",widgetSkin:"unknown",theme:"light",motionLevel:"off"}));
+    installDemoBridge();
+    expect(await state.callback!("get_pulse_preferences")).toMatchObject({skinId:"clear",widgetSkin:"follow",theme:"light",motionLevel:"off"});
+    localStorage.setItem("codexpulse.appearance.v1", "{malformed-json");
+    installDemoBridge();
+    expect(await state.callback!("get_pulse_preferences")).toMatchObject({skinId:"clear",widgetSkin:"follow",theme:"system",motionLevel:"gentle"});
+  });
+
+  it("does not claim a saved appearance when browser storage rejects the write", async () => {
+    history.replaceState(null, "", "/?demo=1");
+    installDemoBridge();
+    const before = structuredClone(await state.callback!("get_pulse_preferences"));
+    const rejectWrite = vi.spyOn(Storage.prototype,"setItem").mockImplementation(()=>{throw new Error("browser storage is read-only");});
+    try {
+      await expect(state.callback!("set_pulse_preferences",{patch:{skinId:"paper",widgetSkin:"meter"}})).rejects.toThrow("browser storage is read-only");
+      expect(await state.callback!("get_pulse_preferences")).toEqual(before);
+    } finally { rejectWrite.mockRestore(); }
+  });
+
+  it("does not read appearance storage outside the explicit browser demo",()=>{
+    const read = vi.spyOn(Storage.prototype,"getItem");
+    try {
+      installDemoBridge();
+      history.replaceState(null, "", "/?demo=1");
+      state.native=true;
+      installDemoBridge();
+      expect(read).not.toHaveBeenCalled();
+    } finally { read.mockRestore(); }
+  });
+
   it("never installs without demo=1 and never replaces native IPC", () => {
     installDemoBridge();
     expect(mockIPC).not.toHaveBeenCalled();
@@ -152,6 +207,18 @@ describe("explicit browser-only demo transport", () => {
     await state.callback!("update_tray", { payload: { popover: { quotas: [], tokens: null, cost: null } } });
     expect(await state.callback!("get_widget_snapshot")).toEqual(widget);
     expect(await state.callback!("get_tray_popover")).toMatchObject({ quotas: [], tokens: null, cost: null });
+  });
+  it("publishes the same raw today totals to the widget, tray and dashboard", async () => {
+    history.replaceState(null, "", "/?demo=1");
+    installDemoBridge();
+    const home = await state.callback!("fetch_overview",{range:"1d"}) as any;
+    expect(home.totals.totalTokens).toBe(13600);
+    expect(home.totals.costUSD.toFixed(2)).toBe("0.04");
+    for(const command of ["get_widget_snapshot","get_tray_popover"]){
+      const companion = await state.callback!(command) as any;
+      expect(companion.integration?.today).toMatchObject({date:today,timezone:home.timezone,totalTokens:home.totals.totalTokens,costUSD:home.totals.costUSD,stale:false});
+      expect(JSON.stringify(companion.integration)).not.toMatch(/demo@example|membershipLevel|workspaceName|codexHome/);
+    }
   });
   it.each(["", "&coachScenario=fast", "&coachScenario=balanced", "&coachScenario=stale", "&paceState=forecast"])("shares the same synthetic quota reading across surfaces for %s", async query => {
     history.replaceState(null, "", `/?demo=1${query}`);

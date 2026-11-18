@@ -673,7 +673,7 @@ a { text-underline-offset: 3px; }
 .pulse-settings-section h2 { font-size: 18px; font-weight: 600; }
 .pulse-settings-section header p { margin-top: 7px; color: rgb(var(--muted-foreground)); font-size: 12px; }
 .pulse-setting-row { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 16px; padding: 15px 0; border-top: 1px solid rgb(var(--border)); font-size: 13px; }
-.pulse-skin-options { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 24px; }
+.pulse-skin-options { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 20px; margin-bottom: 24px; }
 .pulse-skin-option { display: grid; grid-template-columns: 1fr auto; gap: 10px; text-align: left; padding: 10px; border: 1px solid rgb(var(--border)); border-radius: 9px; }
 .pulse-skin-option[aria-pressed="true"] { border-color: rgb(var(--primary)); background: rgb(var(--primary)/.04); }
 .pulse-option-state { color: rgb(var(--primary)); }

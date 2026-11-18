@@ -11,11 +11,15 @@ import { PulseWidget } from "./pulse-widget";
 
 const state = vi.hoisted(() => ({
   data: null as PaceSnapshot | null, expanded: false, pinned: false,
+  skin: "clear", widgetSkin: "follow", updatePreferences: vi.fn().mockResolvedValue(undefined),
+  preferenceError: null as string|null,
   action: vi.fn().mockResolvedValue(undefined), details: vi.fn().mockResolvedValue(undefined),
 }));
 vi.mock("@/lib/pulse-appearance", () => ({
-  usePulsePreferences: () => ({ widgetExpanded: state.expanded, widgetAlwaysOnTop: state.pinned }),
+  usePulsePreferences: () => ({ skinId: state.skin, widgetSkin: state.widgetSkin, widgetExpanded: state.expanded, widgetAlwaysOnTop: state.pinned }),
   pulseWidgetAction: state.action,
+  updatePulsePreferences: state.updatePreferences,
+  usePulsePreferencesError: () => state.preferenceError,
 }));
 vi.mock("@/lib/pulse-pace", async importOriginal => ({
   ...await importOriginal<typeof import("@/lib/pulse-pace")>(),
@@ -28,6 +32,7 @@ describe("desktop widget quota pacing", () => {
     await i18n.changeLanguage("en");
     state.expanded = false;
     state.pinned = false;
+    state.skin = "clear"; state.widgetSkin = "follow"; state.preferenceError = null; state.updatePreferences.mockClear();
     state.action.mockReset().mockResolvedValue(undefined);
     state.details.mockClear();
     const now = new Date();
@@ -125,5 +130,21 @@ describe("desktop widget quota pacing", () => {
     fireEvent.click(screen.getByRole("button", { name: "Check account and connection" }));
     expect(state.details).toHaveBeenCalledWith("account");
     expect(state.action).not.toHaveBeenCalledWith("showMain");
+  });
+  it("offers an explicit widget theme without replacing native widget actions or global style", async () => {
+    state.expanded = true; state.skin = "paper";
+    render(<PulseWidget/>);
+    const select = screen.getByRole("combobox", { name: "Widget style" });
+    expect(select).toHaveValue("follow");
+    expect([...select.querySelectorAll('option')].map(option => option.value)).toEqual(["follow", "clear", "meter", "paper"]);
+    fireEvent.change(select, { target: { value: "meter" } });
+    await waitFor(() => expect(state.updatePreferences).toHaveBeenCalledWith({widgetSkin:"meter"}));
+    expect(state.action).not.toHaveBeenCalled();
+  });
+  it("reports widget-style persistence failure instead of implying the selection was saved", () => {
+    state.expanded=true; state.preferenceError='Synthetic preferences write failure';
+    render(<PulseWidget/>);
+    expect(screen.getByRole('alert')).toHaveTextContent('Could not save preferences');
+    expect(screen.getByRole('alert')).toHaveTextContent('Synthetic preferences write failure');
   });
 });

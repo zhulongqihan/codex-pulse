@@ -149,6 +149,7 @@ pub fn prepare_paths() -> Result<PulsePaths, String> {
 #[serde(default, rename_all = "camelCase", deny_unknown_fields)]
 pub struct PulsePreferences {
     pub skin_id: String,
+    pub widget_skin: String,
     pub theme: String,
     pub motion_level: String,
     pub compact_mode: bool,
@@ -165,6 +166,7 @@ impl Default for PulsePreferences {
     fn default() -> Self {
         Self {
             skin_id: "clear".into(),
+            widget_skin: "follow".into(),
             theme: "system".into(),
             motion_level: "gentle".into(),
             compact_mode: false,
@@ -183,6 +185,7 @@ pub struct PreferenceStore {
     pub value: Mutex<PulsePreferences>,
     path: PathBuf,
     titlebar_path: PathBuf,
+    widget_appearance_path: PathBuf,
     legacy: Option<LegacyPreferences>,
 }
 
@@ -192,14 +195,19 @@ struct TitlebarPreferences {
     enabled: bool,
 }
 
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct WidgetAppearancePreferences {
+    skin_id: String,
+}
+
 /// Keep the established file readable by 0.5, whose parser rejects unknown fields.
 /// The IPC DTO still includes the complete current preference set.
 fn base_preferences(value: &PulsePreferences) -> Result<serde_json::Value, String> {
     let mut stored = serde_json::to_value(value).map_err(|error| error.to_string())?;
-    stored
-        .as_object_mut()
-        .ok_or("Invalid preference object")?
-        .remove("titlebarEnabled");
+    let object = stored.as_object_mut().ok_or("Invalid preference object")?;
+    object.remove("titlebarEnabled");
+    object.remove("widgetSkin");
     Ok(stored)
 }
 
@@ -224,7 +232,11 @@ pub struct LegacyPreferences {
 fn migrate_legacy(value: &serde_json::Value) -> (PulsePreferences, LegacyPreferences) {
     let mut preferences = PulsePreferences::default();
     for (key, allowed, destination) in [
-        ("skinId", &["clear", "meter"][..], &mut preferences.skin_id),
+        (
+            "skinId",
+            &["clear", "meter", "paper"][..],
+            &mut preferences.skin_id,
+        ),
         (
             "theme",
             &["system", "light", "dark"][..],
@@ -296,6 +308,7 @@ impl PreferenceStore {
     pub fn load(data: &Path) -> Self {
         let path = data.join("pulse-preferences.json");
         let titlebar_path = data.join("pulse-titlebar-preferences.json");
+        let widget_appearance_path = data.join("pulse-widget-appearance.json");
         let legacy_path = data.join("pulse-legacy-preferences.json");
         if !path.exists() {
             if let Some(legacy) = fs::read(data.join("settings.json"))
@@ -330,30 +343,45 @@ impl PreferenceStore {
         {
             value.titlebar_enabled = titlebar.enabled;
         }
+        if let Some(widget) = fs::read(&widget_appearance_path)
+            .ok()
+            .and_then(|bytes| serde_json::from_slice::<WidgetAppearancePreferences>(&bytes).ok())
+            .filter(|widget| {
+                ["follow", "clear", "meter", "paper"].contains(&widget.skin_id.as_str())
+            })
+        {
+            value.widget_skin = widget.skin_id;
+        }
         Self {
             value: Mutex::new(value),
             path,
             titlebar_path,
+            widget_appearance_path,
             legacy: fs::read(legacy_path)
                 .ok()
                 .and_then(|bytes| serde_json::from_slice(&bytes).ok()),
         }
     }
 
-    fn persist(&self, value: &PulsePreferences) -> Result<(), String> {
+    fn persist(
+        &self,
+        previous_value: &PulsePreferences,
+        value: &PulsePreferences,
+    ) -> Result<(), String> {
         let base = base_preferences(value)?;
         let previous = fs::read(&self.path).ok();
-        let base_changed = previous
-            .as_ref()
-            .and_then(|bytes| serde_json::from_slice::<serde_json::Value>(bytes).ok())
-            .as_ref()
-            != Some(&base);
+        // A widget-only change must not normalize, create, or repair the shared
+        // preference file. Disk bytes are used only for rollback, not as user intent.
+        let base_changed = base_preferences(previous_value)? != base;
+        let mut writes: Vec<(&Path, Option<Vec<u8>>, Vec<u8>)> = Vec::new();
         if base_changed {
-            write_preferences_file(
+            writes.push((
                 &self.path,
-                &serde_json::to_vec_pretty(&base).map_err(|error| error.to_string())?,
-            )?;
+                previous,
+                serde_json::to_vec_pretty(&base).map_err(|error| error.to_string())?,
+            ));
         }
+        let previous_titlebar = fs::read(&self.titlebar_path).ok();
         let existing_titlebar = fs::read(&self.titlebar_path)
             .ok()
             .and_then(|bytes| serde_json::from_slice::<TitlebarPreferences>(&bytes).ok());
@@ -366,19 +394,48 @@ impl PreferenceStore {
                 enabled: value.titlebar_enabled,
             })
             .map_err(|error| error.to_string())?;
-            if let Err(error) = write_preferences_file(&self.titlebar_path, &titlebar) {
-                // A combined patch must not leave the old preference file partly updated.
-                if base_changed {
-                    let rollback = if let Some(bytes) = previous {
-                        write_preferences_file(&self.path, &bytes)
-                    } else {
-                        fs::remove_file(&self.path).map_err(|error| error.to_string())
+            writes.push((&self.titlebar_path, previous_titlebar, titlebar));
+        }
+        let previous_widget = fs::read(&self.widget_appearance_path).ok();
+        let existing_widget = previous_widget
+            .as_deref()
+            .and_then(|bytes| serde_json::from_slice::<WidgetAppearancePreferences>(bytes).ok())
+            .filter(|widget| {
+                ["follow", "clear", "meter", "paper"].contains(&widget.skin_id.as_str())
+            })
+            .map(|widget| widget.skin_id)
+            .unwrap_or_else(|| "follow".into());
+        if existing_widget != value.widget_skin {
+            let widget = serde_json::to_vec_pretty(&WidgetAppearancePreferences {
+                skin_id: value.widget_skin.clone(),
+            })
+            .map_err(|error| error.to_string())?;
+            writes.push((&self.widget_appearance_path, previous_widget, widget));
+        }
+        for (index, (path, _, bytes)) in writes.iter().enumerate() {
+            if let Err(error) = write_preferences_file(path, bytes) {
+                // A combined appearance change either persists every file or restores
+                // each already-written file, including its original formatting.
+                let mut rollback_errors = Vec::new();
+                for (written_path, previous_bytes, _) in writes[..index].iter().rev() {
+                    let rollback = match previous_bytes {
+                        Some(previous_bytes) => {
+                            write_preferences_file(written_path, previous_bytes)
+                        }
+                        None => fs::remove_file(written_path).map_err(|cause| cause.to_string()),
                     };
-                    rollback.map_err(|rollback| {
-                        format!("{error}; preference rollback failed: {rollback}")
-                    })?;
+                    if let Err(cause) = rollback {
+                        rollback_errors.push(cause);
+                    }
                 }
-                return Err(error);
+                return if rollback_errors.is_empty() {
+                    Err(error)
+                } else {
+                    Err(format!(
+                        "{error}; preference rollback failed: {}",
+                        rollback_errors.join("; ")
+                    ))
+                };
             }
         }
         Ok(())
@@ -393,8 +450,11 @@ pub fn get_legacy_preferences(
 }
 
 fn validate_preferences(value: &PulsePreferences) -> Result<(), String> {
-    if !["clear", "meter"].contains(&value.skin_id.as_str()) {
+    if !["clear", "meter", "paper"].contains(&value.skin_id.as_str()) {
         return Err("Unsupported skin".into());
+    }
+    if !["follow", "clear", "meter", "paper"].contains(&value.widget_skin.as_str()) {
+        return Err("Unsupported widget skin".into());
     }
     if !["system", "light", "dark"].contains(&value.theme.as_str()) {
         return Err("Unsupported color mode".into());
@@ -444,7 +504,7 @@ pub fn set_pulse_preferences(
         .lock()
         .map_err(|_| "Preference lock unavailable")?;
     let updated = merged_preferences(&saved, patch)?;
-    state.persist(&updated)?;
+    state.persist(&saved, &updated)?;
     *saved = updated.clone();
     drop(saved);
     apply_widget(&app, &updated)?;
@@ -459,11 +519,7 @@ pub fn setup_widget(
     paths: &PulsePaths,
     preferences: &PulsePreferences,
 ) -> tauri::Result<()> {
-    let height = if preferences.widget_expanded {
-        480.0
-    } else {
-        180.0
-    };
+    let height = widget_default_height(preferences);
     tauri::WebviewWindowBuilder::new(
         app,
         "widget",
@@ -475,6 +531,7 @@ pub fn setup_widget(
     .visible(preferences.widget_visible)
     .focused(false)
     .decorations(false)
+    .transparent(true)
     .resizable(false)
     .maximizable(false)
     .minimizable(false)
@@ -519,11 +576,7 @@ fn apply_widget(app: &tauri::AppHandle, preferences: &PulsePreferences) -> Resul
         window
             .set_size(tauri::LogicalSize::new(
                 350.0,
-                if preferences.widget_expanded {
-                    480.0
-                } else {
-                    180.0
-                },
+                widget_default_height(preferences),
             ))
             .map_err(|error| error.to_string())?;
         keep_widget_visible(app).map_err(|error| error.to_string())?;
@@ -535,6 +588,22 @@ fn apply_widget(app: &tauri::AppHandle, preferences: &PulsePreferences) -> Resul
         .map_err(|error| error.to_string())?;
     }
     Ok(())
+}
+
+fn widget_default_height(preferences: &PulsePreferences) -> f64 {
+    if preferences.widget_expanded {
+        return 480.0;
+    }
+    let skin = if preferences.widget_skin == "follow" {
+        &preferences.skin_id
+    } else {
+        &preferences.widget_skin
+    };
+    if skin == "paper" {
+        84.0
+    } else {
+        180.0
+    }
 }
 
 fn clamp_widget_position(
@@ -639,9 +708,14 @@ pub fn save_widget_position(app: &tauri::AppHandle) {
         if let Ok(position) = window.outer_position() {
             let store = app.state::<PreferenceStore>();
             if let Ok(mut value) = store.value.lock() {
-                value.widget_x = Some(position.x);
-                value.widget_y = Some(position.y);
-                let _ = store.persist(&value);
+                let updated = PulsePreferences {
+                    widget_x: Some(position.x),
+                    widget_y: Some(position.y),
+                    ..value.clone()
+                };
+                if store.persist(&value, &updated).is_ok() {
+                    *value = updated;
+                }
             };
         }
     }
@@ -757,15 +831,18 @@ mod tests {
     fn titlebar_preferences_survive_downgrade_without_polluting_the_050_file() {
         let (directory, original) = preference_fixture();
         let store = PreferenceStore::load(&directory);
-        let mut current = store.value.lock().unwrap().clone();
+        let initial = store.value.lock().unwrap().clone();
+        let mut current = initial.clone();
         // Reproduce the regression before checking the new storage boundary.
-        let inline = serde_json::to_vec(&current).unwrap();
+        let mut inline_value = serde_json::to_value(&current).unwrap();
+        inline_value.as_object_mut().unwrap().remove("widgetSkin");
+        let inline = serde_json::to_vec(&inline_value).unwrap();
         assert!(serde_json::from_slice::<Preferences050>(&inline)
             .unwrap_err()
             .to_string()
             .contains("titlebarEnabled"));
         current.titlebar_enabled = false;
-        store.persist(&current).unwrap();
+        store.persist(&initial, &current).unwrap();
         assert_eq!(
             fs::read(&store.path).unwrap(),
             original,
@@ -792,8 +869,9 @@ mod tests {
         assert_eq!(value.theme, "light");
         assert_eq!(value.widget_x, Some(-500));
         assert!(!value.titlebar_enabled);
+        let previous = value.clone();
         value.widget_y = Some(100);
-        upgraded.persist(&value).unwrap();
+        upgraded.persist(&previous, &value).unwrap();
         assert_eq!(
             serde_json::from_slice::<Preferences050>(&fs::read(&store.path).unwrap())
                 .unwrap()
@@ -825,15 +903,16 @@ mod tests {
         fs::create_dir(directory.join("pulse-titlebar-preferences.json")).unwrap();
         let store = PreferenceStore::load(&directory);
         let mut value = store.value.lock().unwrap().clone();
+        let previous = value.clone();
         value.skin_id = "clear".into();
         value.titlebar_enabled = false;
-        assert!(store.persist(&value).is_err());
+        assert!(store.persist(&previous, &value).is_err());
         assert_eq!(fs::read(&store.path).unwrap(), original);
         fs::remove_dir_all(&directory).unwrap();
     }
 
     #[test]
-    fn an_unreleased_inline_titlebar_field_is_split_on_the_next_save() {
+    fn an_unreleased_inline_titlebar_field_is_split_on_the_next_base_save() {
         let (directory, _) = preference_fixture();
         let mut value = PreferenceStore::load(&directory)
             .value
@@ -849,7 +928,9 @@ mod tests {
         let store = PreferenceStore::load(&directory);
         let loaded = store.value.lock().unwrap().clone();
         assert!(!loaded.titlebar_enabled);
-        store.persist(&loaded).unwrap();
+        let mut changed = loaded.clone();
+        changed.widget_y = Some(100);
+        store.persist(&loaded, &changed).unwrap();
         assert!(serde_json::from_slice::<Preferences050>(&fs::read(&store.path).unwrap()).is_ok());
         assert!(
             !PreferenceStore::load(&directory)
@@ -886,6 +967,197 @@ mod tests {
             serde_json::json!({"accessToken":"never store auth here"})
         )
         .is_err());
+    }
+
+    #[test]
+    fn paper_patch_preserves_the_existing_independent_preferences() {
+        let initial = PulsePreferences {
+            skin_id: "meter".into(),
+            theme: "dark".into(),
+            motion_level: "off".into(),
+            compact_mode: true,
+            widget_expanded: true,
+            widget_x: Some(-400),
+            ..Default::default()
+        };
+        let changed = merged_preferences(&initial, serde_json::json!({"skinId":"paper"})).unwrap();
+        assert_eq!(changed.skin_id, "paper");
+        assert_eq!(changed.theme, "dark");
+        assert_eq!(changed.motion_level, "off");
+        assert!(changed.compact_mode && changed.widget_expanded);
+        assert_eq!(changed.widget_x, Some(-400));
+    }
+
+    #[test]
+    fn widget_skin_is_persisted_separately_without_rewriting_old_preferences() {
+        let (directory, original) = preference_fixture();
+        let titlebar_bytes = b"{ \"enabled\": false }\n";
+        let legacy_bytes =
+            b"{ \"language\": \"zh\", \"refreshMinutes\": 5, \"launchAtLogin\": true }\n";
+        fs::write(
+            directory.join("pulse-titlebar-preferences.json"),
+            titlebar_bytes,
+        )
+        .unwrap();
+        fs::write(
+            directory.join("pulse-legacy-preferences.json"),
+            legacy_bytes,
+        )
+        .unwrap();
+        let store = PreferenceStore::load(&directory);
+        let initial = store.value.lock().unwrap().clone();
+        let changed =
+            merged_preferences(&initial, serde_json::json!({"widgetSkin":"paper"})).unwrap();
+        store.persist(&initial, &changed).unwrap();
+        assert_eq!(fs::read(&store.path).unwrap(), original);
+        assert_eq!(fs::read(&store.titlebar_path).unwrap(), titlebar_bytes);
+        assert_eq!(
+            fs::read(directory.join("pulse-legacy-preferences.json")).unwrap(),
+            legacy_bytes
+        );
+        let old: Preferences050 = serde_json::from_slice(&fs::read(&store.path).unwrap()).unwrap();
+        assert_eq!(old.skin_id, "meter");
+        let reloaded = PreferenceStore::load(&directory);
+        let value = reloaded.value.lock().unwrap().clone();
+        assert_eq!(serde_json::to_value(&value).unwrap()["widgetSkin"], "paper");
+        assert_eq!(value.skin_id, "meter");
+        let changed = merged_preferences(&value, serde_json::json!({"skinId":"clear"})).unwrap();
+        reloaded.persist(&value, &changed).unwrap();
+        let value = PreferenceStore::load(&directory)
+            .value
+            .lock()
+            .unwrap()
+            .clone();
+        assert_eq!(value.skin_id, "clear");
+        assert_eq!(serde_json::to_value(value).unwrap()["widgetSkin"], "paper");
+        fs::remove_dir_all(&directory).unwrap();
+    }
+
+    #[test]
+    fn widget_only_save_does_not_create_a_missing_global_preferences_file() {
+        let directory =
+            std::env::temp_dir().join(format!("pulse-widget-no-base-{}", uuid::Uuid::new_v4()));
+        fs::create_dir_all(&directory).unwrap();
+        let store = PreferenceStore::load(&directory);
+        let before = store.value.lock().unwrap().clone();
+        let after = merged_preferences(&before, serde_json::json!({"widgetSkin":"paper"})).unwrap();
+        store.persist(&before, &after).unwrap();
+        assert!(!directory.join("pulse-preferences.json").exists());
+        assert!(!directory.join("pulse-titlebar-preferences.json").exists());
+        let reloaded = PreferenceStore::load(&directory);
+        let value = reloaded.value.lock().unwrap().clone();
+        assert_eq!(value.skin_id, "clear");
+        assert_eq!(value.widget_skin, "paper");
+        fs::remove_dir_all(&directory).unwrap();
+    }
+
+    #[test]
+    fn widget_only_save_preserves_partial_old_global_preferences_bytes() {
+        let directory = std::env::temp_dir().join(format!(
+            "pulse-widget-partial-base-{}",
+            uuid::Uuid::new_v4()
+        ));
+        fs::create_dir_all(&directory).unwrap();
+        let original = b" {\n  \"skinId\": \"meter\", \"theme\": \"dark\"\n}\n";
+        fs::write(directory.join("pulse-preferences.json"), original).unwrap();
+        let store = PreferenceStore::load(&directory);
+        let before = store.value.lock().unwrap().clone();
+        let after = merged_preferences(&before, serde_json::json!({"widgetSkin":"paper"})).unwrap();
+        store.persist(&before, &after).unwrap();
+        assert_eq!(
+            fs::read(directory.join("pulse-preferences.json")).unwrap(),
+            original
+        );
+        let value = PreferenceStore::load(&directory)
+            .value
+            .lock()
+            .unwrap()
+            .clone();
+        assert_eq!(value.skin_id, "meter");
+        assert_eq!(value.theme, "dark");
+        assert_eq!(value.widget_skin, "paper");
+        fs::remove_dir_all(&directory).unwrap();
+    }
+
+    #[test]
+    fn widget_only_save_preserves_global_preferences_with_unknown_extensions() {
+        let directory = std::env::temp_dir().join(format!(
+            "pulse-widget-extended-base-{}",
+            uuid::Uuid::new_v4()
+        ));
+        fs::create_dir_all(&directory).unwrap();
+        let original =
+            b"{ \"skinId\":\"meter\", \"futureExtension\":{\"keep\":\"original bytes\"} }\n";
+        fs::write(directory.join("pulse-preferences.json"), original).unwrap();
+        let store = PreferenceStore::load(&directory);
+        let before = store.value.lock().unwrap().clone();
+        let after = merged_preferences(&before, serde_json::json!({"widgetSkin":"paper"})).unwrap();
+        store.persist(&before, &after).unwrap();
+        assert_eq!(
+            fs::read(directory.join("pulse-preferences.json")).unwrap(),
+            original
+        );
+        let value = PreferenceStore::load(&directory)
+            .value
+            .lock()
+            .unwrap()
+            .clone();
+        assert_eq!(value.skin_id, before.skin_id);
+        assert_eq!(value.widget_skin, "paper");
+        fs::remove_dir_all(&directory).unwrap();
+    }
+
+    #[test]
+    fn legacy_and_invalid_widget_styles_follow_without_resetting_global_preferences() {
+        let (directory, _) = preference_fixture();
+        for bytes in [
+            None,
+            Some(b"{\"skinId\":\"unknown\"}".as_slice()),
+            Some(b"{\"skinId\":false}".as_slice()),
+        ] {
+            if let Some(bytes) = bytes {
+                fs::write(directory.join("pulse-widget-appearance.json"), bytes).unwrap();
+            }
+            let value = PreferenceStore::load(&directory)
+                .value
+                .lock()
+                .unwrap()
+                .clone();
+            assert_eq!(value.skin_id, "meter");
+            assert_eq!(value.theme, "dark");
+            assert_eq!(serde_json::to_value(value).unwrap()["widgetSkin"], "follow");
+        }
+        fs::remove_dir_all(&directory).unwrap();
+    }
+
+    #[test]
+    fn failed_widget_save_restores_base_and_titlebar_bytes() {
+        let (directory, original) = preference_fixture();
+        let titlebar_bytes = b"{\"enabled\":false}\n";
+        fs::write(
+            directory.join("pulse-titlebar-preferences.json"),
+            titlebar_bytes,
+        )
+        .unwrap();
+        fs::create_dir(directory.join("pulse-widget-appearance.json")).unwrap();
+        let store = PreferenceStore::load(&directory);
+        let initial = store.value.lock().unwrap().clone();
+        let changed = merged_preferences(
+            &initial,
+            serde_json::json!({"skinId":"clear","titlebarEnabled":true,"widgetSkin":"paper"}),
+        )
+        .unwrap();
+        assert!(store.persist(&initial, &changed).is_err());
+        assert_eq!(fs::read(&store.path).unwrap(), original);
+        assert_eq!(fs::read(&store.titlebar_path).unwrap(), titlebar_bytes);
+        let value = PreferenceStore::load(&directory)
+            .value
+            .lock()
+            .unwrap()
+            .clone();
+        assert_eq!(value.skin_id, "meter");
+        assert!(!value.titlebar_enabled);
+        fs::remove_dir_all(&directory).unwrap();
     }
     #[test]
     fn widget_expansion_stays_in_the_work_area_on_mixed_dpi_and_negative_origin_monitors() {

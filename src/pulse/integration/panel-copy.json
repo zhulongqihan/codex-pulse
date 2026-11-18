@@ -100,7 +100,8 @@
     "noticeStateUnknownDetail": "尚无可确认的预告状态。仅凭预告未显示，无法判断它是到期还是被撤回。",
     "noticeStateChecked": "最后检查：{time}",
     "noticeStateValidUntil": "上次预告有效期至：{time}",
-    "noticeStateIndependent": "公开重置预告与个人账号的重置时间相互独立。"
+    "noticeStateIndependent": "公开重置预告与个人账号的重置时间相互独立。",
+    "paper": "纸册"
   },
   "zh-Hant": {
     "heading": "額度與時間，一起看",
@@ -203,7 +204,8 @@
     "noticeStateUnknownDetail": "尚無可確認的預告狀態。僅憑預告未顯示，無法判斷它是到期還是被撤回。",
     "noticeStateChecked": "最後檢查：{time}",
     "noticeStateValidUntil": "上次預告有效期至：{time}",
-    "noticeStateIndependent": "公開重設預告與個人帳戶的重設時間互相獨立。"
+    "noticeStateIndependent": "公開重設預告與個人帳戶的重設時間互相獨立。",
+    "paper": "紙冊"
   },
   "en": {
     "heading": "Quota and time, together",
@@ -306,7 +308,8 @@
     "noticeStateUnknownDetail": "There is no confirmed notice status yet. A missing notice alone does not establish whether it expired or was withdrawn.",
     "noticeStateChecked": "Last checked: {time}",
     "noticeStateValidUntil": "Previous notice valid until: {time}",
-    "noticeStateIndependent": "Public reset notices are separate from your account’s reset time."
+    "noticeStateIndependent": "Public reset notices are separate from your account’s reset time.",
+    "paper": "Paper"
   },
   "ja": {
     "heading": "上限と時間を一緒に確認",
@@ -409,7 +412,8 @@
     "noticeStateUnknownDetail": "確認できた予告の状態はまだありません。表示されないことだけでは、期限切れか撤回かは判断できません。",
     "noticeStateChecked": "最終確認：{time}",
     "noticeStateValidUntil": "前回の予告の有効期限：{time}",
-    "noticeStateIndependent": "公開されるリセット予告と個人アカウントのリセット時刻は別の情報です。"
+    "noticeStateIndependent": "公開されるリセット予告と個人アカウントのリセット時刻は別の情報です。",
+    "paper": "ペーパー"
   },
   "ko": {
     "heading": "한도와 시간을 함께 보기",
@@ -512,7 +516,8 @@
     "noticeStateUnknownDetail": "아직 확인된 예고 상태가 없습니다. 예고가 표시되지 않는 것만으로 만료 또는 철회 여부를 판단할 수 없습니다.",
     "noticeStateChecked": "마지막 확인: {time}",
     "noticeStateValidUntil": "이전 예고 유효 기간: {time}",
-    "noticeStateIndependent": "공개 초기화 예고와 개인 계정의 초기화 시각은 별개입니다."
+    "noticeStateIndependent": "공개 초기화 예고와 개인 계정의 초기화 시각은 별개입니다.",
+    "paper": "페이퍼"
   },
   "de": {
     "heading": "Kontingent und Zeit zusammen",
@@ -615,6 +620,7 @@
     "noticeStateUnknownDetail": "Es liegt noch kein bestätigter Ankündigungsstatus vor. Eine fehlende Anzeige allein belegt weder Ablauf noch Widerruf.",
     "noticeStateChecked": "Zuletzt geprüft: {time}",
     "noticeStateValidUntil": "Vorige Ankündigung gültig bis: {time}",
-    "noticeStateIndependent": "Öffentliche Reset-Ankündigungen und die Reset-Zeit Ihres Kontos sind voneinander unabhängig."
+    "noticeStateIndependent": "Öffentliche Reset-Ankündigungen und die Reset-Zeit Ihres Kontos sind voneinander unabhängig.",
+    "paper": "Papier"
   }
 }

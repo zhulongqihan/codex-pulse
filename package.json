@@ -1,9 +1,9 @@
 {
   "name": "codex-pulse",
-  "version": "0.12.0",
+  "version": "0.13.0",
   "private": true,
   "type": "module",
-  "description": "Local Codex usage, complete session replay and account capacity in Clear and Meter styles.",
+  "description": "Local Codex usage, complete session replay and account capacity in Clear, Meter and Paper styles.",
   "homepage": "https://github.com/zhulongqihan/codex-pulse#readme",
   "repository": {
     "type": "git",

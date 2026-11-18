@@ -194,7 +194,14 @@ export function SettingsPage({
           if (next === null) return;
           event.preventDefault();
           setActiveSection(SETTINGS_SECTIONS[next]);
-          document.getElementById(`settings-tab-${SETTINGS_SECTIONS[next]}`)?.focus({ preventScroll: true });
+          const target = document.getElementById(`settings-tab-${SETTINGS_SECTIONS[next]}`);
+          target?.focus({ preventScroll: true });
+          const strip = target?.parentElement;
+          if (target && strip && strip.scrollWidth > strip.clientWidth) {
+            const tabBounds = target.getBoundingClientRect(), stripBounds = strip.getBoundingClientRect();
+            if (tabBounds.left < stripBounds.left) strip.scrollLeft -= stripBounds.left - tabBounds.left;
+            else if (tabBounds.right > stripBounds.right) strip.scrollLeft += tabBounds.right - stripBounds.right;
+          }
         }}
         onClick={() => {
           setActiveSection(section);

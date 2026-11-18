@@ -30,7 +30,7 @@ const messages = {
     features: [
       ["本轮额度配速", "余量、重置时间与时间进度一起判断，配上日均或每小时分配参考。百分比暂未变化时，基本信息仍然可用。"],
       ["需要时追溯消耗", "在完整工作台按日期、项目和模型查看本机留存日志，或只读回放会话。账号额度与本机 Token 分开，不把参考成本当订阅账单。"],
-      ["需要时才展开", "小图标与状态条贴在 Codex 右上角。点击展开无输入框卡片；离开 Codex 时隐藏。清爽与刻度两版保持同样的能力。"],
+      ["需要时才展开", "小图标与状态条贴在 Codex 右上角。点击展开无输入框卡片；离开 Codex 时隐藏。清爽、刻度与纸册均可使用。"],
     ],
     install: "几步放到手边。",
     steps: [
@@ -76,7 +76,7 @@ const messages = {
     features: [
       ["This window’s pace", "View remaining quota, reset time and time progress together, with daily or hourly reference allocations. Basic information remains useful even when the percentage has not changed."],
       ["Trace usage when needed", "Explore retained local logs by date, project and model, or replay a session read-only. Account quota and local tokens stay separate; reference cost is not your subscription bill."],
-      ["Expand when needed", "An app icon and compact status follow the top right of Codex. Click for a card without a text box; it hides when you leave Codex. Clear and Meter share the same capabilities."],
+      ["Expand when needed", "An app icon and compact status follow the top right of Codex. Click for a card without a text box; it hides when you leave Codex. Available in Clear, Meter and Paper."],
     ],
     install: "Keep it within reach.",
     steps: [

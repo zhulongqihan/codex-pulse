@@ -10,6 +10,7 @@ import { syntheticCoachSnapshot } from "@/lib/pulse-pace";
 import i18n from "./i18n";
 import tauriConfig from "../../src-tauri/tauri.conf.json";
 import forecastFixture from "../../e2e/fixtures/reset-forecast.json";
+import {updatePulsePreferences} from "@/lib/pulse-appearance";
 
 const invokeMock = vi.hoisted(() => vi.fn());
 const forecastInvokeMock = vi.hoisted(() => vi.fn());
@@ -1753,7 +1754,8 @@ describe("App", () => {
     expect(sessionFetchCount).toBe(2);
   });
 
-  it("retains model searches and sorting across skin changes and settings without rescanning or refreshing account limits", async () => {
+  it.each(["meter", "paper"] as const)("retains model searches and sorting across %s and settings without rescanning or refreshing account limits", async (skin) => {
+    onTestFinished(async () => { await act(async () => { await updatePulsePreferences({skinId: "clear"}); }); });
     const models = [{ model: "gpt-5", inputTokens: 100, cachedInputTokens: 20, outputTokens: 40, totalTokens: 140, costUSD: 0.001, pricingStatus: "priced" }];
     invokeMock.mockImplementation(async (command: string) => {
       if (command === "scan_usage") return scan(0);
@@ -1780,12 +1782,12 @@ describe("App", () => {
     const scanCount = invokeMock.mock.calls.filter(([command]) => command === "scan_usage").length;
     const limitsCount = invokeMock.mock.calls.filter(([command]) => command === "fetch_codex_limits").length;
 
-    await user.click(screen.getByRole("button", { name: "Meter" }));
-    expect(document.documentElement).toHaveAttribute("data-skin", "meter");
+    await user.click(screen.getByRole("button", { name: skin === "paper" ? "Paper" : "Meter" }));
+    expect(document.documentElement).toHaveAttribute("data-skin", skin);
     expect(screen.getByRole("tab", { name: "Model" })).toHaveAttribute("aria-selected", "true");
     expect(search).toHaveValue("gpt-5");
     expect(screen.queryByRole("row", { name: /other-model/ })).not.toBeInTheDocument();
-    await user.click(screen.getByRole("button", { name: "Settings" }));
+    await user.click(screen.getByTestId("settings-nav-tab"));
     await user.click(screen.getByRole("button", { name: "Back" }));
     expect(screen.getByRole("tab", { name: "Model" })).toHaveAttribute("aria-selected", "true");
     expect(screen.getByRole("textbox", { name: "Search models or providers..." })).toHaveValue("gpt-5");
