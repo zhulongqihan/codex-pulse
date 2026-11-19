@@ -1,6 +1,7 @@
 import { $, browser, expect } from '@wdio/globals';
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
+import type { TrayPopoverData } from '../src/pulse/lib/tray-popover';
 
 async function invoke<T>(command: string, args: Record<string, unknown> = {}): Promise<T> {
   return browser.tauri.execute(({ core }, cmd, payload) => core.invoke(cmd, payload), command, args) as Promise<T>;
@@ -21,6 +22,19 @@ async function selectSkin(id: 'clear' | 'meter' | 'paper') {
   await button.click();
   await expect(button).toHaveAttribute('aria-pressed', 'true');
   await expect($('html')).toHaveAttribute('data-skin', id);
+}
+
+async function expectReadingFonts(selectors: string[]) {
+  for (const selector of selectors) await $(selector).waitForExist();
+  const samples = await browser.execute((required) => required.flatMap(selector => {
+    const elements = [...document.querySelectorAll(selector)];
+    if (!elements.length) throw new Error(`Missing Paper typography target: ${selector}`);
+    return elements.map(element => ({ selector, family: getComputedStyle(element).fontFamily }));
+  }), selectors);
+  for (const sample of samples) {
+    expect(sample.family).toMatch(/Segoe UI/);
+    expect(sample.family).not.toMatch(/KaiTi|STKaiti|Georgia|Times New Roman|SimSun|楷体|宋体/i);
+  }
 }
 
 async function logicalWidgetSize() {
@@ -54,9 +68,67 @@ describe('paper theme in the native app', () => {
       await $('button=返回').click();
       await expect($('#session-detail-title')).toHaveText(title);
       await expect(search).toHaveValue('合成');
+      if (skin === 'paper') await expectReadingFonts(['#session-detail-title', '#session-detail-search input']);
     }
     expect(await preferences()).toEqual({ ...before, skinId: 'paper' });
     await $('button[aria-label="关闭会话详情"]').click();
+  });
+
+  it('uses reading fonts in analysis, settings, the account drawer and the native tray', async () => {
+    await browser.switchToWindow('main');
+    await openAppearance();
+    await selectSkin('paper');
+    await expectReadingFonts([
+      '.max-w-5xl:has(> .pulse-settings-layout) h1',
+      '#pulse-appearance-title',
+      '#settings-tab-appearance',
+    ]);
+    await $('[data-testid="analysis-nav-tab"]').click();
+    await $('[data-testid="usage-analysis"]').waitForDisplayed();
+    await expectReadingFonts(['#pulse-analysis-title', '.pulse-analysis-totals dd']);
+
+    const size = await browser.getWindowSize();
+    try {
+      await browser.setWindowSize(1000, 780);
+      await $('[data-testid="account-toggle"]').click();
+      await $('[data-testid="account-drawer"]').waitForDisplayed();
+      await expectReadingFonts([
+        '#pulse-account-drawer-title',
+        '[data-testid="account-drawer"] #pulse-account-details-heading',
+        '[data-testid="account-drawer"] .pulse-account-identity strong',
+      ]);
+      await browser.keys('Escape');
+      await $('[data-testid="account-drawer"]').waitForExist({ reverse: true });
+    } finally {
+      await browser.setWindowSize(size.width, size.height);
+    }
+
+    // Supply known readings through the existing native snapshot/event path;
+    // an offline fixture otherwise has no quota or cost nodes to inspect.
+    const previous = await invoke<TrayPopoverData>('get_tray_popover');
+    expect(previous).not.toBeNull();
+    const popover: TrayPopoverData = {
+      ...previous,
+      account: 'paper-typography@example.invalid',
+      quotas: [{ kind: 'weekly', label: '7天周期', remainingPercent: 11, usedText: '已用89%', resetText: '48分钟后重置' }],
+      tokens: { value: '100,000', exact: '100,000' },
+      cost: '$1.25',
+    };
+    try {
+      await invoke('update_tray', { payload: { title: 'Codex Pulse', items: [], popover } });
+      await invoke('tray_popover_action', { action: 'rightClick' });
+      await browser.switchToWindow('tray');
+      await $('.tray-popover').waitForDisplayed();
+      await expect($('html')).toHaveAttribute('data-skin', 'paper');
+      await expectReadingFonts([
+        '.tray-identity h1', '.tray-quota h2', '.tray-remaining strong',
+        '.tray-metric:nth-child(1) strong', '.tray-metric:nth-child(2) strong',
+      ]);
+    } finally {
+      await browser.switchToWindow('main');
+      await invoke('tray_popover_action', { action: 'showMain' });
+      await invoke('update_tray', { payload: { title: 'Codex Pulse', items: [], popover: previous } });
+    }
   });
 
   it('follows the main skin, applies an independent override and exercises actual widget geometry and actions', async () => {
@@ -94,6 +166,7 @@ describe('paper theme in the native app', () => {
     await browser.switchToWindow('widget');
     await expect($(widget)).toHaveAttribute('data-widget-skin', 'paper');
     await expectWidgetSize('paperCollapsed', height => height >= 83 && height < 180);
+    await expectReadingFonts(['.pulse-widget-header > strong']);
 
     // Each webview has its own locale at startup.
     await browser.execute(() => localStorage.setItem('language', 'zh'));
@@ -103,6 +176,18 @@ describe('paper theme in the native app', () => {
     await header.$('button[aria-label="展开"]').click();
     await expect($(widget + '.is-expanded')).toBeDisplayed();
     await expectWidgetSize('paperExpanded', height => Math.abs(height - 480) <= 1);
+    await expectReadingFonts([
+      '.pulse-widget-header > strong',
+      '.pulse-widget-close-hint',
+      '.paper-widget-quota strong',
+      '.paper-widget-quota small',
+      '.paper-widget-judgment',
+      '.paper-widget-today strong',
+      '.paper-widget-pace-details > summary',
+      '.paper-widget-style label',
+      '.paper-widget-style select',
+      '.paper-widget-style > button',
+    ]);
 
     const pin = $('[data-testid="widget-pin"]');
     const initiallyPinned = (await preferences()).widgetAlwaysOnTop;

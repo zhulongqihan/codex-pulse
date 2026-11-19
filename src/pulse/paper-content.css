@@ -1,11 +1,14 @@
+html[data-skin="paper"] {
+  --journal-heading: var(--pulse-reading);
+}
+
 html[data-skin="paper"] :is(.pulse-app, .pulse-account-drawer, .pulse-chart-fullscreen, [aria-labelledby="pulse-range-title"]) {
-  --journal-heading: KaiTi, STKaiti, "楷体", Georgia, serif;
   --journal-grid: color-mix(in srgb, var(--paper-line) 44%, transparent);
   --journal-table-heading: color-mix(in srgb, var(--paper-accent) 14%, var(--paper-surface));
   --journal-shadow: 1px 3px 6px rgb(40 34 20 / .13);
   --journal-graph: linear-gradient(var(--journal-grid) 1px, transparent 1px),
     linear-gradient(90deg, var(--journal-grid) 1px, transparent 1px);
-  font-family: "Segoe UI", "Microsoft YaHei UI", "Microsoft YaHei", sans-serif;
+  font-family: var(--pulse-reading);
 }
 
 html[data-skin="paper"] :is(.pulse-main-scroll, .pulse-account-rail, .pulse-account-drawer, .pulse-chart-fullscreen, [aria-labelledby="pulse-range-title"], [aria-labelledby="session-detail-title"], [aria-labelledby="modal-project-title"], [aria-labelledby="codex-reset-history-title"]) :is(h1, h2, h3, h4) {
@@ -14,12 +17,24 @@ html[data-skin="paper"] :is(.pulse-main-scroll, .pulse-account-rail, .pulse-acco
   overflow-wrap: anywhere;
 }
 
-html[data-skin="paper"] .pulse-app :is(.pulse-analysis-heading h1, .pulse-quota-heading h1, .pulse-main-scroll h2.text-xl) {
-  font-size: clamp(1.55rem, 3vw, 2.1rem);
-  line-height: 1.25;
+html[data-skin="paper"] .pulse-app :is(.pulse-analysis-heading h1, .pulse-quota-heading h1, .pulse-main-scroll h2.text-xl),
+html[data-skin="paper"] .pulse-app[data-view="settings"] .pulse-main-scroll h1 {
+  font-size: 24px;
+  line-height: 1.35;
+  font-weight: 600;
   text-decoration: underline color-mix(in srgb, #bc774b 70%, transparent);
   text-decoration-thickness: 2px;
   text-underline-offset: .23em;
+}
+
+html[data-skin="paper"] .pulse-app[data-view="settings"] #settings-panel :is(.pulse-settings-section > header h2, h3.text-lg, .pulse-feedback header h2) {
+  font-size: 18px;
+  line-height: 1.4;
+  font-weight: 600;
+}
+
+html[data-skin="paper"] .pulse-limit-value {
+  font-family: var(--pulse-reading);
 }
 
 html[data-skin="paper"] :is(.pulse-app, .pulse-account-drawer, .pulse-chart-fullscreen) :is(.pulse-panel, .pulse-settings-section, .pulse-session-group, .pulse-chart-tooltip),

@@ -16,7 +16,7 @@
 :root[data-skin="paper"][data-theme="dark"] .pulse-app:before{filter:brightness(.35) sepia(.12)}
 :root[data-skin="paper"] .pulse-topbar{flex-shrink:0;min-height:60px;height:8vh;max-height:90px;padding-inline:8.6% 10.4%;gap:20px;background:transparent;border:0;z-index:3}
 :root[data-skin="paper"] .pulse-brand{gap:12px;min-width:0;flex-shrink:0}
-:root[data-skin="paper"] .pulse-brand>strong{font:600 clamp(21px,2.3vw,35px)/1.2 'Segoe Print',KaiTi,'楷体',serif;white-space:nowrap;position:relative}
+:root[data-skin="paper"] .pulse-brand>strong{font:600 clamp(21px,2.3vw,35px)/1.2 'Segoe Print',var(--pulse-reading);white-space:nowrap;position:relative}
 :root[data-skin="paper"] .pulse-brand>strong:after{content:'';position:absolute;left:30%;right:3%;bottom:-6px;height:3px;border-radius:50%;background:#c4804d;transform:rotate(-4deg)}
 :root[data-skin="paper"] .pulse-brand svg,:root[data-skin="paper"] .pulse-brand img{width:42px;height:42px;flex-shrink:0}
 :root[data-skin="paper"] .pulse-brand .pulse-page-label{display:none}
@@ -56,7 +56,7 @@
 :root[data-skin="paper"][data-theme="dark"] .pulse-paper-navigation button[aria-selected="true"]{background-color:#8b8a64}
 :root[data-skin="paper"] .pulse-account-rail{background:rgb(var(--surface)) var(--paper-texture) center/600px;background-blend-mode:multiply;border:1px solid rgb(var(--border));border-radius:5px;box-shadow:3px 5px 0 #a6a28040;padding:18px;width:min(320px,32%);min-width:245px}
 :root[data-skin="paper"] .pulse-main-scroll>div>header,:root[data-skin="paper"] .pulse-main-scroll .pulse-dashboard-header{background:transparent}
-:root[data-skin="paper"] .pulse-dashboard-home{--journal-heading:var(--pulse-reading);display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);column-gap:clamp(24px,3vw,48px);row-gap:16px;align-items:start;font-family:var(--pulse-reading);font-size:14px;line-height:1.6;font-variant-numeric:tabular-nums}
+:root[data-skin="paper"] .pulse-dashboard-home{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);column-gap:clamp(24px,3vw,48px);row-gap:16px;align-items:start;font-family:var(--pulse-reading);font-size:14px;line-height:1.6;font-variant-numeric:tabular-nums}
 .pulse-paper-quotas{display:none}
 :root[data-skin="paper"] .pulse-paper-quotas{display:block;grid-column:1;grid-row:1/span 4;min-width:0}
 :root[data-skin="paper"] .pulse-paper-quotas>.sidebar-limits>div:first-child{border-bottom:0;gap:8px 12px;align-items:baseline;margin-bottom:12px;font-size:12px;line-height:1.6;flex-wrap:wrap}

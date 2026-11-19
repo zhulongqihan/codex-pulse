@@ -4,6 +4,17 @@ User-facing changes are grouped by release, following [Keep a Changelog](https:/
 
 ## [Unreleased]
 
+## [0.13.2] - 2026-11-19
+
+### Fixed / 修复
+
+- Align Paper UI lettering across workspace views and dialogs, the attached pacing card, tray and Codex panel; remove inconsistent calligraphic and serif readings.
+- 统一纸册工作台、弹层、标题栏配速卡、托盘和 Codex 面板的 UI 字体，修正文字与数值混用楷体和衬线体的问题。
+- Coordinate page and settings headings and compact-surface type sizes while retaining backgrounds, other themes, existing records and preferences.
+- 统一页面与设置标题层级和小窗字号，保留背景、其他主题、已有记录和偏好。
+
+[完整中英说明 / Full release notes](docs/releases/v0.13.2.md)
+
 ## [0.13.1] - 2026-11-19
 
 ### Fixed / 修复
@@ -313,7 +324,8 @@ User-facing changes are grouped by release, following [Keep a Changelog](https:/
 
 Earlier releases remain available in [GitHub Releases](https://github.com/zhulongqihan/codex-pulse/releases). / 更早版本保留在 GitHub Releases。
 
-[Unreleased]: https://github.com/zhulongqihan/codex-pulse/compare/v0.13.1...HEAD
+[Unreleased]: https://github.com/zhulongqihan/codex-pulse/compare/v0.13.2...HEAD
+[0.13.2]: https://github.com/zhulongqihan/codex-pulse/compare/v0.13.1...v0.13.2
 [0.13.1]: https://github.com/zhulongqihan/codex-pulse/releases/tag/v0.13.1
 [0.13.0]: https://github.com/zhulongqihan/codex-pulse/releases/tag/v0.13.0
 [0.12.0]: https://github.com/zhulongqihan/codex-pulse/releases/tag/v0.12.0

@@ -2,6 +2,7 @@ import { $, browser, expect } from '@wdio/globals';
 import { readFileSync, writeFileSync, renameSync } from 'node:fs';
 import { join } from 'node:path';
 import { randomUUID } from 'node:crypto';
+import { syntheticPaceSnapshot } from '../src/pulse/lib/pulse-pace';
 
 type Status = { enabled: boolean; supported: boolean; hostFound: boolean; badgeVisible: boolean; badgeForeground: boolean; popupOpen: boolean; popupForeground: boolean;
   reason: string;
@@ -199,17 +200,60 @@ describe('Pulse attached titlebar in a real owned native host', () => {
     expect(popup.fields).toBe(0); expect(popup.noHorizontalOverflow).toBe(true); expect(popup.hasButtons).toBe(true);
     await browser.saveScreenshot(join(output, 'native-titlebar-popover.png'));
     const styles: Record<string, unknown> = {};
-    for (const skinId of ['clear', 'meter']) {
+    for (const skinId of ['clear', 'meter', 'paper']) {
       await invoke('set_pulse_preferences', { patch: { skinId, theme: 'light' } });
       await browser.waitUntil(async () => await browser.execute(() => document.documentElement.dataset.skin) === skinId);
-      styles[skinId] = await browser.execute(() => ({ skin: document.documentElement.dataset.skin,
-        bodyHeight: document.body.scrollHeight, viewport: innerHeight,
-        noHorizontalOverflow: document.documentElement.scrollWidth <= innerWidth + 1,
-        footerVisible: (() => { const footer = document.querySelector('.pulse-pace-footer'); if (!footer) return false;
-          const bounds = footer.getBoundingClientRect(); return bounds.top >= 0 && bounds.bottom <= innerHeight + 1; })() }));
-      expect((styles[skinId] as { noHorizontalOverflow: boolean }).noHorizontalOverflow).toBe(true);
-      expect((styles[skinId] as { footerVisible: boolean }).footerVisible).toBe(true);
-      await browser.saveScreenshot(join(output, `native-titlebar-popover-${skinId}.png`));
+      if (skinId === 'paper') {
+        // Only the local reading is synthetic. The actual popup, native input
+        // and dismissal commands continue to use the owned Tauri fixture.
+        await browser.execute((snapshot) => {
+          const target = window as typeof window & { pulseTypographyFetch?: typeof window.fetch;
+            __TAURI_INTERNALS__: { convertFileSrc: (path: string, protocol: string) => string } };
+          const url = target.__TAURI_INTERNALS__.convertFileSrc('fetch_pulse_pace', 'ipc');
+          const original = window.fetch;
+          target.pulseTypographyFetch = original;
+          window.fetch = (input, options) => String(input) === url
+            ? Promise.resolve(new Response(JSON.stringify(snapshot), { headers: { 'Content-Type': 'application/json', 'Tauri-Response': 'ok' } }))
+            : original.call(window, input, options);
+        }, syntheticPaceSnapshot('forecast'));
+      }
+      try {
+        if (skinId === 'paper') {
+          await invoke('plugin:event|emit', { event: 'pulse-pace-updated', payload: null });
+          const selectors = ['.pulse-pace-header h2', '.coach-window-tag', '.coach-key-readings strong',
+            '.coach-countdown', '.coach-reference h3', '.coach-reference strong', '.coach-reference p',
+            '.pulse-pace-footer time', '.pace-details'];
+          for (const selector of selectors) await $(selector).waitForExist();
+          const fonts = await browser.execute((required) => required.flatMap(selector => {
+            const elements = [...document.querySelectorAll(selector)];
+            if (!elements.length) throw new Error(`Missing Paper popover typography target: ${selector}`);
+            return elements.map(element => ({ selector, family: getComputedStyle(element).fontFamily }));
+          }), selectors);
+          record('paper-popover-reading-fonts', fonts);
+          for (const font of fonts) {
+            expect(font.family).toMatch(/Segoe UI/);
+            expect(font.family).not.toMatch(/KaiTi|STKaiti|Georgia|Times New Roman|SimSun|楷体|宋体/i);
+          }
+        }
+        styles[skinId] = await browser.execute(() => ({ skin: document.documentElement.dataset.skin,
+          bodyHeight: document.body.scrollHeight, viewport: innerHeight,
+          noHorizontalOverflow: document.documentElement.scrollWidth <= innerWidth + 1,
+          footerVisible: (() => { const footer = document.querySelector('.pulse-pace-footer'); if (!footer) return false;
+            const bounds = footer.getBoundingClientRect(); return bounds.top >= 0 && bounds.bottom <= innerHeight + 1; })() }));
+        expect((styles[skinId] as { noHorizontalOverflow: boolean }).noHorizontalOverflow).toBe(true);
+        expect((styles[skinId] as { footerVisible: boolean }).footerVisible).toBe(true);
+        await browser.saveScreenshot(join(output, `native-titlebar-popover-${skinId}.png`));
+      } finally {
+        if (skinId === 'paper') {
+          await browser.execute(() => {
+            const target = window as typeof window & { pulseTypographyFetch?: typeof window.fetch };
+            if (!target.pulseTypographyFetch) throw new Error('The Paper typography fetch restore point is missing');
+            window.fetch = target.pulseTypographyFetch;
+            delete target.pulseTypographyFetch;
+          });
+          await invoke('plugin:event|emit', { event: 'pulse-pace-updated', payload: null });
+        }
+      }
     }
     await browser.keys('Escape');
     await browser.waitUntil(async () => !(await status()).popupOpen && nativeState()?.foreground === true);
