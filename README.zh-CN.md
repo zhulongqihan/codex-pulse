@@ -31,7 +31,7 @@
 - **导出与更新**：XLSX／Markdown 包含所选范围的汇总、日期、模型和项目。自有更新源验证签名、品牌、平台与包摘要，更新失败保留数据并恢复原程序。
 - **帮助与反馈**：设置内集中查看使用帮助、分享体验或报告问题。反馈摘要只包含可见的最少环境与用户选择项，先预览再复制，不自动上传账号、日志或会话。
 
-0.13.0 新增纸册工作台，提供横向纸签、书册布局与配套浮窗。浮窗可跟随主窗，也可单独选择外观。查看[本版更新说明](docs/releases/v0.13.0.md)。
+0.13.1 优化纸册仪表盘与悬浮窗的字体、字号和间距，让读数、周期与说明更协调；保留书册背景、清爽／刻度主题及原有记录。查看[本版更新说明](docs/releases/v0.13.1.md)。
 
 ## 工作情境与节奏卡片预览
 
@@ -45,7 +45,7 @@
 
 | 清爽 Clear | 刻度 Meter | 纸册 Paper |
 |---|---| --- |
-| ![清爽界面，合成数据](docs/screenshots/clear-overview.png) | ![刻度界面，合成数据](docs/screenshots/meter-overview.png) | ![纸册仪表盘，合成数据](docs/screenshots/paper-dashboard.png) |
+| ![清爽界面，合成数据](docs/screenshots/clear-overview.png) | ![刻度界面，合成数据](docs/screenshots/meter-overview.png) | ![纸册仪表盘，合成数据](docs/screenshots/paper-0.13.1-dashboard.png) |
 
 三种外观共用相同功能。仪表盘优先展示额度与今日参考成本；“用量分析”保留完整时段趋势、分布与导出。清爽使用轻量比较图与连续表格，刻度突出深色趋势区域，纸册使用横向纸签、书册布局和纸张纹理。逐日细看、数据表、全屏和键盘操作保持可达。
 
@@ -55,7 +55,7 @@
 
 | 清爽 Clear | 刻度 Meter | 纸册 Paper |
 |---|---| --- |
-| ![清爽用量分析，合成数据](docs/screenshots/clear-analysis.png) | ![刻度用量分析，合成数据](docs/screenshots/meter-analysis.png) | ![纸册用量分析，合成数据](docs/screenshots/paper-analysis-local.png) |
+| ![清爽用量分析，合成数据](docs/screenshots/clear-analysis.png) | ![刻度用量分析，合成数据](docs/screenshots/meter-analysis.png) | ![纸册用量分析，合成数据](docs/screenshots/paper-0.13.1-analysis-local.png) |
 
 ## 每日官方额度记录
 
@@ -63,7 +63,7 @@
 
 | 清爽 Clear | 刻度 Meter | 纸册 Paper |
 |---|---| --- |
-| ![清爽每日官方额度记录，合成数据](docs/screenshots/clear-quota-history.png) | ![刻度每日官方额度记录，合成数据](docs/screenshots/meter-quota-history.png) | ![纸册每日官方额度记录，合成数据](docs/screenshots/paper-analysis-official.png) |
+| ![清爽每日官方额度记录，合成数据](docs/screenshots/clear-quota-history.png) | ![刻度每日官方额度记录，合成数据](docs/screenshots/meter-quota-history.png) | ![纸册每日官方额度记录，合成数据](docs/screenshots/paper-0.13.1-analysis-official.png) |
 
 在 **设置 → 数据来源** 中可关闭或重新开启记录。默认开启，正常约每 60 秒读取当前已选择账号，错误与限流时退避；隐藏主窗、浮窗和标题栏不会停止记录。Pulse 退出或系统休眠时不采集，不新增系统服务或模型请求。
 

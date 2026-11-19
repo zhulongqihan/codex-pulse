@@ -31,7 +31,7 @@ A quiet quota-pacing companion for Codex on Windows: view remaining quota and re
 - **Exports and updates:** XLSX/Markdown contain range summary, daily, model and project statistics. Pulse updates verify the release signature, product, platform and package digest, preserving data and restoring the previous executable if startup fails.
 - **Help and feedback:** find usage guidance, experience discussions and bug reporting in settings. Preview a minimal summary of visible environment and selected options before copying it; account data, logs and conversations are not uploaded automatically.
 
-0.13.0 adds Paper, a journal-style workspace with paper tabs and a matching floating widget. The widget can follow the workspace or use its own style. Read the [release notes](docs/releases/v0.13.0.md#english).
+0.13.1 refines typography, type sizes and spacing in the Paper dashboard and floating widget. Readings, periods and explanations are easier to scan together, while the journal background, Clear/Meter styles and existing records are retained. Read the [release notes](docs/releases/v0.13.1.md#english).
 
 ## Work context and interactive pace preview
 
@@ -45,7 +45,7 @@ Try the [roomy quota](https://zhulongqihan.github.io/codex-pulse/?demo=1&coachSc
 
 | Clear | Meter | Paper |
 |---|---| --- |
-| ![Clear with synthetic data](docs/screenshots/clear-overview.png) | ![Meter with synthetic data](docs/screenshots/meter-overview.png) | ![Paper dashboard with synthetic data](docs/screenshots/paper-dashboard.png) |
+| ![Clear with synthetic data](docs/screenshots/clear-overview.png) | ![Meter with synthetic data](docs/screenshots/meter-overview.png) | ![Paper dashboard with synthetic data](docs/screenshots/paper-0.13.1-dashboard.png) |
 
 All three styles share the same capabilities. The dashboard prioritizes quota and today's reference cost; Usage analysis retains complete-range trends, distributions and exports. Clear uses lightweight comparisons and continuous tables; Meter emphasizes one dark trend field, and Paper uses a bound-journal layout with page tabs and textured paper. Daily detail, a data table, fullscreen viewing and keyboard controls remain available.
 
@@ -55,7 +55,7 @@ Open historical trends and distributions from **Usage analysis**. Today's dashbo
 
 | Clear | Meter | Paper |
 |---|---| --- |
-| ![Clear Usage analysis with synthetic data](docs/screenshots/clear-analysis.png) | ![Meter Usage analysis with synthetic data](docs/screenshots/meter-analysis.png) | ![Paper Usage analysis with synthetic data](docs/screenshots/paper-analysis-local.png) |
+| ![Clear Usage analysis with synthetic data](docs/screenshots/clear-analysis.png) | ![Meter Usage analysis with synthetic data](docs/screenshots/meter-analysis.png) | ![Paper Usage analysis with synthetic data](docs/screenshots/paper-0.13.1-analysis-local.png) |
 
 ## Daily official quota history
 
@@ -63,7 +63,7 @@ The dashboard shows today's observed consumption. Open **Usage analysis → Offi
 
 | Clear | Meter | Paper |
 |---|---| --- |
-| ![Clear daily official quota history, synthetic data](docs/screenshots/clear-quota-history.png) | ![Meter daily official quota history, synthetic data](docs/screenshots/meter-quota-history.png) | ![Paper daily official quota history with synthetic data](docs/screenshots/paper-analysis-official.png) |
+| ![Clear daily official quota history, synthetic data](docs/screenshots/clear-quota-history.png) | ![Meter daily official quota history, synthetic data](docs/screenshots/meter-quota-history.png) | ![Paper daily official quota history with synthetic data](docs/screenshots/paper-0.13.1-analysis-official.png) |
 
 Recording is enabled by default and can be changed under **Settings → Data source**. While Pulse is running, it reads the selected account approximately every 60 seconds, with backoff for failures and rate limits. Hiding the main window, widget or corner indicator does not stop recording. Quitting or system sleep stops sampling; no system service or model request is added.
 

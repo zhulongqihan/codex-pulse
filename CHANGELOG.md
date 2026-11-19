@@ -4,6 +4,17 @@ User-facing changes are grouped by release, following [Keep a Changelog](https:/
 
 ## [Unreleased]
 
+## [0.13.1] - 2026-11-19
+
+### Fixed / 修复
+
+- Use consistent UI lettering for Paper dashboard labels, readings and navigation, with a closer size balance between numbers and supporting text.
+- 统一纸册仪表盘标签、读数与导航的 UI 字体，缩小主数字与辅助文字的字号落差。
+- Refine the matching widget's typography and spacing while retaining its compact/expanded views, status explanations and independent style selection.
+- 调整配套悬浮窗的字体与间距，保留收起／展开、状态说明与独立外观选择。
+
+[完整中英说明 / Full release notes](docs/releases/v0.13.1.md)
+
 ## [0.13.0] - 2026-11-18
 
 ### Added / 新增
@@ -302,7 +313,8 @@ User-facing changes are grouped by release, following [Keep a Changelog](https:/
 
 Earlier releases remain available in [GitHub Releases](https://github.com/zhulongqihan/codex-pulse/releases). / 更早版本保留在 GitHub Releases。
 
-[Unreleased]: https://github.com/zhulongqihan/codex-pulse/compare/v0.13.0...HEAD
+[Unreleased]: https://github.com/zhulongqihan/codex-pulse/compare/v0.13.1...HEAD
+[0.13.1]: https://github.com/zhulongqihan/codex-pulse/releases/tag/v0.13.1
 [0.13.0]: https://github.com/zhulongqihan/codex-pulse/releases/tag/v0.13.0
 [0.12.0]: https://github.com/zhulongqihan/codex-pulse/releases/tag/v0.12.0
 [0.11.0]: https://github.com/zhulongqihan/codex-pulse/releases/tag/v0.11.0
