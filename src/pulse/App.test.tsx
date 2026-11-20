@@ -310,8 +310,14 @@ describe("App", () => {
     expect(await screen.findByRole("tab", { name: label })).toHaveAttribute("data-testid", "analysis-nav-tab");
   });
 
-  it.each(["sessions", "settings"])("opens cycle pace observations after the native pace card leaves %s", async source => {
+  it.each([
+    ["sessions", "clear"], ["settings", "clear"], ["sessions", "paper"], ["settings", "paper"],
+  ] as const)("opens cycle pace observations from %s in %s after a native request", async (source, skinId) => {
     mockLoadedDashboard();
+    if (skinId === "paper") {
+      onTestFinished(async () => { await act(async () => { await updatePulsePreferences({ skinId: "clear" }); }); });
+      await updatePulsePreferences({ skinId });
+    }
     const invokeLoaded = invokeMock.getMockImplementation()!;
     invokeMock.mockImplementation((command: string, ...args: unknown[]) => command === "fetch_pulse_pace"
       ? Promise.resolve(syntheticCoachSnapshot("roomy")) : invokeLoaded(command, ...args));
@@ -333,11 +339,56 @@ describe("App", () => {
     await waitFor(() => expect(document.activeElement).toBe(document.getElementById("pulse-pace-details")));
     const observations = document.querySelector<HTMLDetailsElement>("#pulse-pace-details .coach-daily")!;
     expect(observations.open).toBe(true);
-    observations.open = false;
+    if (skinId === "paper") {
+      expect(screen.getByTestId("dashboard-hero").lastElementChild).toContainElement(document.getElementById("pulse-pace-details"));
+      fireEvent.keyDown(document.getElementById("pulse-pace-details")!, { key: "Escape" });
+      expect(document.getElementById("pulse-pace-details")).toHaveAttribute("hidden");
+      expect(document.activeElement).toHaveAttribute("aria-controls", "pulse-pace-details");
+    } else {
+      observations.open = false;
+    }
     await act(async () => {
       for (const callback of eventListeners.get("pulse-show-pace-details") ?? []) callback({ payload: null });
     });
-    await waitFor(() => expect(observations.open).toBe(true));
+    await waitFor(() => expect(document.querySelector("#pulse-pace-details .coach-daily")).toHaveAttribute("open"));
+  });
+  it("keeps a Paper companion request open and focused when the first overview arrives late", async () => {
+    onTestFinished(async () => { await act(async () => { await updatePulsePreferences({ skinId: "clear" }); }); });
+    await updatePulsePreferences({ skinId: "paper" });
+    setPageActive(true);
+    let resolveOverview!: (value: ReturnType<typeof overview>) => void;
+    let recovering = false;
+    const delayedOverview = new Promise<ReturnType<typeof overview>>(resolve => { resolveOverview = resolve; });
+    const initialScan = new Promise<ReturnType<typeof scan>>(() => {});
+    mockLoadedDashboard();
+    const invokeLoaded = invokeMock.getMockImplementation()!;
+    invokeMock.mockImplementation(async (command: string, ...args: unknown[]) => {
+      if (command === "fetch_pulse_pace") return syntheticCoachSnapshot("roomy");
+      if (command === "scan_usage") return initialScan;
+      if (command === "fetch_overview") {
+        if (recovering) return delayedOverview;
+        throw new Error("Initial usage cache unavailable");
+      }
+      return invokeLoaded(command, ...args);
+    });
+    render(<App/>);
+    await waitFor(() => expect(eventListeners.get("background-refresh-completed")).toHaveLength(1));
+    await act(async () => {
+      eventListeners.get("pulse-show-pace-details")?.[0]?.({ payload: null });
+      recovering = true;
+      eventListeners.get("background-refresh-completed")?.[0]?.({ payload: {
+        scan: scan(1), limits: null, limitsError: null, limitsSkipped: true, refreshedAt: new Date().toISOString(),
+      } });
+    });
+    // The dashboard can process a focus frame while the replacement overview is still pending.
+    await act(async () => { await new Promise<void>(resolve => window.requestAnimationFrame(() => resolve())); });
+    expect(screen.queryByTestId("dashboard-hero")).not.toBeInTheDocument();
+    await act(async () => { resolveOverview(overview()); });
+    const dashboard = await screen.findByTestId("dashboard-hero");
+    const details = within(dashboard).getByTestId("pulse-coach-overview");
+    expect(details).toBeVisible();
+    expect(within(details).getByTestId("coach-cycle-observations")).toHaveAttribute("open");
+    await waitFor(() => expect(details).toHaveFocus());
   });
   it("publishes a resolved theme change to the local plugin snapshot without querying usage", async () => {
     mockLoadedDashboard();

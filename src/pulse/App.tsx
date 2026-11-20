@@ -30,7 +30,7 @@ import { useUsageDashboard } from "@/hooks/use-usage-dashboard";
 import { buildMetricCards, getRangeLabel } from "@/lib/usage-dashboard";
 import { getReleaseNotes } from "@/lib/release-notes";
 import type { SessionDetailRow } from "@/lib/api";
-import { Activity, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { Activity, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { PulseStyleSwitcher } from "@/components/pulse-appearance-controls";
 import { usePulseCopy } from "@/lib/pulse-copy";
 import { usePulsePreferences } from "@/lib/pulse-appearance";
@@ -416,6 +416,38 @@ export default function App() {
     </section>
   </>;
 
+  const paperDashboard = preferences.skinId === "paper";
+  const openQuotaHistory = () => { setAnalysisSource("official"); navigate("analysis"); };
+  const coachProps = { onDetails: () => paceDetails.current(), onRecover: showAccount };
+  const dashboardCoach = <PulseCoachOverview {...coachProps} summary={!paceObservationsExpanded} observationsExpanded={paceObservationsExpanded}/>;
+  const renderDashboard = (coach: ReactNode, coachDetails?: ReactNode) => showDashboard ? <DashboardHeroCard
+    overview={showDashboard}
+    todayOverview={todayOverview}
+    todayUnavailable={!isLoading && !todayOverview}
+    todayStale={isTodayStale}
+    onOpenToday={() => {
+      const today = new Intl.DateTimeFormat("sv-SE", { timeZone: todayOverview?.timezone || showDashboard.timezone }).format(new Date());
+      setSelectedProjectFilter(null);
+      setSelectedSessionDate(today);
+      navigate("sessions");
+    }}
+    range={range}
+    isBusy={isLoading || isRefreshing || isResetting || isExporting !== null}
+    isExporting={isExporting}
+    exportError={exportError}
+    onRangeChange={handleRangeChange}
+    onExport={(format) => void handleExport(format)}
+    metrics={metrics}
+    codexLimits={codexLimits}
+    coach={coach}
+    coachFirst
+    paperSpread={paperDashboard}
+    coachDetails={coachDetails}
+    quotaHistory={<QuotaHistorySummary onOpenHistory={openQuotaHistory}/>}
+    quotaLimits={paperDashboard ? <CodexSidebarLimits paper limits={codexLimits} error={codexLimitsError} isLimitsRefreshing={isLimitsRefreshing} onRefreshLimits={() => void handleLimitsRefresh()} isWindowActivating={isWindowActivating} windowActivationStatus={windowActivationStatus} windowActivationError={windowActivationError} onActivateWindow={() => void handleActivateCodexWindow()}/> : undefined}
+    onOpenAnalysis={() => navigate("analysis")}
+  /> : null;
+
   return (
     <div className="pulse-app relative flex h-screen flex-col overflow-hidden bg-background text-foreground" data-view={view}>
       <header className="pulse-topbar">
@@ -625,29 +657,11 @@ export default function App() {
             <Activity mode={view === "dashboard" ? "visible" : "hidden"}>
             <div className="space-y-5">
               {showQuickStart && !compactWindow ? <PulseGettingStarted expanded={helpExpanded} onExpand={() => setHelpExpanded(value => !value)} localReady={!!overview?.updatedAt || diagnostics?.status === "ready"} accountReady={!!codexLimits} quotaAvailable={hasReturnedQuota(codexLimits)} source={diagnostics?.codexHome} busy={desktopAction !== null} notice={desktopNotice} error={desktopError} onSource={() => openSettings("source")} onAccount={showAccount} onWidget={() => void runDesktopAction("widget")} onShortcuts={() => void runDesktopAction("shortcuts")} onDismiss={dismissQuickStart}/> : null}
-              {!showDashboard || !overview ? <PulseCoachOverview summary={!paceObservationsExpanded} onDetails={() => paceDetails.current()} onRecover={showAccount} observationsExpanded={paceObservationsExpanded}/> : null}
-              {!showDashboard || !overview ? <QuotaHistorySummary onOpenHistory={() => { setAnalysisSource("official"); navigate("analysis"); }}/> : null}
-              {showDashboard && overview ? <DashboardHeroCard
-                overview={overview}
-                  todayOverview={todayOverview}
-                  todayUnavailable={!isLoading && !todayOverview}
-                  todayStale={isTodayStale}
-                  onOpenToday={() => { const today = new Intl.DateTimeFormat("sv-SE", { timeZone: todayOverview?.timezone || overview.timezone }).format(new Date()); setSelectedProjectFilter(null); setSelectedSessionDate(today); navigate("sessions"); }}
-                range={range}
-                isBusy={isLoading || isRefreshing || isResetting || isExporting !== null}
-                isExporting={isExporting}
-                exportError={exportError}
-                onRangeChange={handleRangeChange}
-                onExport={(format) => void handleExport(format)}
-                metrics={metrics}
-                codexLimits={codexLimits}
-                coach={<PulseCoachOverview summary={!paceObservationsExpanded} onDetails={() => paceDetails.current()} onRecover={showAccount} observationsExpanded={paceObservationsExpanded}/>}
-                coachFirst
-                quotaHistory={<QuotaHistorySummary onOpenHistory={() => { setAnalysisSource("official"); navigate("analysis"); }}/>}
-                quotaLimits={preferences.skinId === "paper" ? <CodexSidebarLimits limits={codexLimits} error={codexLimitsError} isLimitsRefreshing={isLimitsRefreshing} onRefreshLimits={() => void handleLimitsRefresh()} isWindowActivating={isWindowActivating} windowActivationStatus={windowActivationStatus} windowActivationError={windowActivationError} onActivateWindow={() => void handleActivateCodexWindow()}/> : undefined}
-                onOpenAnalysis={() => navigate("analysis")}
-                onOpenDay={(date) => { setSelectedProjectFilter(null); setSelectedSessionDate(date); navigate("sessions"); }}
-              /> : null}
+              {paperDashboard ? <PulseCoachOverview {...coachProps} observationsExpanded={paceDetailsRequested}>
+                {({ summary, details }) => showDashboard ? renderDashboard(summary, details)
+                  : <>{summary}<QuotaHistorySummary onOpenHistory={openQuotaHistory}/>{details}</>}
+              </PulseCoachOverview> : showDashboard ? renderDashboard(dashboardCoach)
+                : <>{dashboardCoach}<QuotaHistorySummary onOpenHistory={openQuotaHistory}/></>}
 
               {showQuickStart && compactWindow ? <PulseGettingStarted expanded={helpExpanded} onExpand={() => setHelpExpanded(value => !value)} localReady={!!overview?.updatedAt || diagnostics?.status === "ready"} accountReady={!!codexLimits} quotaAvailable={hasReturnedQuota(codexLimits)} source={diagnostics?.codexHome} busy={desktopAction !== null} notice={desktopNotice} error={desktopError} onSource={() => openSettings("source")} onAccount={showAccount} onWidget={() => void runDesktopAction("widget")} onShortcuts={() => void runDesktopAction("shortcuts")} onDismiss={dismissQuickStart}/> : null}
 

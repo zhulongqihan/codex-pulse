@@ -42,6 +42,32 @@ function breakdownOverview(rows: Array<{ name: string; tokens: number; cost: num
 beforeEach(async () => { await i18n.changeLanguage("en"); });
 
 describe("focused dashboard", () => {
+  it("puts account and today on separate Paper pages, with one details section below", async () => {
+    const user = userEvent.setup();
+    const onOpenAnalysis = vi.fn(), onOpenToday = vi.fn(), onOpenHistory = vi.fn();
+    render(<DashboardHeroCard {...props()} paperSpread coachFirst
+      todayOverview={{ ...overview, daily: [row(today(), 77, 1.2)] }}
+      quotaLimits={<h2>Account quota</h2>} coach={<h2>Account pace</h2>}
+      coachDetails={<h2>Full pace details</h2>}
+      quotaHistory={<button onClick={onOpenHistory}>Open quota records</button>}
+      onOpenAnalysis={onOpenAnalysis} onOpenToday={onOpenToday}/>);
+    const [quotaPage, todayPage, details] = screen.getByTestId("dashboard-hero").children;
+    expect(quotaPage).toContainElement(screen.getByRole("heading", { name: "Account quota" }));
+    expect(quotaPage).toContainElement(screen.getByRole("heading", { name: "Account pace" }));
+    const todaysSessions = within(todayPage as HTMLElement).getByRole("button", { name: "Today's sessions" });
+    const quotaRecords = within(todayPage as HTMLElement).getByRole("button", { name: "Open quota records" });
+    const usageAnalysis = within(todayPage as HTMLElement).getByRole("button", { name: "Open usage analysis" });
+    expect(todayPage.querySelector(".pulse-dashboard-today-values > div:first-child")).toContainElement(screen.getByTestId("today-tokens"));
+    expect(todayPage.querySelector(".pulse-today-breakdown")).toHaveAttribute("open");
+    expect(details).toContainElement(screen.getByRole("heading", { name: "Full pace details" }));
+    await user.click(todaysSessions);
+    await user.click(quotaRecords);
+    await user.click(usageAnalysis);
+    expect(onOpenToday).toHaveBeenCalledOnce();
+    expect(onOpenHistory).toHaveBeenCalledOnce();
+    expect(onOpenAnalysis).toHaveBeenCalledOnce();
+  });
+
   it("keeps quota first, puts today's estimate before tokens and opens separate analysis without repeating account facts", async () => {
     const user = userEvent.setup();
     const onOpenAnalysis = vi.fn(), onOpenToday = vi.fn();

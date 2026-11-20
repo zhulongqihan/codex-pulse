@@ -26,6 +26,7 @@ type CodexLimitsCardProps = {
 
 type CodexSidebarLimitsProps = {
   compact?: boolean;
+  paper?: boolean;
   limits: CodexLimitsResponse | null;
   error: string | null;
   isLimitsRefreshing?: boolean;
@@ -96,11 +97,14 @@ export function CodexLimitsCard({ limits, isLimitsLoading = false, limitsError =
   );
 }
 
-export function CodexSidebarLimits({ compact = false, limits, error, isLimitsRefreshing = false, isWindowActivating = false, windowActivationStatus, windowActivationError, onRefreshLimits, onActivateWindow }: CodexSidebarLimitsProps) {
+export function CodexSidebarLimits({ compact = false, paper = false, limits, error, isLimitsRefreshing = false, isWindowActivating = false, windowActivationStatus, windowActivationError, onRefreshLimits, onActivateWindow }: CodexSidebarLimitsProps) {
   const { t } = useTranslation();
   const [, refreshCountdown] = useState(0);
   const now = Date.now();
   const hasExpiredReading = [limits?.session, limits?.weekly].some(window => window?.resetsAt != null && Date.parse(window.resetsAt) <= now);
+  const failedReading = paper && Boolean(error);
+  const updatedTime = limits && dayjs(limits.updatedAt).isValid()
+    ? t("limits.updated", { time: dayjs(limits.updatedAt).format("HH:mm") }) : undefined;
   useEffect(() => {
     const timer = window.setInterval(() => refreshCountdown((tick) => tick + 1), 30_000);
     return () => window.clearInterval(timer);
@@ -108,11 +112,12 @@ export function CodexSidebarLimits({ compact = false, limits, error, isLimitsRef
 
   return (
     <section className="sidebar-limits space-y-3" aria-label={t("limits.sidebar_title")}>
-      {!compact ? <div className="flex min-w-0 items-center justify-between gap-1 text-[12px]">
+      {!compact ? <div className="pulse-limit-section-heading flex min-w-0 items-center justify-between gap-1 text-[12px]">
         <h2 className="font-semibold">{t("limits.sidebar_title")}</h2>
-        <span className="flex min-w-0 items-center gap-1 text-muted-foreground" title={limits ? t("limits.updated", { time: dayjs(limits.updatedAt).format("HH:mm") }) : undefined}>
+        <span className="pulse-limit-freshness flex min-w-0 items-center gap-1 text-muted-foreground" title={updatedTime}>
           <span className={cn("h-1.5 w-1.5 shrink-0 rounded-full", error ? "bg-warning" : limits && !hasExpiredReading ? "bg-success" : "bg-muted-foreground")} />
-          <span className="truncate">{t(error ? "limits.unavailable" : hasExpiredReading ? "ux.window_elapsed" : limits ? "limits.sidebar_updated" : "limits.not_fetched")}</span>
+          {!paper || !updatedTime || error || hasExpiredReading ? <span className="truncate">{t(error ? "limits.unavailable" : hasExpiredReading ? "ux.window_elapsed" : limits ? "limits.sidebar_updated" : "limits.not_fetched")}</span> : null}
+          {paper && limits && updatedTime ? <time dateTime={limits.updatedAt}>{updatedTime}</time> : null}
         </span>
       </div> : null}
       {!compact && onRefreshLimits && onActivateWindow ? (
@@ -156,9 +161,9 @@ export function CodexSidebarLimits({ compact = false, limits, error, isLimitsRef
 
       ) : null}
       {!error || limits ? (
-        <div className="space-y-3">
-          {limits?.session ? <LimitRow label={quotaWindowKind(limits.session) === "5h" ? "5 hour" : quotaWindowKind(limits.session)} window={limits.session} now={now} compact={compact}/> : null}
-          {limits?.weekly ? <LimitRow label={quotaWindowKind(limits.weekly) === "weekly" ? "Weekly" : quotaWindowKind(limits.weekly)} window={limits.weekly} now={now} compact={compact}/> : null}
+        <div className={paper ? "pulse-limit-windows" : "space-y-3"}>
+          {limits?.session ? <LimitRow label={quotaWindowKind(limits.session) === "5h" ? "5 hour" : quotaWindowKind(limits.session)} window={limits.session} now={now} compact={compact} failedReading={failedReading}/> : null}
+          {limits?.weekly ? <LimitRow label={quotaWindowKind(limits.weekly) === "weekly" ? "Weekly" : quotaWindowKind(limits.weekly)} window={limits.weekly} now={now} compact={compact} failedReading={failedReading}/> : null}
           {!limits?.session && !limits?.weekly ? <p className="text-[12px] leading-6 text-muted-foreground">{t("limits.no_window_returned")}</p> : null}
           {!compact && (limits?.session || limits?.weekly) ? <p data-testid="limits-timezone" className="pulse-time-context">{t("reading_context.reset_local", { zone: localTimeZone() ?? t("reading_context.local_timezone") })}</p> : null}
         </div>
@@ -316,17 +321,23 @@ export function formatSidebarCountdown(resetsAt: string | null, now: number): st
   return `${Math.floor(minutes / 60)}h${minutes % 60}m`;
 }
 
-function LimitRow({ label, window, now, compact }: LimitRowProps & { now: number; compact: boolean }) {
+function LimitRow({ label, window, now, compact, failedReading }: LimitRowProps & { now: number; compact: boolean; failedReading: boolean }) {
   const {t} = useTranslation();
   const friendlyLabel = quotaWindowLabel(window,t);
   const remaining = window && Number.isFinite(window.remainingPercent) ? Math.min(100,Math.max(0,window.remainingPercent)) : null;
   const countdown = formatSidebarCountdown(window?.resetsAt ?? null,now);
   const expired = window?.resetsAt != null && Date.parse(window.resetsAt) <= now;
+  const lastReading = expired || failedReading;
+  const rounded = remaining == null ? "—" : Math.round(remaining);
+  const value = typeof rounded === "number" ? `${rounded}%` : rounded;
+  const valueText = expired ? t("ux.expired_reading", { percent: rounded })
+    : failedReading ? `${t("ux.last_reading")} ${value}`
+    : remaining == null ? t("limits.no_window_returned") : undefined;
   const reset = window?.resetsAt && Number.isFinite(Date.parse(window.resetsAt)) ? dayjs(window.resetsAt).format("MM/DD HH:mm") : null;
   return <div data-testid={`limit-row-${label.toLowerCase().replaceAll(" ","-")}`} className={`pulse-limit-row ${compact ? "is-compact" : ""}`}>
-    <div className="pulse-limit-heading"><span data-quota-label>{friendlyLabel}</span><small>{t(expired ? "ux.last_reading" : "limits.remaining")}</small></div>
-    <strong className="pulse-limit-value">{remaining == null ? "—" : `${Math.round(remaining)}%`}</strong>
-    <div className="pulse-limit-meter" data-quota-level={expired || remaining == null ? "unknown" : remaining < 30 ? "error" : remaining < 70 ? "warning" : "success"} role="progressbar" aria-label={friendlyLabel} aria-valuemin={0} aria-valuemax={100} aria-valuenow={remaining ?? undefined} aria-valuetext={expired ? t("ux.expired_reading", {percent: remaining == null ? "—" : Math.round(remaining)}) : remaining == null ? t("limits.no_window_returned") : undefined}><span style={{width:`${remaining ?? 0}%`}}/></div>
+    <div className="pulse-limit-heading"><span data-quota-label>{friendlyLabel}</span><small>{t(lastReading ? "ux.last_reading" : "limits.remaining")}</small></div>
+    <strong className="pulse-limit-value">{value}</strong>
+    <div className="pulse-limit-meter" data-quota-level={lastReading || remaining == null ? "unknown" : remaining < 30 ? "error" : remaining < 70 ? "warning" : "success"} role="progressbar" aria-label={friendlyLabel} aria-valuemin={0} aria-valuemax={100} aria-valuenow={remaining ?? undefined} aria-valuetext={valueText}><span style={{width:`${remaining ?? 0}%`}}/></div>
     {!compact ? <div className="pulse-limit-reset"><span title={window?.resetsAt ?? undefined}>{reset ? `${reset} ${t("limits.sidebar_reset")}` : t("limits.reset_unavailable")}</span>{countdown != null ? <span data-quota-countdown>{expired ? t("ux.window_elapsed") : countdown}</span> : null}</div> : null}
   </div>;
 }

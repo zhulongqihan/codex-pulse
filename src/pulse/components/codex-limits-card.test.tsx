@@ -161,6 +161,18 @@ describe("sidebar reset countdown", () => {
 });
 
 describe("sidebar quota colors", () => {
+  it("marks retained Paper quota as a last reading after a failed query", () => {
+    const updatedAt = new Date().toISOString();
+    const session = { usedPercent: 100, remainingPercent: 0, windowMinutes: 300, resetsAt: null };
+    render(<CodexSidebarLimits paper limits={{ session, weekly: null, updatedAt, source: "test" }} error="HTTP 429"/>);
+    expect(screen.getByText("Last reading")).toBeInTheDocument();
+    expect(screen.getByText("0%")).toBeInTheDocument();
+    expect(screen.getByRole("progressbar")).toHaveAttribute("data-quota-level", "unknown");
+    expect(screen.getByRole("progressbar")).toHaveAttribute("aria-valuenow", "0");
+    expect(screen.getByRole("progressbar")).toHaveAttribute("aria-valuetext", expect.stringContaining("Last reading"));
+    expect(document.querySelector("time")).toHaveAttribute("datetime", updatedAt);
+  });
+
   it("keeps an expired quota as a neutral last reading and does not invent a reset", () => {
     const expired={usedPercent:21,remainingPercent:79,windowMinutes:300,resetsAt:new Date(Date.now()-1000).toISOString()};
     render(<CodexSidebarLimits limits={{session:expired,weekly:null,updatedAt:new Date().toISOString(),source:"test"}} error={null}/>);
