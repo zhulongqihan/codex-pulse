@@ -78,3 +78,41 @@ html[data-pace-surface=panel][data-theme=dark][data-skin=paper] .pulse-pace-card
 .coach-notice-state{grid-column:1/-1;font-size:12px;line-height:1.6;margin:10px 0;overflow-wrap:anywhere;color:var(--pace-muted)}
 .coach-notice-state summary{min-height:28px;align-content:center;cursor:pointer;font-weight:550;color:var(--pace-ink)}
 .coach-notice-state>p{margin-top:5px!important}
+
+.pulse-coach-details[hidden] {
+  display: none;
+}
+
+.quota-coach-card.layout-spread .coach-body {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--paper-spread-gap, 28px);
+  align-items: start;
+}
+
+.coach-spread-context,
+.coach-spread-observations {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.layout-spread .coach-spread-context > :first-child,
+.layout-spread .coach-spread-observations > :first-child {
+  margin-top: 0;
+}
+
+.layout-spread .coach-notice-summary {
+  display: block;
+  overflow: visible;
+}
+
+.layout-spread .coach-notice-actions {
+  flex-wrap: wrap;
+}
+
+@media (max-width: 900px) {
+  .quota-coach-card.layout-spread .coach-body {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 16px;
+  }
+}

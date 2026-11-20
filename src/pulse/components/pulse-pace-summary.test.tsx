@@ -42,6 +42,25 @@ describe("dashboard quota summary", () => {
     fireEvent.click(screen.getByRole("button", { name: quotaCoachFeedback("en", "recover") }));
     expect(handlers.onRecover).toHaveBeenCalledOnce();
   });
+  it.each(["stale", "expired"] as const)("preserves the precision of the last %s reading", status => {
+    const data = syntheticCoachSnapshot("balanced", new Date(now));
+    if (status === "stale") data.updatedAt = new Date(now - 420_000).toISOString();
+    else data.windows[1].resetsAt = new Date(now - 60_000).toISOString();
+    render(<PulsePaceSummary data={data} {...actions()}/>);
+    expect(screen.getByText(quotaCoachFeedback("en", "last"))).toBeVisible();
+    expect(screen.getByTestId("summary-remaining")).toHaveTextContent("71.4%");
+    expect(screen.getByRole("status")).toHaveTextContent(quotaCoachCopy("en", status));
+    expect(screen.queryByTestId("coach-reference")).not.toBeInTheDocument();
+  });
+  it("surfaces the projected depletion of a fast cycle before external details open", () => {
+    const data = syntheticCoachSnapshot("fast", new Date(now));
+    Object.assign(data.windows[1], {
+      state: "forecast", rateLowerPerHour: 2, rateUpperPerHour: 3,
+    });
+    render(<PulsePaceSummary data={data} detailsPlacement="external" expanded={false} {...actions()}/>);
+    expect(screen.getByText("Recent observations point to possible depletion before reset.")).toBeVisible();
+    expect(screen.queryByTestId("pace-popover")).not.toBeInTheDocument();
+  });
   it("does not turn unavailable data into zero or bypass existing cooldown", () => {
     const handlers = actions();
     const data = syntheticCoachSnapshot("roomy", new Date(now));
