@@ -31,7 +31,7 @@ A quiet quota-pacing companion for Codex on Windows: view remaining quota and re
 - **Exports and updates:** XLSX/Markdown contain range summary, daily, model and project statistics. Pulse updates verify the release signature, product, platform and package digest, preserving data and restoring the previous executable if startup fails.
 - **Help and feedback:** find usage guidance, experience discussions and bug reporting in settings. Preview a minimal summary of visible environment and selected options before copying it; account data, logs and conversations are not uploaded automatically.
 
-0.13.2 coordinates Paper lettering and readings across workspace views, settings and detail dialogs, the attached pacing card, tray and Codex panel, while retaining the journal background, other themes and existing records. Read the [release notes](docs/releases/v0.13.2.md#english).
+0.13.3 reorganizes the Paper dashboard. In wide windows, the left page groups quota, resets and pacing, and the right page shows today's local tokens, API reference cost and official quota observations. Pacing details open below both pages. Narrow windows use a single column. Read the [release notes](docs/releases/v0.13.3.md#english).
 
 Paper companion views with synthetic data: [pacing details](docs/screenshots/paper-0.13.2-pace-panel.png) · [system tray](docs/screenshots/paper-0.13.2-tray.png) · [Codex panel styling](docs/screenshots/paper-0.13.2-mcp.png).
 
@@ -47,7 +47,7 @@ Try the [roomy quota](https://zhulongqihan.github.io/codex-pulse/?demo=1&coachSc
 
 | Clear | Meter | Paper |
 |---|---| --- |
-| ![Clear with synthetic data](docs/screenshots/clear-overview.png) | ![Meter with synthetic data](docs/screenshots/meter-overview.png) | ![Paper dashboard with synthetic data](docs/screenshots/paper-0.13.2-dashboard.png) |
+| ![Clear with synthetic data](docs/screenshots/clear-overview.png) | ![Meter with synthetic data](docs/screenshots/meter-overview.png) | ![Paper dashboard with synthetic data](docs/screenshots/paper-0.13.3-dashboard.png) |
 
 All three styles share the same capabilities. The dashboard prioritizes quota and today's reference cost; Usage analysis retains complete-range trends, distributions and exports. Clear uses lightweight comparisons and continuous tables; Meter emphasizes one dark trend field, and Paper uses a bound-journal layout with page tabs and textured paper. Daily detail, a data table, fullscreen viewing and keyboard controls remain available.
 

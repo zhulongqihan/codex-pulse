@@ -4,6 +4,17 @@ User-facing changes are grouped by release, following [Keep a Changelog](https:/
 
 ## [Unreleased]
 
+## [0.13.3] - 2026-11-21
+
+### Fixed / 修复
+
+- Rebalance the Paper dashboard across two pages, with quota, resets and pacing on the left and today's usage and analysis links on the right.
+- 调整纸册仪表盘两页的内容分布，左页集中显示额度、重置与配速，右页呈现今日用量和分析入口。
+- Open complete pacing details below both pages and use one continuous column in narrow windows.
+- 完整配速详情在两页下方展开，窄窗使用可连续滚动的单列。
+
+[完整中英说明 / Full release notes](docs/releases/v0.13.3.md)
+
 ## [0.13.2] - 2026-11-19
 
 ### Fixed / 修复
@@ -324,7 +335,8 @@ User-facing changes are grouped by release, following [Keep a Changelog](https:/
 
 Earlier releases remain available in [GitHub Releases](https://github.com/zhulongqihan/codex-pulse/releases). / 更早版本保留在 GitHub Releases。
 
-[Unreleased]: https://github.com/zhulongqihan/codex-pulse/compare/v0.13.2...HEAD
+[Unreleased]: https://github.com/zhulongqihan/codex-pulse/compare/v0.13.3...HEAD
+[0.13.3]: https://github.com/zhulongqihan/codex-pulse/compare/v0.13.2...v0.13.3
 [0.13.2]: https://github.com/zhulongqihan/codex-pulse/compare/v0.13.1...v0.13.2
 [0.13.1]: https://github.com/zhulongqihan/codex-pulse/releases/tag/v0.13.1
 [0.13.0]: https://github.com/zhulongqihan/codex-pulse/releases/tag/v0.13.0

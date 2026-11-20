@@ -31,7 +31,7 @@
 - **导出与更新**：XLSX／Markdown 包含所选范围的汇总、日期、模型和项目。自有更新源验证签名、品牌、平台与包摘要，更新失败保留数据并恢复原程序。
 - **帮助与反馈**：设置内集中查看使用帮助、分享体验或报告问题。反馈摘要只包含可见的最少环境与用户选择项，先预览再复制，不自动上传账号、日志或会话。
 
-0.13.2 统一纸册工作台、设置与详情弹层、标题栏配速卡、托盘和 Codex 面板的文字与读数，整理标题层级；保留纸册背景、旧主题和已有记录。查看[本版更新说明](docs/releases/v0.13.2.md)。
+0.13.3 重新安排纸册仪表盘。宽窗左页集中显示额度、重置和配速，右页呈现今日本机 Token、API 参考成本与官方额度观测。配速详情在两页下方展开，窄窗按单列阅读。查看[本版更新说明](docs/releases/v0.13.3.md)。
 
 纸册配套界面（合成数据）：[配速详情](docs/screenshots/paper-0.13.2-pace-panel.png) · [系统托盘](docs/screenshots/paper-0.13.2-tray.png) · [Codex 面板样式](docs/screenshots/paper-0.13.2-mcp.png)。
 
@@ -47,7 +47,7 @@
 
 | 清爽 Clear | 刻度 Meter | 纸册 Paper |
 |---|---| --- |
-| ![清爽界面，合成数据](docs/screenshots/clear-overview.png) | ![刻度界面，合成数据](docs/screenshots/meter-overview.png) | ![纸册仪表盘，合成数据](docs/screenshots/paper-0.13.2-dashboard.png) |
+| ![清爽界面，合成数据](docs/screenshots/clear-overview.png) | ![刻度界面，合成数据](docs/screenshots/meter-overview.png) | ![纸册仪表盘，合成数据](docs/screenshots/paper-0.13.3-dashboard.png) |
 
 三种外观共用相同功能。仪表盘优先展示额度与今日参考成本；“用量分析”保留完整时段趋势、分布与导出。清爽使用轻量比较图与连续表格，刻度突出深色趋势区域，纸册使用横向纸签、书册布局和纸张纹理。逐日细看、数据表、全屏和键盘操作保持可达。
 
