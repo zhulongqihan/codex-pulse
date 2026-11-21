@@ -30,6 +30,41 @@ beforeEach(async () => {
 });
 
 describe("official quota history", () => {
+  it("explains saved history outside the current scope and counts only days with a consumption value", async () => {
+    native.invoke.mockResolvedValue({
+      ...history({
+        startDate: "2026-11-13",
+        daily: [daily("session", 300, 0), daily("session", 300, null, "2026-11-14"), daily("weekly", 10080, null)],
+      }),
+      hasOtherScopeHistory: true,
+    });
+    render(<QuotaHistoryView/>);
+    expect(await screen.findByText(/Quota history from another account or source is saved locally/)).toBeVisible();
+    expect(screen.getByText("1 of 3 days had enough readings to calculate consumption.")).toBeVisible();
+    expect(within(screen.getByRole("table")).getByText("Insufficient samples")).toBeVisible();
+    await userEvent.selectOptions(screen.getByRole("combobox", { name: "Quota window" }), "weekly:10080");
+    expect(screen.getByText("0 of 3 days had enough readings to calculate consumption.")).toBeVisible();
+  });
+
+  it.each([
+    [true, undefined],
+    [true, false],
+    [false, true],
+  ])("withholds the separate-history note for scopeAvailable=%s and hasOtherScopeHistory=%s", async (scopeAvailable, hasOtherScopeHistory) => {
+    native.invoke.mockResolvedValue({
+      ...history({ scopeAvailable, daily: scopeAvailable ? [daily()] : [] }),
+      hasOtherScopeHistory,
+    });
+    render(<QuotaHistoryView/>);
+    if (scopeAvailable) {
+      expect(await screen.findByText("1 of 2 days had enough readings to calculate consumption.")).toBeVisible();
+    } else {
+      expect(await screen.findByText("Current account identity is unavailable. Check the selected Codex account and environment.")).toBeVisible();
+      expect(screen.queryByText(/days had enough readings/)).not.toBeInTheDocument();
+    }
+    expect(screen.queryByText(/Quota history from another account or source is saved locally/)).not.toBeInTheDocument();
+  });
+
   it.each([
     ["zh", "Excel 导出需使用桌面版；网页演示可下载 Markdown。"],
     ["zh-Hant", "Excel 匯出需使用桌面版；網頁示範可下載 Markdown。"],

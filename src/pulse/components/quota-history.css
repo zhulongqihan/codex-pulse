@@ -24,6 +24,7 @@
 .pulse-quota-total { padding-top:12px; border-top:1px solid rgb(var(--border)); }
 .pulse-quota-total dt { font-size:13px; color:rgb(var(--muted-foreground)); }
 .pulse-quota-total dd { margin:4px 0 0; font-size:26px; line-height:1.3; font-weight:600; font-variant-numeric:tabular-nums; }
+.pulse-quota-observed-days { display:block; margin-bottom:4px; color:rgb(var(--foreground)); font-weight:600; }
 .pulse-quota-chart-scroll { overflow-x:auto; }
 .pulse-quota-chart-hint { font-size:12px; line-height:1.6; color:rgb(var(--muted-foreground)); margin-bottom:8px; }
 .pulse-quota-chart-scroll svg { display:block; }

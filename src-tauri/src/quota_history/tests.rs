@@ -74,6 +74,40 @@ fn same_day_remaining_80_to_72_records_eight_points_in_real_sqlite() {
     assert!(count > 0);
 }
 
+#[test]
+fn signals_that_other_local_history_exists_without_including_it_in_the_current_scope() {
+    let dir = Temp::new();
+    let mut ledger = dir.ledger();
+    observe(&mut ledger, "2025-12-31T10:00:00Z", 20.0);
+    observe(&mut ledger, "2025-12-31T10:01:00Z", 28.0);
+    assert!(!ledger.query(Some(A), RANGE).unwrap().has_other_scope_history);
+    let empty_current = ledger.query(Some(B), RANGE).unwrap();
+    assert!(empty_current.has_other_scope_history);
+    assert!(empty_current.daily.is_empty());
+
+    ledger.observe(Some(B), &limits("2026-01-01T10:00:00Z", 45.0)).unwrap();
+    ledger.observe(Some(B), &limits("2026-01-01T10:01:00Z", 46.0)).unwrap();
+    let (current, exported) = ledger
+        .export_snapshot(Some(B), "custom:2025-12-31_2026-01-02")
+        .unwrap();
+    assert!(current.has_other_scope_history);
+    assert_eq!(current.daily.len(), 1);
+    assert_eq!(current.daily[0].consumed_percent_points, Some(1.0));
+    assert_eq!(current.daily[0].sample_count, 2);
+    assert_eq!(exported.len(), 2);
+    assert!(exported.iter().all(|segment| segment.date.as_deref() == Some("2026-01-01")));
+
+    let earlier = ledger.query(Some(A), "custom:2025-12-31_2025-12-31").unwrap();
+    assert!(earlier.has_other_scope_history);
+    assert_eq!(earlier.daily[0].consumed_percent_points, Some(8.0));
+    for unverified in [None, Some("invalid")] {
+        let response = ledger.query(unverified, RANGE).unwrap();
+        assert!(!response.scope_available);
+        assert!(!response.has_other_scope_history);
+        assert!(response.daily.is_empty());
+    }
+}
+
 fn reset_limits(at: &str, used: f64, reset: &str) -> CodexLimitsResponse {
     let mut response = limits(at, used);
     response.session.as_mut().unwrap().resets_at = Some(reset.into());

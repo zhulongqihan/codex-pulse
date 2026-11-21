@@ -4,6 +4,17 @@ User-facing changes are grouped by release, following [Keep a Changelog](https:/
 
 ## [Unreleased]
 
+## [0.13.4] - 2026-11-21
+
+### Fixed / 修复
+
+- Show how many days in the selected range had enough readings to calculate quota consumption for the selected window.
+- 在额度消耗汇总旁显示所选日期中有多少天具备足够读数来计算该窗口的消耗。
+- Explain how to view locally saved quota history from another account or data source.
+- 本地保留其他账号或来源的额度历史时，提示如何查看对应记录。
+
+[完整中英说明 / Full release notes](docs/releases/v0.13.4.md)
+
 ## [0.13.3] - 2026-11-21
 
 ### Fixed / 修复
@@ -335,7 +346,8 @@ User-facing changes are grouped by release, following [Keep a Changelog](https:/
 
 Earlier releases remain available in [GitHub Releases](https://github.com/zhulongqihan/codex-pulse/releases). / 更早版本保留在 GitHub Releases。
 
-[Unreleased]: https://github.com/zhulongqihan/codex-pulse/compare/v0.13.3...HEAD
+[Unreleased]: https://github.com/zhulongqihan/codex-pulse/compare/v0.13.4...HEAD
+[0.13.4]: https://github.com/zhulongqihan/codex-pulse/compare/v0.13.3...v0.13.4
 [0.13.3]: https://github.com/zhulongqihan/codex-pulse/compare/v0.13.2...v0.13.3
 [0.13.2]: https://github.com/zhulongqihan/codex-pulse/compare/v0.13.1...v0.13.2
 [0.13.1]: https://github.com/zhulongqihan/codex-pulse/releases/tag/v0.13.1

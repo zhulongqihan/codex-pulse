@@ -309,6 +309,7 @@ mod tests {
             schema_version: 1,
             identity_revision: 7,
             scope_available: true,
+            has_other_scope_history: true,
             timezone: "Asia/Shanghai".into(),
             enabled: true,
             storage_status: "ready".into(),

@@ -31,7 +31,7 @@ A quiet quota-pacing companion for Codex on Windows: view remaining quota and re
 - **Exports and updates:** XLSX/Markdown contain range summary, daily, model and project statistics. Pulse updates verify the release signature, product, platform and package digest, preserving data and restoring the previous executable if startup fails.
 - **Help and feedback:** find usage guidance, experience discussions and bug reporting in settings. Preview a minimal summary of visible environment and selected options before copying it; account data, logs and conversations are not uploaded automatically.
 
-0.13.3 reorganizes the Paper dashboard. In wide windows, the left page groups quota, resets and pacing, and the right page shows today's local tokens, API reference cost and official quota observations. Pacing details open below both pages. Narrow windows use a single column. Read the [release notes](docs/releases/v0.13.3.md#english).
+0.13.4 clarifies the scope of official quota history. The total shows how many days in the selected range had enough readings to calculate consumption. If history from another account or source is saved locally, the page explains how to view it. [Release notes](docs/releases/v0.13.4.md#english)
 
 Paper companion views with synthetic data: [pacing details](docs/screenshots/paper-0.13.2-pace-panel.png) · [system tray](docs/screenshots/paper-0.13.2-tray.png) · [Codex panel styling](docs/screenshots/paper-0.13.2-mcp.png).
 
@@ -61,7 +61,7 @@ Open historical trends and distributions from **Usage analysis**. Today's dashbo
 
 ## Daily official quota history
 
-The dashboard shows today's observed consumption. Open **Usage analysis → Official quota history** to choose a date range and actual quota window, inspect daily bars and equivalent tables, open cycle evidence, or export a separate XLSX/Markdown file. One query covers up to 366 days; older history remains stored and can be reached with another custom range.
+The dashboard shows today's observed consumption. Open **Usage analysis → Official quota history** to choose a date range and quota window, inspect daily charts and cycle details, or export a separate XLSX or Markdown file. The total shows how many days had enough readings to calculate consumption for that window. To view earlier history under a different account or source, switch back to that account in Codex or restore the source under **Settings → Data source**. One query covers up to 366 days. Use a custom range to view earlier dates.
 
 | Clear | Meter | Paper |
 |---|---| --- |

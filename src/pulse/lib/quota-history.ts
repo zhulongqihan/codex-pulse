@@ -22,6 +22,7 @@ export type QuotaHistorySummaryRow = {
 };
 export type QuotaHistoryResponse = {
   schemaVersion: number; identityRevision: number; scopeAvailable: boolean; timezone: string; enabled: boolean;
+  hasOtherScopeHistory?: boolean;
   storageStatus: string;
   /** Official provider status only; a failed local query rejects the IPC call. */
   readStatus: string; updatedAt: string | null; startDate: string; endDate: string;

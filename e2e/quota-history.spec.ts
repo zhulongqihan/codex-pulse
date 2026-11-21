@@ -1,12 +1,13 @@
 import { $, browser, expect } from '@wdio/globals';
-import { existsSync, mkdirSync, readFileSync, realpathSync, statSync, writeFileSync } from 'node:fs';
+import { createHash } from 'node:crypto';
+import { existsSync, mkdirSync, readFileSync, realpathSync, statSync, unlinkSync, writeFileSync } from 'node:fs';
 import { isAbsolute, join, relative, resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
+import { DatabaseSync } from 'node:sqlite';
 import type { QuotaHistoryDayResponse, QuotaHistoryResponse, QuotaRecordingPreferences } from '../src/pulse/lib/quota-history';
 
-// This suite intentionally has no account fixture and no synthetic quota rows.
-// IPC, preference persistence and UI wiring run inside the actual offline Tauri app.
-// Numeric histories, rollover and populated pagination belong to SQLite/browser tests.
+// All commands run inside the actual offline Tauri app. Only the last scenario
+// temporarily seeds an account and its two synthetic quota scopes.
 const output = process.env.PULSE_TEST_OUTPUT!;
 const evidence: Record<string, unknown> = {};
 type StoredPreferences = QuotaRecordingPreferences & { epoch: number };
@@ -28,6 +29,35 @@ function storedPreferences(): StoredPreferences {
 function insideFixture(path: string, root: string) {
   const child = relative(realpathSync(root), realpathSync(path));
   return child !== '' && child !== '..' && !child.startsWith(`..${process.platform === 'win32' ? '\\' : '/'}`) && !isAbsolute(child);
+}
+
+function syntheticAccount(account: string, home: string) {
+  const subject = 'synthetic-quota-user';
+  const hash = createHash('sha256');
+  // Match the existing Rust v1 ledger key for this owned test directory.
+  for (const value of ['pulse-quota-pace-v1', account, subject, home]) {
+    const bytes = Buffer.from(value, 'utf8');
+    const length = Buffer.alloc(8);
+    length.writeBigUInt64LE(BigInt(bytes.length));
+    hash.update(length).update(bytes);
+  }
+  const claims = Buffer.from(JSON.stringify({
+    'https://api.openai.com/auth': { chatgpt_user_id: subject },
+  })).toString('base64url');
+  return {
+    identity: hash.digest('hex'),
+    auth: {
+      auth_mode: 'chatgpt',
+      tokens: { account_id: account, access_token: 'synthetic-not-a-credential', id_token: `synthetic.${claims}.invalid` },
+    },
+  };
+}
+
+function syntheticDay(daysAgo: number, timezone: string) {
+  const formatter = new Intl.DateTimeFormat('sv-SE', { timeZone: timezone });
+  let end = Date.now() - daysAgo * 86_400_000;
+  if (formatter.format(end - 60_000) !== formatter.format(end)) end += 60_000;
+  return { date: formatter.format(end), start: end - 60_000, end };
 }
 
 async function rejected(command: string, args: Record<string, unknown>, expected: RegExp | string) {
@@ -116,12 +146,12 @@ describe('Official quota history in the real offline Tauri app', () => {
     await $('[data-testid="dashboard-nav-tab"]').waitForDisplayed({ timeout: 90000 });
     const binary = process.env.PULSE_TITLEBAR_EXPECTED_APP_BINARY!;
     record('boundary', {
-      fixtureRoot, data, home, offline: true, authFileAbsent: true,
-      actualTauriIpc: true, quotaObservationsInjected: false,
+      fixtureRoot, data, home, offline: true, authFileAbsentAtStart: true,
+      actualTauriIpc: true, syntheticHistoryOnlyInScopeScenario: true,
       keyboardInput: 'Guarded Win32 SendInput; exact foreground debug image, only Enter/Space/ArrowRight/Home',
       binary, binaryModifiedAt: statSync(binary).mtime.toISOString(),
       covered: ['real IPC', 'preference file and epoch', 'scope unavailable', 'input rejection', 'native UI and keyboard activation'],
-      notCovered: ['authenticated official quota fetch', 'populated numeric history', 'populated segment pagination', 'production installation or upgrade'],
+      notCovered: ['authenticated official quota fetch', 'populated segment pagination', 'production installation or upgrade'],
     });
   });
 
@@ -162,6 +192,7 @@ describe('Official quota history in the real offline Tauri app', () => {
     const history = await invoke<QuotaHistoryResponse>('fetch_quota_history', { range: '1d' });
     expect(history.schemaVersion).toBe(1);
     expect(history.scopeAvailable).toBe(false);
+    expect(history.hasOtherScopeHistory).toBe(false);
     expect(history.readStatus).toBe('identity_unavailable');
     expect(history.storageStatus).toBe('ready');
     expect(history.timezone).toBe(preferences.timezone);
@@ -299,5 +330,109 @@ describe('Official quota history in the real offline Tauri app', () => {
     } finally {
       await invoke('set_quota_recording_enabled', { enabled: original.enabled });
     }
+  });
+
+  it('shows a saved-history hint while displaying only the current scope in all three skins', async () => {
+    const fixtureRoot = process.env.PULSE_TEST_FIXTURE_ROOT!;
+    const home = process.env.PULSE_CODEX_HOME!;
+    const data = process.env.PULSE_DATA_DIR!;
+    const ledgerPath = join(data, 'quota-history.db');
+    const authPath = join(home, 'auth.json');
+    expect(process.env.PULSE_OFFLINE).toBe('1');
+    expect(insideFixture(fixtureRoot, resolve('.local/native-parity'))).toBe(true);
+    expect(insideFixture(home, fixtureRoot)).toBe(true);
+    expect(insideFixture(data, fixtureRoot)).toBe(true);
+    expect(insideFixture(ledgerPath, data)).toBe(true);
+    expect(existsSync(authPath)).toBe(false);
+
+    const original = await invoke<{ skinId: string; theme: string; motionLevel: string }>('get_pulse_preferences');
+    const originalSize = await browser.getWindowSize();
+    const timezone = storedPreferences().timezone;
+    const earlier = syntheticDay(2, timezone);
+    const current = syntheticDay(1, timezone);
+    const previousAccount = syntheticAccount('synthetic-quota-account-a', home);
+    const currentAccount = syntheticAccount('synthetic-quota-account-b', home);
+    const db = new DatabaseSync(ledgerPath);
+    const inserted: number[] = [];
+    const skins: Array<{ skinId: string; total: string; coverage: string }> = [];
+    let authCreated = false;
+    try {
+      db.exec('PRAGMA busy_timeout = 5000');
+      expect(db.prepare('SELECT COUNT(*) AS count FROM segments').get()?.count).toBe(0);
+      const insert = db.prepare(`
+        INSERT INTO segments (identity, kind, minutes, reset, cycle, date, start_date, end_date,
+            start_at, end_at, start_used, end_used, consumed, covered, samples, reason, source)
+        VALUES (?, 'weekly', 10080, ?, 0, ?, ?, ?, ?, ?, 20, ?, ?, 1, 2, 'continuous', 'official')
+      `);
+      db.exec('BEGIN IMMEDIATE');
+      try {
+        const setCycle = db.prepare('UPDATE segments SET cycle = id WHERE id = ?');
+        for (const [account, day, points] of [[previousAccount, earlier, 8], [currentAccount, current, 1]] as const) {
+          const result = insert.run(account.identity, day.end + 2 * 86_400_000, day.date, day.date, day.date, day.start, day.end, 20 + points, points);
+          const id = Number(result.lastInsertRowid);
+          inserted.push(id);
+          setCycle.run(id);
+        }
+        db.exec('COMMIT');
+      } catch (error) {
+        db.exec('ROLLBACK');
+        throw error;
+      }
+      writeFileSync(authPath, JSON.stringify(currentAccount.auth), { flag: 'wx' });
+      authCreated = true;
+
+      const history = await invoke<QuotaHistoryResponse>('fetch_quota_history', { range: '30d' });
+      expect(history.scopeAvailable).toBe(true);
+      expect(history.hasOtherScopeHistory).toBe(true);
+      expect(history.daily.map(row => [row.date, row.consumedPercentPoints])).toEqual([[current.date, 1]]);
+      const earlierDay = await invoke<QuotaHistoryDayResponse>('fetch_quota_history_day', {
+        date: earlier.date, kind: 'weekly', windowMinutes: 10080, before: null,
+      });
+      expect(earlierDay.scopeAvailable).toBe(true);
+      expect(earlierDay.segments).toEqual([]);
+
+      for (const skinId of ['clear', 'meter', 'paper']) {
+        await invoke('set_pulse_preferences', { patch: { skinId, theme: 'light', motionLevel: 'off' } });
+        await browser.setWindowSize(1000, 780);
+        await browser.refresh();
+        await browser.waitUntil(async () => await browser.execute(() => document.documentElement.dataset.skin) === skinId);
+        await $('[data-testid="dashboard-nav-tab"]').click();
+        const entry = $('[data-testid="quota-history-summary"] button');
+        await entry.waitForDisplayed();
+        await entry.click();
+        const view = $('[data-testid="quota-history-view"]');
+        await view.waitForDisplayed();
+        await browser.waitUntil(async () => (await view.getText()).includes('本地还保留其他账号或来源的额度历史'));
+        await expect(view.$('.pulse-quota-controls select')).toHaveValue('30d');
+        const total = await view.$('.pulse-quota-total dd').getText();
+        const coverage = await view.$('.pulse-quota-observed-days').getText();
+        expect(total).toBe('1个百分点');
+        expect(coverage).toBe('所选 30 天中，有 1 天的样本足以计算观测消耗。');
+        expect(await view.getText()).not.toContain('8个百分点');
+        const geometry = await browser.execute(() => ({ width: innerWidth, documentFits: document.documentElement.scrollWidth <= innerWidth }));
+        expect(geometry.documentFits).toBe(true);
+        await browser.saveScreenshot(join(output, `quota-history-${skinId}-separate-scope.png`));
+        skins.push({ skinId, total, coverage });
+      }
+    } finally {
+      try {
+        const remove = db.prepare('DELETE FROM segments WHERE id = ? AND identity IN (?, ?)');
+        for (const id of inserted) remove.run(id, previousAccount.identity, currentAccount.identity);
+      } finally {
+        db.close();
+        if (authCreated) unlinkSync(authPath);
+      }
+      await invoke('set_pulse_preferences', { patch: {
+        skinId: original.skinId, theme: original.theme, motionLevel: original.motionLevel,
+      } });
+      await browser.setWindowSize(originalSize.width, originalSize.height);
+      await browser.refresh();
+    }
+    const after = await invoke<QuotaHistoryResponse>('fetch_quota_history', { range: '30d' });
+    expect(after.scopeAvailable).toBe(false);
+    expect(after.hasOtherScopeHistory).toBe(false);
+    expect(after.daily).toEqual([]);
+    record('present-but-isolated-history', { synthetic: true, offline: true, currentOnly: true,
+      previousDayNotDisclosedByIpc: true, restoredAnonymousFixture: true, skins });
   });
 });

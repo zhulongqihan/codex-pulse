@@ -187,7 +187,9 @@ export function QuotaHistoryView() {
     <HistoryStatus data={data} error={error} loading={loading} onRetry={refresh}/>
     {data ? <>
       <p className="pulse-quota-context"><span>{copy("scope")}</span><span>{copy("timezone", { zone: data.timezone })}</span><span>{data.startDate} — {data.endDate}</span></p>
-      <dl className="pulse-quota-total"><div><dt>{copy("sum")}</dt><dd>{points(total)}</dd></div></dl><p>{copy("sumNote")}</p>
+      {data.scopeAvailable && data.hasOtherScopeHistory ? <p role="status">{copy("otherScopeHistory")}</p> : null}
+      <dl className="pulse-quota-total"><div><dt>{copy("sum")}</dt><dd>{points(total)}</dd></div></dl>
+      <p>{rows.length > 0 ? <strong className="pulse-quota-observed-days">{copy("observedDays", { observed: number(known.length), total: number(rows.length) })}</strong> : null}{copy("sumNote")}</p>
       {data.unallocatedCount > 0 ? <p className="pulse-quota-gap">{copy("unallocated", { count: data.unallocatedCount })}</p> : null}
       {rows.length ? <><DailyChart rows={rows}/><div className="pulse-quota-table-scroll"><table aria-label={copy("table")}><thead><tr><th>{copy("date")}</th><th>{copy("consumption")}</th><th>{copy("state")}</th><th>{copy("partial")}</th></tr></thead><tbody>{[...rows].reverse().map(row => <tr key={row.date}>
         <th scope="row"><button type="button" className="pulse-text-button" onClick={event => { dayTrigger.current = event.currentTarget; setSelectedDate(row.date); }}>{row.date}</button></th><td>{points(row.consumedPercentPoints)}</td><td>{copy(statusKey(row))}{row.gapCount > 0 ? <small>{copy("gaps", { count: row.gapCount })}</small> : null}{row.unallocatedCount > 0 ? <small>{copy("unallocated", { count: row.unallocatedCount })}</small> : null}{row.source !== "official" ? <small>{copy(row.source === "mixed" ? "mixed" : "migrated")}</small> : null}</td><td>{copy("coverage", { minutes: number(row.coveredMinutes) })}<small>{copy("samples", { count: row.sampleCount })} · {copy("cycles", { count: row.cycleCount })}</small></td>

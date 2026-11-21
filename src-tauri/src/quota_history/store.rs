@@ -508,23 +508,26 @@ pub(super) fn query(
             summary.unallocated_count = count;
         }
     }
-    let updated_at = if let Some(identity) = identity.filter(|s| valid_identity(s)) {
-        connection
+    let identity = identity.filter(|s| valid_identity(s));
+    let (updated_at, has_other_scope_history) = match identity {
+        Some(identity) => connection
             .query_row(
-                "SELECT MAX(end_at) FROM segments WHERE identity=?1",
+                "SELECT MAX(end_at),
+                        EXISTS(SELECT 1 FROM segments WHERE identity < ?1)
+                        OR EXISTS(SELECT 1 FROM segments WHERE identity > ?1)
+                 FROM segments WHERE identity=?1",
                 [identity],
-                |r| r.get::<_, Option<i64>>(0),
+                |r| Ok((r.get::<_, Option<i64>>(0)?.map(iso), r.get::<_, bool>(1)?)),
             )
-            .map_err(err)?
-            .map(iso)
-    } else {
-        None
+            .map_err(err)?,
+        None => (None, false),
     };
-    let available = identity.is_some_and(valid_identity);
+    let available = identity.is_some();
     Ok(QuotaHistoryResponse {
         schema_version: 1,
         identity_revision: 0,
         scope_available: available,
+        has_other_scope_history,
         timezone: preferences.timezone.clone(),
         enabled: preferences.enabled,
         storage_status: status.into(),

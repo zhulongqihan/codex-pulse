@@ -46,6 +46,9 @@ pub struct QuotaHistoryResponse {
     pub schema_version: u8,
     pub identity_revision: u64,
     pub scope_available: bool,
+    /// Presence only. Details and totals always use the verified current identity.
+    #[serde(default)]
+    pub has_other_scope_history: bool,
     pub timezone: String,
     pub enabled: bool,
     /// ready | write_failed | preferences_error | unavailable

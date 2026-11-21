@@ -1,6 +1,8 @@
 import { getLanguage, type Language } from "./languages";
 
 const en = {
+  otherScopeHistory: "Quota history from another account or source is saved locally. To view it, switch back to that account in Codex or restore the previous source in Pulse settings. Each account and source has its own total.",
+  observedDays: "{observed} of {total} days had enough readings to calculate consumption.",
   exportDesktopOnly: "Excel export requires the desktop app. You can download Markdown from this web demo.",
   rangeStart: "Start date", rangeEnd: "End date",
   chartScroll: "Scroll horizontally for earlier dates; the latest dates are shown first.",
@@ -22,6 +24,8 @@ export type QuotaHistoryCopyKey = keyof typeof en;
 const messages: Record<Language, Record<QuotaHistoryCopyKey, string>> = {
   en,
   zh: {
+    otherScopeHistory: "本地还保留其他账号或来源的额度历史。请在 Codex 切回原账号，或在 Pulse 设置切回原数据来源后查看。各账号与来源分别统计。",
+    observedDays: "所选 {total} 天中，有 {observed} 天的样本足以计算观测消耗。",
     exportDesktopOnly: "Excel 导出需使用桌面版；网页演示可下载 Markdown。",
     rangeStart: "开始日期", rangeEnd: "结束日期",
     chartScroll: "横向滚动可查看更早日期，默认显示最近日期。",
@@ -34,6 +38,8 @@ const messages: Record<Language, Record<QuotaHistoryCopyKey, string>> = {
     record: "记录每日官方额度", recordNote: "Pulse 运行时约每分钟记录当前账号，隐藏窗口仍记录；退出或休眠停止。本地长期保存，关闭开关不删除历史。", preferenceFailed: "记录设置保存失败，仍沿用此前设置。", retrySettings: "重新读取设置", preferenceReadFailed: "读取记录设置失败，当前记录状态未知。请重新读取设置后再修改。", exportXlsx: "导出 Excel", exportMarkdown: "导出 Markdown", exportFailed: "导出额度历史失败，请重试。", exported: "已导出至 {path}", range: "额度历史日期范围", rangeLimit: "单次最多查询366天，更早历史仍保留。", window: "额度窗口", noWindows: "此范围尚未记录额度窗口。",
   },
   "zh-Hant": {
+    otherScopeHistory: "本機還保留其他帳號或來源的額度歷史。請在 Codex 切回原帳號，或在 Pulse 設定切回原資料來源後查看。各帳號與來源分開統計。",
+    observedDays: "所選 {total} 天中，有 {observed} 天的樣本足以計算觀測消耗。",
     exportDesktopOnly: "Excel 匯出需使用桌面版；網頁示範可下載 Markdown。",
     rangeStart: "開始日期", rangeEnd: "結束日期",
     chartScroll: "橫向捲動可查看更早日期，預設顯示最近日期。",
@@ -44,6 +50,8 @@ const messages: Record<Language, Record<QuotaHistoryCopyKey, string>> = {
     record: "記錄每日官方額度", recordNote: "Pulse 執行時約每分鐘記錄目前帳號，隱藏視窗仍記錄；退出或休眠停止。本機長期儲存，關閉開關不刪除歷史。", preferenceFailed: "記錄設定儲存失敗，仍沿用先前設定。", retrySettings: "重新讀取設定", preferenceReadFailed: "讀取記錄設定失敗，目前記錄狀態未知。請重新讀取設定後再修改。", exportXlsx: "匯出 Excel", exportMarkdown: "匯出 Markdown", exportFailed: "匯出額度歷史失敗，請重試。", exported: "已匯出至 {path}", range: "額度歷史日期範圍", rangeLimit: "單次最多查詢366天，更早歷史仍保留。", window: "額度視窗", noWindows: "此範圍尚未記錄額度視窗。",
   },
   ja: {
+    otherScopeHistory: "別のアカウントまたはデータソースの上限履歴もこの端末に保存されています。表示するには、Codex で元のアカウントに切り替えるか、Pulse の設定で元のデータソースに戻してください。アカウントとデータソースごとに集計します。",
+    observedDays: "選択した {total} 日のうち、{observed} 日で消費量を計算できるだけの測定値がありました。",
     exportDesktopOnly: "Excel出力はデスクトップ版で利用できます。このWebデモではMarkdownをダウンロードできます。",
     rangeStart: "開始日", rangeEnd: "終了日",
     chartScroll: "左右にスクロールすると以前の日付を表示します。初期表示は最新の日付です。",
@@ -51,12 +59,16 @@ const messages: Record<Language, Record<QuotaHistoryCopyKey, string>> = {
     providerReadFailed: "公式の上限を読み取れません。保存済み履歴は表示できますが、新しい記録が欠ける場合があります。既存の待機間隔で自動再試行します。", readFailed: "上限履歴を読み取れません。保存済みの記録があれば表示します。", writeFailed: "上限履歴を保存できません。公式の値は取得しましたが、保存に失敗しました。以前の記録を保持し、ローカル保存を自動再試行します。", unavailable: "履歴ストレージを使用できません。記録は一時停止し、元のファイルは保持しています。ローカルデータと診断を確認してください。", identity: "現在のアカウントを確認できません。Codexのアカウントと環境を確認してください。", retry: "履歴を再読込", paused: "記録はオフです。保存済み履歴は保持されます。", loading: "ローカルの上限履歴を読込中…", timezone: "台帳のタイムゾーン：{zone}", scope: "現在のアカウントと環境のみ", sum: "記録済み部分の合計", sumNote: "欠けた日は不明のままとし、消費ゼロとして集計しません。", chart: "日別の観測消費（ポイント）", table: "日別の上限観測", date: "日付", consumption: "観測消費", state: "観測状態", details: "日の詳細", close: "詳細を閉じる", reset: "{time}にリセット", unallocated: "{count}件の日付をまたぐ区間が未配分", crossDay: "日付をまたぐ未配分", start: "最初の観測", end: "最後の観測", more: "前の区間を読み込む", pageNote: "読込済み区間のみ表示。前の区間も読み込めます。エクスポートは全該当区間を含みます。", baseline: "基準値のみ", continuous: "連続観測", gap: "同日の空白：変化は保持し、観測時間には加算しません", decreased: "観測値低下、新しい基準値", changed: "上限サイクルが変更", resumed: "記録再開、新しい基準値", conflict: "観測値の矛盾", historical: "インポートした部分観測", migrated: "以前の観測からインポート", mixed: "公式とインポートの観測", record: "公式上限を日別に記録", recordNote: "Pulse実行中は約1分ごとに現在のアカウントを記録。非表示でも続行し、終了・スリープ時は停止。ローカル保存で、オフにしても履歴は保持。", preferenceFailed: "記録設定を保存できません。以前の設定を保持します。", retrySettings: "設定を再読込", preferenceReadFailed: "記録設定を読み取れません。現在の記録状態は不明です。設定を再読込してから変更してください。", exportXlsx: "Excelに出力", exportMarkdown: "Markdownに出力", exportFailed: "履歴を出力できません。再試行してください。", exported: "出力先：{path}", range: "上限履歴の日付範囲", rangeLimit: "1回の照会は最大366日。以前の履歴も保存されています。", window: "上限の期間", noWindows: "この範囲の上限期間はまだ記録されていません。",
   },
   ko: {
+    otherScopeHistory: "다른 계정이나 데이터 소스의 한도 기록도 이 기기에 저장되어 있습니다. 해당 기록을 보려면 Codex에서 이전 계정으로 전환하거나 Pulse 설정에서 이전 데이터 소스를 선택하세요. 계정과 데이터 소스별로 따로 집계합니다.",
+    observedDays: "선택한 {total}일 중 {observed}일은 사용량을 계산할 수 있는 충분한 측정값이 있습니다.",
     exportDesktopOnly: "Excel 내보내기는 데스크톱 앱에서 사용할 수 있습니다. 이 웹 데모에서는 Markdown을 다운로드할 수 있습니다.",
     rangeStart: "시작 날짜", rangeEnd: "종료 날짜",
     chartScroll: "가로로 스크롤하여 이전 날짜를 확인하세요. 기본으로 최근 날짜가 표시됩니다.",
     title: "공식 한도 기록", local: "로컬 Token 및 참고 비용", today: "오늘 관측 소비", open: "한도 기록 보기", partial: "부분 관측", note: "현재 계정 한도 관측의 변화로, 다른 기기 사용도 포함될 수 있습니다. 로컬 Token과 별도이며 공식 일별 청구서가 아닙니다.", weekly: "장기 한도", session: "단기 한도", duration: "{minutes}분 기간", hours: "{hours}시간 기간", days: "{days}일 기간", points: "{points}퍼센트포인트", unknown: "미관측", insufficient: "표본 부족", unchanged: "관측값 변화 없음", coverage: "{minutes}분 관측", cycles: "{count}개 주기", samples: "{count}개 표본", gaps: "{count}개 공백", providerReadFailed: "공식 한도를 읽지 못했습니다. 저장된 기록은 볼 수 있지만 새 기록이 누락될 수 있습니다. 기존 대기 간격에 따라 자동 재시도합니다.", readFailed: "한도 기록을 읽지 못했습니다. 저장된 기록이 있으면 표시합니다.", writeFailed: "한도 기록을 저장하지 못했습니다. 공식 관측값은 받았지만 저장에 실패했습니다. 이전 기록은 보존되며 로컬 저장을 자동 재시도합니다.", unavailable: "한도 저장소를 사용할 수 없습니다. 기록이 일시 중지되었으며 원본 파일은 보존됩니다. 로컬 데이터와 진단을 확인하세요.", identity: "현재 계정을 확인할 수 없습니다. Codex 계정과 환경을 확인하세요.", retry: "기록 다시 읽기", paused: "기록이 꺼져 있으며 저장된 기록은 보존됩니다.", loading: "로컬 한도 기록 읽는 중…", timezone: "기록 시간대: {zone}", scope: "현재 계정 및 출처만", sum: "기록된 부분의 합계", sumNote: "누락된 날짜는 알 수 없음이며 소비 0인 날로 계산하지 않습니다.", chart: "일별 관측 소비 (퍼센트포인트)", table: "일별 한도 관측", date: "날짜", consumption: "관측 소비", state: "관측 상태", details: "일별 상세", close: "상세 닫기", reset: "{time} 초기화", unallocated: "날짜를 넘는 {count}개 구간 미배분", crossDay: "날짜 경계 미배분", start: "첫 관측", end: "마지막 관측", more: "이전 구간 불러오기", pageNote: "불러온 구간만 표시합니다. 이전 구간을 더 불러올 수 있으며 내보내기는 일치하는 모든 구간을 포함합니다.", baseline: "기준값만", continuous: "연속 관측", gap: "같은 날 공백: 순변화 보존, 관측 시간 제외", decreased: "관측값 감소, 새 기준값", changed: "한도 주기 변경", resumed: "기록 재개, 새 기준값", conflict: "관측값 충돌", historical: "가져온 부분 관측", migrated: "이전 관측에서 가져옴", mixed: "공식 및 가져온 관측", record: "일별 공식 한도 기록", recordNote: "Pulse 실행 중 약 1분마다 현재 계정을 기록합니다. 창을 숨겨도 계속되며 종료 또는 절전 시 멈춥니다. 로컬에 보존되며 꺼도 기록은 삭제되지 않습니다.", preferenceFailed: "기록 설정을 저장하지 못했습니다. 이전 설정을 유지합니다.", retrySettings: "설정 다시 읽기", preferenceReadFailed: "기록 설정을 읽지 못했습니다. 현재 기록 상태를 알 수 없습니다. 설정을 다시 읽은 후 변경하세요.", exportXlsx: "Excel 내보내기", exportMarkdown: "Markdown 내보내기", exportFailed: "한도 기록을 내보내지 못했습니다. 다시 시도하세요.", exported: "내보낸 위치: {path}", range: "한도 기록 날짜 범위", rangeLimit: "조회당 최대 366일이며 이전 기록도 보존됩니다.", window: "한도 기간", noWindows: "이 범위에 기록된 한도 기간이 없습니다.",
   },
   de: {
+    otherScopeHistory: "Der Kontingentverlauf eines anderen Kontos oder einer anderen Quelle ist lokal gespeichert. Wechseln Sie in Codex zurück zum betreffenden Konto oder wählen Sie in den Pulse-Einstellungen die frühere Quelle. Die Summe wird je Konto und Quelle berechnet.",
+    observedDays: "An {observed} von {total} Tagen reichen die Messwerte zur Berechnung des Verbrauchs aus.",
     exportDesktopOnly: "Excel-Export erfordert die Desktop-App. In dieser Webdemo können Sie Markdown herunterladen.",
     rangeStart: "Startdatum", rangeEnd: "Enddatum",
     chartScroll: "Horizontal zu früheren Tagen scrollen; zuerst werden die neuesten Tage angezeigt.",
