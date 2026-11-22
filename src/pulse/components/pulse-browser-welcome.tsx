@@ -152,7 +152,7 @@ export function PulseBrowserWelcome() {
             <button type="button" aria-pressed={foreground} onClick={() => setForeground(true)}>{copy.foreground}</button>
             <button type="button" aria-pressed={!foreground} onClick={() => { setForeground(false); setExpanded(false); }}>{copy.away}</button>
           </div>
-          <div ref={scene} className={`pulse-site-work-scene${foreground ? " is-codex" : " is-away"}`} data-testid="site-work-scene" onKeyDown={event => { if (event.key === "Escape" && expanded) { event.preventDefault(); collapse(); } }}>
+          <div ref={scene} className={`pulse-site-work-scene${foreground ? " is-codex" : " is-away"}`} data-testid="site-work-scene" onKeyDown={event => { if (event.key === "Escape" && expanded && !event.defaultPrevented) { event.preventDefault(); collapse(); } }}>
             <header className="pulse-site-window-bar"><span>{foreground ? copy.scene : copy.otherApp}</span>{foreground ? <div title={copy.toggle}><PulsePaceBadgeView data={snapshot} expanded={expanded} controls="site-pace-card" onToggle={() => setExpanded(value => !value)}/></div> : null}</header>
             <div className="pulse-site-work-sample">
               {foreground ? <button type="button" onClick={collapse} aria-label={copy.continue}><Code2 size={20} aria-hidden="true"/><strong>{copy.task}</strong><span>{copy.taskDetail}</span></button> : <p>{copy.hidden}</p>}

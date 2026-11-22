@@ -136,6 +136,7 @@ export function formatCoachReset(resetAt: number | null, language: string): stri
 const clarity = {
   en: {
     explain: "Time and window details", timeMethod: "The nominal start is the given reset time minus the official window duration. It is not when you installed Pulse or first used Codex.",
+    windowList: "Quota windows",
     timeRange: "Inferred start {start} → given reset {end}", timeMissing: "The current reading does not provide a reliable window duration and reset time to infer its start.",
     selection: "The main reading automatically highlights the usable window with less quota relative to its time left. Each window still imposes its own limit.", selectionPaused: "These are the last returned windows. No current pace recommendation is made while readings are missing, outdated or failed.",
     windowRow: "{kind} · {window} · {status}", sessionKind: "Short window", weeklyKind: "Long window", selected: "Shown above", noWindows: "No quota windows were returned.",
@@ -146,6 +147,7 @@ const clarity = {
   },
   zh: {
     explain: "时间与窗口说明", timeMethod: "名义起点由给定重置时刻减去官方窗口时长推算，并非安装 Pulse 或首次使用 Codex 的时刻。",
+    windowList: "额度窗口",
     timeRange: "推算起点 {start} → 给定重置 {end}", timeMissing: "当前读数缺少可靠的窗口时长或重置时刻，暂不能推算起点。",
     selection: "主读数自动突出相对剩余时间更紧的可用额度窗口；每个窗口的限制仍分别生效。", selectionPaused: "以下是各窗口最近返回的读数；信息缺失、陈旧或刷新失败时，暂不给出当前配速建议。",
     windowRow: "{kind} · {window} · {status}", sessionKind: "短周期", weeklyKind: "长周期", selected: "上方主读数", noWindows: "尚未返回任何额度窗口。",
@@ -156,6 +158,7 @@ const clarity = {
   },
   "zh-Hant": {
     explain: "時間與視窗說明", timeMethod: "名義起點由指定重置時刻減去官方視窗長度推算，並非安裝 Pulse 或首次使用 Codex 的時刻。",
+    windowList: "額度視窗",
     timeRange: "推算起點 {start} → 指定重置 {end}", timeMissing: "目前讀數缺少可靠的視窗長度或重置時刻，暫時無法推算起點。",
     selection: "主讀數自動突出相對剩餘時間更緊的可用額度視窗；各視窗的限制仍分別生效。", selectionPaused: "以下是各視窗最近回傳的讀數；資訊不足、過時或更新失敗時，暫不提供目前配速建議。",
     windowRow: "{kind} · {window} · {status}", sessionKind: "短週期", weeklyKind: "長週期", selected: "上方主讀數", noWindows: "尚未回傳任何額度視窗。",
@@ -166,6 +169,7 @@ const clarity = {
   },
   ja: {
     explain: "時間と期間の説明", timeMethod: "名目上の開始は、指定リセット時刻から公式の期間長を引いた推定値です。Pulseのインストール時刻やCodexの初回使用時刻ではありません。",
+    windowList: "上限期間",
     timeRange: "推定開始 {start} → 指定リセット {end}", timeMissing: "開始の推定に必要な確かな期間長またはリセット時刻がありません。",
     selection: "残り時間に対して残量が厳しい、有効な期間を自動的に強調します。各期間の制限は個別に適用されます。", selectionPaused: "各期間の最後の観測です。情報不足、古い観測、更新失敗時には現在のペースを提案しません。",
     windowRow: "{kind} · {window} · {status}", sessionKind: "短い期間", weeklyKind: "長い期間", selected: "上部の値", noWindows: "上限期間がまだ返されていません。",
@@ -176,6 +180,7 @@ const clarity = {
   },
   ko: {
     explain: "시간 및 기간 설명", timeMethod: "명목 시작은 지정 초기화 시각에서 공식 기간 길이를 뺀 추정값입니다. Pulse 설치 시각이나 Codex 최초 사용 시각이 아닙니다.",
+    windowList: "한도 기간",
     timeRange: "추정 시작 {start} → 지정 초기화 {end}", timeMissing: "시작을 추정할 신뢰할 수 있는 기간 길이나 초기화 시각이 없습니다.",
     selection: "남은 시간 대비 잔여 한도가 더 빠듯한 유효 기간을 자동으로 강조합니다. 각 기간의 제한은 별도로 적용됩니다.", selectionPaused: "각 기간의 마지막 관측입니다. 정보 부족, 오래된 관측 또는 갱신 실패 시 현재 페이스를 권하지 않습니다.",
     windowRow: "{kind} · {window} · {status}", sessionKind: "짧은 기간", weeklyKind: "긴 기간", selected: "위의 대표 관측", noWindows: "반환된 한도 기간이 없습니다.",
@@ -186,6 +191,7 @@ const clarity = {
   },
   de: {
     explain: "Zeit und Fenster erklärt", timeMethod: "Der rechnerische Beginn ist die angegebene Reset-Zeit minus der offiziellen Fensterdauer. Er ist nicht der Zeitpunkt der Installation oder ersten Codex-Nutzung.",
+    windowList: "Kontingentfenster",
     timeRange: "Rechnerischer Beginn {start} → angegebener Reset {end}", timeMissing: "Eine verlässliche Fensterdauer oder Reset-Zeit für die Berechnung des Beginns fehlt.",
     selection: "Die Hauptanzeige betont automatisch das nutzbare Fenster mit weniger Kontingent im Verhältnis zur Restzeit. Jedes Fenster begrenzt die Nutzung weiterhin separat.", selectionPaused: "Letzte zurückgelieferte Fensterwerte. Bei fehlenden, alten oder fehlgeschlagenen Messungen gibt es keine aktuelle Tempoempfehlung.",
     windowRow: "{kind} · {window} · {status}", sessionKind: "Kurzes Fenster", weeklyKind: "Langes Fenster", selected: "Oben angezeigt", noWindows: "Noch keine Kontingentfenster zurückgeliefert.",

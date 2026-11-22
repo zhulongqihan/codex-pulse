@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
-import { act, fireEvent, render, screen, within } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import i18n from "../i18n";
 import { paceCopy } from "@/lib/pulse-pace-copy";
@@ -12,6 +13,7 @@ const now = Date.parse("2026-11-09T08:00:00Z");
 const iso = (minutes: number) => new Date(now + minutes * 60_000).toISOString();
 beforeEach(async () => { vi.restoreAllMocks(); vi.spyOn(Date, "now").mockReturnValue(now); history.replaceState(null, "", "/"); await i18n.changeLanguage("en"); });
 const actions = () => ({ onRefresh: vi.fn(), onClose: vi.fn(), onDetails: vi.fn() });
+const timeInfo = (language = "en") => screen.getByRole("button", { name: quotaCoachClarity(language, "explain") });
 function cycle(remaining = 80): PaceSnapshot {
   const data = syntheticPaceSnapshot("idle", new Date(now));
   data.primaryKind = "weekly";
@@ -34,7 +36,11 @@ describe("shared cycle pace card", () => {
     const { rerender } = render(<PulsePaceCard data={null} variant="widget" onRecover={onRecover} {...handlers}/>);
     expect(screen.queryByTestId("coach-remaining")).not.toBeInTheDocument();
     expect(screen.queryByTestId("coach-countdown")).not.toBeInTheDocument();
-    expect(screen.getByTestId("widget-empty-guide")).toHaveTextContent(readingGuidanceCopy(language, "emptyObservation"));
+    expect(screen.getByTestId("widget-empty-guide")).toHaveTextContent(readingGuidanceCopy(language, "emptyNext"));
+    expect(screen.queryByText(readingGuidanceCopy(language, "emptyObservation"))).not.toBeInTheDocument();
+    fireEvent.click(timeInfo(language));
+    expect(await screen.findByRole("tooltip")).toHaveTextContent(readingGuidanceCopy(language, "emptyObservation"));
+    fireEvent.click(timeInfo(language));
     expect(screen.queryByTestId("coach-cycle-observations")).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: quotaCoachFeedback(language, "recover") }));
     expect(onRecover).toHaveBeenCalledOnce();
@@ -54,14 +60,18 @@ describe("shared cycle pace card", () => {
     await i18n.changeLanguage(language);
     const data = cycle(), handlers = actions();
     const { rerender } = render(<PulsePaceCard data={data} {...handlers}/>);
+    expect(screen.queryByText(quotaCoachClarity(language, "timeMethod"))).not.toBeInTheDocument();
+    fireEvent.click(timeInfo(language));
+    const info = await screen.findByRole("tooltip");
+    expect(info).toHaveTextContent(quotaCoachClarity(language, "timeMethod"));
+    expect(within(info).getByTestId("coach-time-basis")).toHaveTextContent("→");
+    fireEvent.click(timeInfo(language));
     const details = screen.getByTestId("coach-window-details");
-    const summary = within(details).getByText(quotaCoachClarity(language, "explain"));
+    const summary = details.querySelector("summary")!;
     expect(details.tagName).toBe("DETAILS");
     expect(details).not.toHaveAttribute("open");
     fireEvent.click(summary);
     expect(details).toHaveAttribute("open");
-    expect(within(details).getByText(quotaCoachClarity(language, "timeMethod"))).toBeVisible();
-    expect(screen.getByTestId("coach-time-basis")).toHaveTextContent("→");
     const rows = within(screen.getByTestId("coach-window-list")).getAllByRole("listitem");
     expect(rows).toHaveLength(data.windows.length);
     expect(rows[0]).toHaveAttribute("data-reading-state", "unavailable");
@@ -71,26 +81,8 @@ describe("shared cycle pace card", () => {
     expect(screen.getByTestId("coach-remaining")).toHaveTextContent("80%");
     const stale = cycle(); stale.updatedAt = iso(-7);
     rerender(<PulsePaceCard data={stale} {...handlers}/>);
-    expect(within(details).getByText(quotaCoachClarity(language, "selectionPaused"))).toBeVisible();
     expect(within(details).queryByText(quotaCoachClarity(language, "selected"))).not.toBeInTheDocument();
     expect(screen.getByTestId("coach-window-list").querySelector('[data-window-kind="weekly"]')).toHaveAttribute("data-reading-state", "stale");
-  });
-  it("keeps the empty current-cycle explanation available after reset without showing another cycle's records", () => {
-    const data = cycle(); data.coachExtras = { observationTimezone: "America/New_York", observedWindow: { kind: "weekly", windowMinutes: 10080, resetsAt: iso(9999) }, dailyObservations: [{ date: "2026-11-08", consumedPercentPoints: 8, coveredMinutes: 60, partial: true }], resetNotice: null };
-    render(<PulsePaceCard data={data} {...actions()}/>);
-    const details = screen.getByTestId("coach-cycle-observations");
-    fireEvent.click(within(details).getByText(quotaCoachFeedback("en", "basis")));
-    expect(within(details).getByText(quotaCoachClarity("en", "cycleNote"))).toBeVisible();
-    expect(within(details).getByText(quotaCoachFeedback("en", "noDaily"))).toBeVisible();
-    expect(screen.getByTestId("coach-observation-timezone")).toHaveTextContent(quotaCoachClarity("en", "observationZoneUnknown"));
-    expect(within(details).queryByText("8 pp")).not.toBeInTheDocument();
-  });
-  it("labels daily observations with their actual cycle timezone, preserving the date-only key", () => {
-    const data = cycle(); data.coachExtras = { observationTimezone: "America/New_York", observedWindow: { kind: "weekly", windowMinutes: 10080, resetsAt: data.windows[1].resetsAt! }, dailyObservations: [{ date: "2026-11-08", consumedPercentPoints: 0, coveredMinutes: 60, partial: true }], resetNotice: null };
-    render(<PulsePaceCard data={data} observationsExpanded {...actions()}/>);
-    expect(screen.getByTestId("coach-observation-timezone")).toHaveTextContent("America/New_York");
-    expect(screen.getByTestId("coach-cycle-observations").querySelector('time[datetime="2026-11-08"]')).toBeVisible();
-    expect(screen.getByText("0 pp")).toBeVisible();
   });
   it.each([59, 60, 1439, 1440])("uses an understandable reference at %s minutes until a weekly reset", minutes => {
     const data = cycle(); data.windows[1].resetsAt = iso(minutes);
@@ -148,16 +140,15 @@ describe("shared cycle pace card", () => {
       expect(screen.queryByTestId("coach-refresh-wait")).not.toBeInTheDocument();
     } finally { vi.useRealTimers(); }
   });
-  it("routes a known login reason to account recovery and expands an honest empty observation basis", () => {
+  it("keeps the login reason and account recovery visible when quota is unavailable", () => {
     const data = cycle(); data.reason = "login_required"; data.windows = []; data.updatedAt = null;
-    const onRecover = vi.fn(); render(<PulsePaceCard data={data} onRecover={onRecover} observationsExpanded {...actions()}/>);
+    const onRecover = vi.fn(); render(<PulsePaceCard data={data} onRecover={onRecover} {...actions()}/>);
     expect(screen.getByRole("status")).toHaveTextContent("Sign in with the official Codex");
     fireEvent.click(screen.getByRole("button", { name: "Check account and connection" })); expect(onRecover).toHaveBeenCalledOnce();
-    expect(screen.getByText(quotaCoachFeedback("en", "noDaily"))).toBeVisible();
+    expect(screen.queryByTestId("coach-cycle-observations")).not.toBeInTheDocument();
   });
-  it("shows unknown-window limits and a single qualified notice in compact view", () => {
+  it("keeps a single qualified notice and the actionable judgment in compact view", () => {
     render(<PulsePaceCard data={withNotice()} variant="compact" {...actions()}/>);
-    expect(screen.getByText(quotaCoachFeedback("en", "unknownWindows"))).toBeVisible();
     expect(screen.getAllByText("Third-party notice · unconfirmed")).toHaveLength(1);
     expect(screen.getByText(quotaCoachCopy("en", "roomyAdvice"))).toBeVisible();
   });
@@ -166,7 +157,10 @@ describe("shared cycle pace card", () => {
     const { rerender } = render(<PulsePaceCard data={cycle(80)} {...actions()}/>);
     expect(screen.getByTestId("coach-remaining")).toHaveTextContent("80%");
     expect(screen.getByTestId("coach-countdown")).toHaveTextContent(formatCoachCountdown(7260, language));
-    expect(screen.getByTestId("coach-comparison")).toHaveTextContent(quotaCoachCopy(language, "comparison", { used: 20, elapsed: 28 }));
+    expect(screen.queryByTestId("coach-comparison")).not.toBeInTheDocument();
+    fireEvent.click(timeInfo(language));
+    expect(within(await screen.findByRole("tooltip")).getByTestId("coach-comparison")).toHaveTextContent(quotaCoachCopy(language, "comparison", { used: 20, elapsed: 28 }));
+    fireEvent.click(timeInfo(language));
     expect(screen.getByText(quotaCoachCopy(language, "roomyLabel"))).toBeVisible();
     expect(screen.getByTestId("coach-reference")).toHaveTextContent("16");
     rerender(<PulsePaceCard data={cycle(20)} {...actions()}/>);
@@ -177,11 +171,13 @@ describe("shared cycle pace card", () => {
     expect(screen.queryByRole("textbox")).not.toBeInTheDocument();
   });
 
-  it("does not let local tokens replace the quota core or treat a missing short window as exhaustion", () => {
+  it("does not let local tokens replace the quota core or treat a missing short window as exhaustion", async () => {
     const data = cycle(); data.localUsage!.totalTokens = 343_000_000;
     render(<PulsePaceCard data={data} {...actions()}/>);
     expect(screen.getByText("7-day window")).toBeVisible();
-    expect(screen.getByText(quotaCoachCopy("en", "scope"), { exact: false })).toBeVisible();
+    expect(screen.queryByText(quotaCoachCopy("en", "scope"), { exact: false })).not.toBeInTheDocument();
+    fireEvent.click(timeInfo());
+    expect(await screen.findByRole("tooltip")).toHaveTextContent(quotaCoachCopy("en", "scope"));
     expect(screen.getByText(quotaCoachCopy("en", "roomyLabel"))).toBeVisible();
     expect(screen.queryByText("343,000,000")).not.toBeInTheDocument();
     expect(screen.queryByText(paceCopy("en", "sessionMissing"))).not.toBeInTheDocument();
@@ -192,7 +188,9 @@ describe("shared cycle pace card", () => {
     const data = recentDepletion();
     const { rerender } = render(<><PulsePaceCard data={data} {...actions()}/><PulsePaceBadgeView data={data} onToggle={vi.fn()}/></>);
     expect(screen.getByTestId("coach-remaining")).toHaveTextContent("77%");
-    expect(screen.getByTestId("coach-comparison")).toHaveTextContent(quotaCoachCopy(language, "comparison", { used: 23, elapsed: 29 }));
+    fireEvent.click(timeInfo(language));
+    expect(within(await screen.findByRole("tooltip")).getByTestId("coach-comparison")).toHaveTextContent(quotaCoachCopy(language, "comparison", { used: 23, elapsed: 29 }));
+    fireEvent.click(timeInfo(language));
     expect(screen.getByTestId("pace-popover")).toHaveClass("tone-roomy", "has-recent-depletion");
     expect(screen.getByTestId("pace-popover")).not.toHaveClass("tone-fast");
     expect(screen.getByText(quotaCoachCopy(language, "recentRiskAdvice"))).toBeVisible();
@@ -261,6 +259,30 @@ describe("shared cycle pace card", () => {
     fireEvent.keyDown(document, { key: "Escape" }); expect(handlers.onClose).toHaveBeenCalledOnce();
     fireEvent.click(screen.getByRole("button", { name: "View usage details" })); expect(handlers.onDetails).toHaveBeenCalledOnce();
   });
+  it("opens reference guidance on hover or keyboard focus and dismisses it before the pace panel", async () => {
+    const handlers = actions(), user = userEvent.setup();
+    render(<PulsePaceCard data={cycle()} {...handlers}/>);
+    const explanation = quotaCoachCopy("en", "referenceNote");
+    const reference = within(screen.getByRole("region", { name: quotaCoachCopy("en", "dayReference") }));
+    const trigger = reference.getByRole("button", { name: quotaCoachCopy("en", "dayReference") });
+    expect(screen.queryByText(explanation)).not.toBeInTheDocument();
+    await user.hover(trigger);
+    expect(await screen.findByRole("tooltip")).toHaveTextContent(explanation);
+    await user.unhover(trigger);
+    await waitFor(() => expect(screen.queryByRole("tooltip")).not.toBeInTheDocument());
+    // jsdom does not infer keyboard modality for the focus-visible pseudo-class.
+    const matches = trigger.matches.bind(trigger);
+    vi.spyOn(trigger, "matches").mockImplementation(selector => selector === ":focus-visible" || matches(selector));
+    await user.tab();
+    expect(trigger).toHaveFocus();
+    expect(await screen.findByRole("tooltip")).toHaveTextContent(explanation);
+    await user.keyboard("{Escape}");
+    expect(screen.queryByRole("tooltip")).not.toBeInTheDocument();
+    expect(handlers.onClose).not.toHaveBeenCalled();
+    expect(trigger).toHaveFocus();
+    await user.keyboard("{Escape}");
+    expect(handlers.onClose).toHaveBeenCalledOnce();
+  });
 
   it.each(["workspace", "widget", "compact"] as const)("reuses the same metrics without an extra close action in %s", variant => {
     const handlers = actions(); render(<PulsePaceCard data={cycle()} variant={variant} {...handlers}/>);
@@ -271,7 +293,7 @@ describe("shared cycle pace card", () => {
     if (variant === "compact") { expect(screen.queryByTestId("coach-reference")).not.toBeInTheDocument(); expect(screen.queryByRole("button", { name: "View usage details" })).not.toBeInTheDocument(); }
   });
 
-  it("shows a fresh global notice and only marks its explicit ID read from the read button", () => {
+  it("shows a fresh global notice and only marks its explicit ID read from the read button", async () => {
     const data = withNotice(), onRead = vi.fn();
     const { rerender } = render(<><PulsePaceCard data={data} {...actions()} onMarkNoticeRead={onRead}/><PulsePaceBadgeView data={data} onToggle={vi.fn()}/></>);
     expect(screen.getByTestId("pace-badge")).toHaveTextContent("Reset notice");
@@ -279,7 +301,10 @@ describe("shared cycle pace card", () => {
     expect(within(banner).getByText(quotaCoachCopy("en", "noticeClass"))).toBeVisible();
     const link = within(banner).getByRole("link", { name: /Example third-party feed/ });
     expect(link).toHaveAttribute("href", "https://example.org/notice");
-    expect(within(banner).getByText(quotaCoachCopy("en", "noticeScope"))).toBeVisible();
+    expect(within(banner).queryByText(quotaCoachCopy("en", "noticeScope"))).not.toBeInTheDocument();
+    fireEvent.click(within(banner).getByRole("button", { name: quotaCoachCopy("en", "noticeClass") }));
+    expect(await screen.findByRole("tooltip")).toHaveTextContent(quotaCoachCopy("en", "noticeScope"));
+    fireEvent.click(within(banner).getByRole("button", { name: quotaCoachCopy("en", "noticeClass") }));
     expect(onRead).not.toHaveBeenCalled();
     fireEvent.click(within(banner).getByRole("button", { name: "Mark read" }));
     expect(onRead).toHaveBeenCalledExactlyOnceWith("synthetic-notice");
@@ -314,14 +339,14 @@ describe("shared cycle pace card", () => {
     expect(screen.getByRole("note", { name: "Reset notice" })).toBeVisible();
   });
 
-  it("preserves unknown versus recorded zero and hides another window's daily history", () => {
+  it("leaves daily observations out of the card even when valid observations were returned", async () => {
     const data = cycle(); data.coachExtras = { observedWindow: { kind: "weekly", windowMinutes: 10080, resetsAt: data.windows[1].resetsAt! }, resetNotice: null, dailyObservations: [{ date: "2026-11-08", consumedPercentPoints: null, coveredMinutes: 0, partial: true }, { date: "2026-11-09", consumedPercentPoints: 0, coveredMinutes: 30, partial: true }] };
-    const { rerender } = render(<PulsePaceCard data={data} {...actions()}/>);
-    fireEvent.click(screen.getByText("Observation basis this cycle"));
-    expect(screen.getByText("Not observed")).toBeVisible(); expect(screen.getByText("0 pp")).toBeVisible();
-    expect(screen.getByText(quotaCoachCopy("en", "dailyNote"), { exact: false })).toBeVisible();
-    data.coachExtras.observedWindow!.resetsAt = iso(9999); rerender(<PulsePaceCard data={data} {...actions()}/>);
-    expect(screen.queryByText("Daily observations this cycle")).not.toBeInTheDocument();
+    render(<PulsePaceCard data={data} {...actions()}/>);
+    expect(screen.queryByTestId("coach-cycle-observations")).not.toBeInTheDocument();
+    fireEvent.click(timeInfo());
+    const information = await screen.findByRole("tooltip");
+    expect(within(information).queryByText("Not observed")).not.toBeInTheDocument();
+    expect(within(information).queryByText("0 pp")).not.toBeInTheDocument();
   });
 
   it.each(["en", "zh", "zh-Hant", "ja", "ko", "de"])("labels demo cards and compact badges without adding a brand word in %s", async language => {

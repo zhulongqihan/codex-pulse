@@ -1,0 +1,21 @@
+.paper-widget-metric-name {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+}
+
+.paper-widget .paper-widget-observed-row {
+  position: relative;
+}
+
+.paper-widget .paper-widget-observed-row > .paper-widget-observed {
+  padding-inline-end: 36px;
+}
+
+.paper-widget-observed-row > .pulse-reading-info {
+  position: absolute;
+  inset-inline-end: 6px;
+  inset-block-start: 50%;
+  transform: translateY(-50%);
+  color: var(--pw-muted);
+}

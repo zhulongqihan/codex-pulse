@@ -3,6 +3,7 @@ import { Clock3, ExternalLink, LoaderCircle, LogIn, Play, RefreshCw, RotateCcw }
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { LatestResetButton } from "@/components/codex-reset-history";
+import { ReadingInfo } from "@/components/reading-info";
 import type { CodexLimitWindow, CodexLimitsResponse, CodexResetAnnouncement, CodexResetCredit, CodexWindowActivationStatus } from "@/lib/api";
 import { cn } from "@/lib/utils";
 import dayjs from "dayjs";
@@ -103,6 +104,11 @@ export function CodexSidebarLimits({ compact = false, paper = false, limits, err
   const now = Date.now();
   const hasExpiredReading = [limits?.session, limits?.weekly].some(window => window?.resetsAt != null && Date.parse(window.resetsAt) <= now);
   const failedReading = paper && Boolean(error);
+  const weeklyOnly = Boolean(limits?.weekly && !limits.session);
+  const resetTimeContext = !compact && (limits?.session || limits?.weekly)
+    ? t("reading_context.reset_local", { zone: localTimeZone() ?? t("reading_context.local_timezone") })
+    : null;
+  const title = <h2 className="font-semibold">{t("limits.sidebar_title")}</h2>;
   const updatedTime = limits && dayjs(limits.updatedAt).isValid()
     ? t("limits.updated", { time: dayjs(limits.updatedAt).format("HH:mm") }) : undefined;
   useEffect(() => {
@@ -123,7 +129,13 @@ export function CodexSidebarLimits({ compact = false, paper = false, limits, err
   return (
     <section className="sidebar-limits space-y-3" aria-label={t("limits.sidebar_title")}>
       {!compact ? <div className="pulse-limit-section-heading flex min-w-0 items-center justify-between gap-1 text-[12px]">
-        <h2 className="font-semibold">{t("limits.sidebar_title")}</h2>
+        {paper && resetTimeContext ? <div className="pulse-limit-title">
+          {title}
+          <ReadingInfo label={t("limits.sidebar_title")}>
+            {weeklyOnly ? <p>{t("ux.no_short_window")}</p> : null}
+            <p data-testid="limits-timezone">{resetTimeContext}</p>
+          </ReadingInfo>
+        </div> : title}
         <span className="pulse-limit-freshness flex min-w-0 items-center gap-1 text-muted-foreground" title={updatedTime}>
           <span className={cn("h-1.5 w-1.5 shrink-0 rounded-full", error ? "bg-warning" : limits && !hasExpiredReading ? "bg-success" : "bg-muted-foreground")} />
           {!paper || !updatedTime || error || hasExpiredReading ? <span className="truncate">{t(error ? "limits.unavailable" : hasExpiredReading ? "ux.window_elapsed" : limits ? "limits.sidebar_updated" : "limits.not_fetched")}</span> : null}
@@ -132,7 +144,7 @@ export function CodexSidebarLimits({ compact = false, paper = false, limits, err
         {paper ? actions : null}
       </div> : null}
       {!paper ? actions : null}
-      {limits?.weekly && !limits.session ? <p className="text-[12px] text-muted-foreground">{t("ux.no_short_window")}</p> : null}
+      {!paper && weeklyOnly ? <p className="text-[12px] text-muted-foreground">{t("ux.no_short_window")}</p> : null}
       {error ? (
         compact ? <p className="break-words text-center text-[12px] text-warning" title={error}>{t("limits.unavailable")}</p> : isOAuthLoginError(error) ? (
           <div className="rounded-xl border border-warning/20 bg-warning/5 p-4 text-sm flex flex-col justify-between h-full">
@@ -165,7 +177,7 @@ export function CodexSidebarLimits({ compact = false, paper = false, limits, err
           {limits?.session ? <LimitRow label={quotaWindowKind(limits.session) === "5h" ? "5 hour" : quotaWindowKind(limits.session)} window={limits.session} now={now} compact={compact} failedReading={failedReading}/> : null}
           {limits?.weekly ? <LimitRow label={quotaWindowKind(limits.weekly) === "weekly" ? "Weekly" : quotaWindowKind(limits.weekly)} window={limits.weekly} now={now} compact={compact} failedReading={failedReading}/> : null}
           {!limits?.session && !limits?.weekly ? <p className="text-[12px] leading-6 text-muted-foreground">{t("limits.no_window_returned")}</p> : null}
-          {!compact && (limits?.session || limits?.weekly) ? <p data-testid="limits-timezone" className="pulse-time-context">{t("reading_context.reset_local", { zone: localTimeZone() ?? t("reading_context.local_timezone") })}</p> : null}
+          {!paper && resetTimeContext ? <p data-testid="limits-timezone" className="pulse-time-context">{resetTimeContext}</p> : null}
         </div>
       ) : null}
     </section>

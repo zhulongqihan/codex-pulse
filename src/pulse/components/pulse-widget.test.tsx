@@ -87,6 +87,8 @@ describe("desktop widget quota pacing", () => {
     expect(state.action).not.toHaveBeenCalledWith("quit");
     expect(screen.queryByTestId("widget-close-hint")).not.toBeInTheDocument();
     state.expanded = true; rerender(<PulseWidget/>);
+    expect(screen.queryByTestId("widget-close-hint")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: closeBehaviorCopy(language, "hideOnly") }));
     expect(screen.getByTestId("widget-close-hint")).toHaveTextContent(closeBehaviorCopy(language, "widgetHint", { quit: i18n.t("settings.menu_bar_quit") }));
   });
 

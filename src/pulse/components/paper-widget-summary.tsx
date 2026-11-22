@@ -9,6 +9,8 @@ import type { PaceSnapshot } from "@/lib/pulse-pace";
 import type { TrayPopoverData } from "@/lib/tray-popover";
 import { currentDateInTimezone } from "@/lib/trend-buckets";
 import { formatCurrencyShort } from "@/lib/formatters";
+import { ReadingInfo } from "@/components/reading-info";
+import "./paper-widget-summary.css";
 
 const companion = {
   en: { today: "Today · local", official: "Today's observed quota", observed: "Observed window", note: "Partial observations. Each quota window is measured separately." },
@@ -95,7 +97,28 @@ export function PaperWidgetSummary({data,snapshot,failed,localFailed=false,langu
       })}
     </section>
     <p className={`paper-widget-judgment is-${coach.tone??coach.status}`}><Leaf size={20}/>{quotaCoachCopy(language,coach.status==='ready'?coach.tone!:coach.status)}</p>
-    <section className="paper-widget-today" aria-label={labels.today} data-testid="paper-widget-today"><p>{labels.today}</p><div data-reading-state={tokens==null?'unknown':tokenStale?'stale':'current'}><Database size={18}/><span className="paper-widget-metric-label"><span>{copy('tokens')}</span>{tokenStale?<small>{copy('stale')}</small>:null}</span><strong title={tokenSource?.updatedAt??undefined}>{tokens==null?'—':formatCoachNumber(tokens,language)}</strong></div><div data-reading-state={cost==null?'unknown':costStale?'stale':'current'}><Tag size={17}/><span className="paper-widget-metric-label"><span>{copy('estimate')}</span>{costStale?<small>{copy('stale')}</small>:null}</span><strong title={currentToday?.updatedAt??undefined}>{formatCurrencyShort(cost)}</strong></div><small>{copy('notBill')}</small></section>
-    <button className="paper-widget-observed" type="button" onClick={onDetails}><BarChart3 size={21}/><span><strong>{labels.official}</strong><span>{coach.window?formatCoachWindow(coach.window,language):labels.observed} · {observed?.consumedPercentPoints==null?copy('unknown'):quotaCoachFeedback(language,'points',{points:formatCoachNumber(observed.consumedPercentPoints,language,2)})}</span><small>{labels.note}</small></span></button>
+    <section className="paper-widget-today" aria-label={labels.today} data-testid="paper-widget-today">
+      <p>{labels.today}</p>
+      <div data-reading-state={tokens == null ? 'unknown' : tokenStale ? 'stale' : 'current'}>
+        <Database size={18}/>
+        <span className="paper-widget-metric-label"><span>{copy('tokens')}</span>{tokenStale ? <small>{copy('stale')}</small> : null}</span>
+        <strong title={tokenSource?.updatedAt ?? undefined}>{tokens == null ? '—' : formatCoachNumber(tokens, language)}</strong>
+      </div>
+      <div data-reading-state={cost == null ? 'unknown' : costStale ? 'stale' : 'current'}>
+        <Tag size={17}/>
+        <span className="paper-widget-metric-label">
+          <span className="paper-widget-metric-name">{copy('estimate')}<ReadingInfo label={copy('estimate')}>{copy('notBill')}</ReadingInfo></span>
+          {costStale ? <small>{copy('stale')}</small> : null}
+        </span>
+        <strong title={currentToday?.updatedAt ?? undefined}>{formatCurrencyShort(cost)}</strong>
+      </div>
+    </section>
+    <div className="paper-widget-observed-row">
+      <button className="paper-widget-observed" type="button" onClick={onDetails}>
+        <BarChart3 size={21}/>
+        <span><strong>{labels.official}</strong><span>{coach.window ? formatCoachWindow(coach.window, language) : labels.observed} · {observed?.consumedPercentPoints == null ? copy('unknown') : quotaCoachFeedback(language, 'points', { points: formatCoachNumber(observed.consumedPercentPoints, language, 2) })}</span></span>
+      </button>
+      <ReadingInfo label={labels.observed}>{labels.note}</ReadingInfo>
+    </div>
   </div>;
 }

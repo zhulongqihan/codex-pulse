@@ -9,7 +9,7 @@ Codex Pulse offers two entrypoints: a Windows corner companion and a local MCP s
 1. Start Pulse and enable the **Codex corner pace indicator** in settings.
 2. Open the Microsoft Store edition of Codex for Windows and bring it to the foreground. The top right shows the app icon and current pace state, without an extra Pulse brand word.
 3. Click the status to open a card without an input box. See remaining quota, time until personal reset, consumption compared with time progress, and a daily/hourly reference allocation. New reset notices include their source.
-4. Press Esc, click outside, or use the close button to dismiss the card. View consumption details opens the Pulse workspace with current-cycle pacing and observations expanded. Check account and connection opens the account panel directly when account information is missing.
+4. Press Esc, click outside, or use the close button to dismiss the card. View consumption details opens the Pulse workspace with pacing details expanded. Check account and connection opens the account panel directly when account information is missing.
 
 Enable **Settings → General → Start Pulse at sign-in** to keep automatic following after a restart. The corner switch controls the companion display; it does not launch Pulse on its own. Sign-in startup keeps Pulse running in the tray. Captionless normal Codex windows are supported; minimization and switching to another app still hide the companion.
 
@@ -42,7 +42,7 @@ The local MCP plugin works with a Codex desktop client supporting MCP Apps; see 
 
 Starting with 0.7.1, normal startup and the Add action idempotently prepare `integrations/codex` from embedded templates. The portable archive no longer carries placeholder templates that could overwrite prepared files. Add also opens the client plugin details, where Codex performs installation. No Node.js, API key, or extra background web service is needed. Normal startup retains a valid existing data binding; explicitly adding again can change it.
 
-The panel shows today's tokens, estimated cost, and the remaining quota and reset time for each available quota window. Window durations are labeled using the data obtained by Pulse. It also shows the current cycle’s daily observations and sourced, time-qualified public reset notices. Actions reread the snapshot or open the Pulse dashboard, desktop widget and consumption details. Unavailable data is shown as missing or stale.
+The panel shows today's tokens, estimated cost, and the remaining quota and reset time for each available quota window. Window durations are labeled using the data obtained by Pulse. It also shows sourced, time-qualified public reset notices. Hover, focus or tap an information icon for reading guidance. Actions reread the snapshot or open the Pulse dashboard, desktop widget and consumption details. Unavailable data is shown as missing or stale.
 
 ## Language and appearance
 

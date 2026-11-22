@@ -1,0 +1,45 @@
+.pulse-reading-info {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  vertical-align: middle;
+  min-width: 26px;
+  min-height: 26px;
+  margin: 0;
+  padding: 0;
+  color: rgb(var(--muted-foreground));
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  cursor: help;
+  flex: none;
+}
+
+.pulse-reading-info:hover, .pulse-reading-info:focus-visible {
+  color: rgb(var(--foreground));
+  background: rgb(var(--muted));
+}
+
+.pulse-reading-info:focus-visible {
+  outline: 2px solid rgb(var(--ring));
+  outline-offset: 1px;
+}
+
+.pulse-reading-tip {
+  position: relative;
+  z-index: 240;
+  width: max-content;
+  max-width: min(270px, var(--radix-popover-content-available-width, calc(100vw - 16px)));
+  max-height: var(--radix-popover-content-available-height, calc(100vh - 16px));
+  overflow: auto;
+  overflow-wrap: anywhere;
+  padding: 9px 12px;
+  border: 1px solid rgb(var(--border));
+  border-radius: 7px;
+  background: rgb(var(--surface));
+  color: rgb(var(--foreground));
+  box-shadow: 0 5px 14px rgb(0 0 0 / .15);
+  font: 400 13px/1.55 var(--pulse-reading, "Segoe UI", sans-serif);
+}
+
+.pulse-reading-tip > p + p { margin-top: 6px; }

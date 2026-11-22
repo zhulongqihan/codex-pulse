@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { render, screen, within } from "@testing-library/react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import i18n from "../i18n";
@@ -73,8 +73,12 @@ describe("focused dashboard", () => {
     expect(screen.getByTestId("today-estimate")).toHaveTextContent("$1.20");
     expect(screen.getByTestId("today-tokens")).toHaveTextContent("77");
     expect(hero.querySelector(".pulse-dashboard-today-values > div:first-child")).toContainElement(screen.getByTestId("today-tokens"));
-    expect(screen.getByText("Estimated from model prices; not an actual bill.")).toBeVisible();
-    expect(screen.getByText("Counted separately from account quota")).toBeVisible();
+    expect(screen.queryByText("Estimated from model prices; not an actual bill.")).not.toBeInTheDocument();
+    expect(screen.queryByText("Counted separately from account quota")).not.toBeInTheDocument();
+    await user.hover(screen.getByRole("button", { name: dashboardCopy("en", "todayLocalUsage") }));
+    const readingInfo = screen.getByRole("tooltip");
+    expect(readingInfo).toHaveTextContent("Estimated from model prices; not an actual bill.");
+    expect(readingInfo).toHaveTextContent("Counted separately from account quota");
     expect(screen.queryByTestId("range-summary")).not.toBeInTheDocument();
     expect(screen.queryByTestId("usage-trends-card")).not.toBeInTheDocument();
     expect(screen.queryByTestId("credits-balance")).not.toBeInTheDocument();
@@ -121,6 +125,7 @@ describe("focused dashboard", () => {
       const rendered = render(<DashboardHeroCard {...props()} todayOverview={snapshot}/>); cleanup = rendered.unmount;
       expect(screen.getByTestId("today-tokens")).toHaveTextContent("77");
       expect(screen.getByTestId("today-summary")).toHaveTextContent("2026-11-06");
+      fireEvent.pointerOver(screen.getByRole("button", { name: dashboardCopy("en", "todayLocalUsage") }));
       expect(screen.getByTestId("today-timezone")).toHaveTextContent("America/Los_Angeles");
       rendered.rerender(<DashboardHeroCard {...props()} todayOverview={{ ...snapshot, timezone: "Asia/Shanghai" }}/>);
       expect(screen.getByTestId("today-summary")).toHaveTextContent("2026-11-07");
@@ -133,7 +138,9 @@ describe("focused dashboard", () => {
     await i18n.changeLanguage(language);
     render(<DashboardHeroCard timezone={overview.timezone} onOpenAnalysis={vi.fn()}/>);
     expect(screen.getByText(dashboardCopy(language, "todayCost"))).toBeVisible();
-    expect(screen.getByText(dashboardCopy(language, "estimateNote"))).toBeVisible();
+    expect(screen.queryByText(dashboardCopy(language, "estimateNote"))).not.toBeInTheDocument();
+    fireEvent.pointerOver(screen.getByRole("button", { name: dashboardCopy(language, "todayLocalUsage") }));
+    expect(screen.getByRole("tooltip")).toHaveTextContent(dashboardCopy(language, "estimateNote"));
     expect(screen.getByRole("button", { name: dashboardCopy(language, "openAnalysis") })).toBeEnabled();
     expect(screen.getByTestId("today-timezone")).not.toHaveTextContent("reading_context");
   });
@@ -152,6 +159,9 @@ describe("usage analysis", () => {
     expect(within(region).getByRole("button", { name: "Tokens" })).toHaveAttribute("aria-pressed", "true");
     expect(within(screen.getByRole("group", { name: "Trend view" })).getByRole("button", { name: "Tokens" })).toHaveAttribute("aria-pressed", "true");
     expect(screen.getByTestId("range-summary").querySelector(".pulse-analysis-totals dt")).toHaveTextContent("Period tokens");
+    expect(screen.queryByText(dashboardCopy("en", "estimateNote"))).not.toBeInTheDocument();
+    await user.hover(within(screen.getByTestId("range-summary")).getByRole("button", { name: dashboardCopy("en", "periodCost") }));
+    expect(screen.getByRole("tooltip")).toHaveTextContent(dashboardCopy("en", "estimateNote"));
     await user.click(within(region).getByRole("button", { name: "API estimate" }));
     expect(explanation).toHaveTextContent("Share of this period’s API estimate");
     expect(region.querySelector(".pulse-rank-row")).toHaveTextContent("high-cost");

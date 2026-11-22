@@ -1,12 +1,13 @@
 import { useEffect, useId, useState, type ComponentProps, type Ref } from "react";
 import { useTranslation } from "react-i18next";
-import { Bell, ChevronDown, Info, RefreshCw } from "lucide-react";
+import { Bell, ChevronDown, RefreshCw } from "lucide-react";
 import { CoachReference, PulsePaceCard } from "./pulse-pace";
 import { quotaCoachFromSnapshot } from "@/lib/quota-pace-coach";
-import { formatCoachCountdown, formatCoachNumber, formatCoachReset, formatCoachWindow, quotaCoachCopy, quotaCoachFeedback, quotaCoachReason } from "@/lib/quota-pace-coach-copy";
+import { formatCoachCountdown, formatCoachNumber, formatCoachReset, formatCoachWindow, quotaCoachClarity, quotaCoachCopy, quotaCoachFeedback, quotaCoachReason } from "@/lib/quota-pace-coach-copy";
 import { paceCopy } from "@/lib/pulse-pace-copy";
 import { paceSummaryCopy } from "@/lib/pace-summary-copy";
 import { localTimeZone, timeZoneLabel } from "@/lib/time-context";
+import { ReadingInfo } from "./reading-info";
 import "./pulse-pace-summary.css";
 
 /** A summary of the existing quota model. Opening its details preserves all original explanations. */
@@ -20,13 +21,13 @@ export function PulsePaceSummary({
   detailsTriggerRef?: Ref<HTMLButtonElement>;
   pacingOnly?: boolean;
 }) {
-  const { data, failed = false, refreshing = false, onRefresh, onRecover, observationsExpanded } = props;
+  const { data, failed = false, refreshing = false, onRefresh, onRecover } = props;
   const { i18n } = useTranslation();
   const language = i18n.resolvedLanguage ?? i18n.language;
   const copy = (key: Parameters<typeof quotaCoachCopy>[1]) => quotaCoachCopy(language, key);
   const summary = (key: Parameters<typeof paceSummaryCopy>[1]) => paceSummaryCopy(language, key);
   const [now, setNow] = useState(Date.now);
-  const [inlineExpanded, setInlineExpanded] = useState(Boolean(observationsExpanded));
+  const [inlineExpanded, setInlineExpanded] = useState(false);
   const generatedId = useId();
   const targetId = detailsId ?? generatedId;
   const expanded = controlledExpanded ?? inlineExpanded;
@@ -35,7 +36,6 @@ export function PulsePaceSummary({
     if (controlledExpanded == null) setInlineExpanded(next);
     onExpandedChange?.(next);
   };
-  useEffect(() => { if (controlledExpanded == null && observationsExpanded) setInlineExpanded(true); }, [controlledExpanded, observationsExpanded]);
   useEffect(() => { const timer = window.setInterval(() => setNow(Date.now()), data?.refreshAfterSeconds ? 1_000 : 30_000); return () => clearInterval(timer); }, [data?.refreshAfterSeconds]);
   const coach = quotaCoachFromSnapshot(data, now, failed);
   const ready = coach.status === "ready" && coach.tone != null;
@@ -52,7 +52,17 @@ export function PulsePaceSummary({
   const resetTimezone = localTimeZone();
   const advice = ready ? recentRisk ? copy("recentRiskAdvice") : coach.tone === "roomy" ? summary("roomy") : copy(`${coach.tone!}Advice`) : reason ?? copy(`${errorStatus}Detail`);
   return <section className={`pulse-summary coach-${coach.status}${pacingOnly ? " pulse-summary-pacing-only" : ""}`} aria-labelledby={`${generatedId}-title`} data-testid="pulse-pace-summary">
-    <header className="pulse-summary-heading"><div><h2 id={`${generatedId}-title`}>{summary(pacingOnly ? "pacing" : "title")}</h2><span>{formatCoachWindow(coach.window, language)}</span></div><div className="pulse-summary-updated"><time dateTime={updatedDate?.toISOString()} title={updatedDate?.toLocaleString(language)}>{updatedDate ? paceCopy(language, "updated", { time: updatedDate.toLocaleTimeString(language, { hour: "2-digit", minute: "2-digit" }) }) : paceCopy(language, "never")}</time><button type="button" onClick={onRefresh} disabled={refreshing || wait > 0} aria-busy={refreshing} aria-label={paceCopy(language, "refresh")} title={wait ? quotaCoachFeedback(language, "cooldown", { seconds: wait }) : paceCopy(language, "refresh")}><RefreshCw size={16}/></button></div></header>
+    <header className="pulse-summary-heading">
+      <div><h2 id={`${generatedId}-title`}>{summary(pacingOnly ? "pacing" : "title")}</h2><span>{formatCoachWindow(coach.window, language)}</span>
+        <ReadingInfo label={quotaCoachClarity(language, "explain")}>
+          <p>{copy("scope")}</p>
+          {coach.hasUnknownWindows ? <p>{quotaCoachFeedback(language, "unknownWindows")}</p> : null}
+          {coach.resetAt != null ? <p>{quotaCoachCopy(language, "resetAt", { time: formatCoachReset(coach.resetAt, language) })}
+            {resetTimezone ? ` · ${timeZoneLabel(resetTimezone, language, coach.resetAt)}` : null}</p> : null}
+        </ReadingInfo>
+      </div>
+      <div className="pulse-summary-updated"><time dateTime={updatedDate?.toISOString()} title={updatedDate?.toLocaleString(language)}>{updatedDate ? paceCopy(language, "updated", { time: updatedDate.toLocaleTimeString(language, { hour: "2-digit", minute: "2-digit" }) }) : paceCopy(language, "never")}</time><button type="button" onClick={onRefresh} disabled={refreshing || wait > 0} aria-busy={refreshing} aria-label={paceCopy(language, "refresh")} title={wait ? quotaCoachFeedback(language, "cooldown", { seconds: wait }) : paceCopy(language, "refresh")}><RefreshCw size={16}/></button></div>
+    </header>
     <div className="pulse-summary-readings">
       {!pacingOnly ? <><div>
         <p>{readingLabel}</p>
@@ -61,10 +71,6 @@ export function PulsePaceSummary({
       <div>
         <p>{copy("resetIn")}</p>
         <strong className="pulse-summary-countdown">{formatCoachCountdown(coach.remainingMinutes, language)}</strong>
-        {coach.resetAt != null ? <p className="pulse-summary-reset">
-          {quotaCoachCopy(language, "resetAt", { time: formatCoachReset(coach.resetAt, language) })}
-          {resetTimezone ? <span>{timeZoneLabel(resetTimezone, language, coach.resetAt)}</span> : null}
-        </p> : null}
       </div></> : null}
       <div className="pulse-summary-judgment" role={!ready ? "status" : undefined}>
         <span className="pulse-summary-status">{status}</span>
@@ -80,7 +86,7 @@ export function PulsePaceSummary({
     </div>
     {external && !pacingOnly && ready && coach.reference ? <CoachReference reference={coach.reference} language={language}/> : null}
     {wait > 0 ? <p className="pulse-summary-wait" role="status">{quotaCoachFeedback(language, "cooldown", { seconds: wait })}</p> : null}
-    <div className="pulse-summary-bottom"><p><Info size={14}/>{coach.hasUnknownWindows ? quotaCoachFeedback(language, "unknownWindows") : copy("scope")}</p><button ref={detailsTriggerRef} type="button" className="pulse-text-button" aria-expanded={expanded} aria-controls={targetId} onClick={() => changeExpanded(!expanded)}>{summary("details")}<ChevronDown size={14}/></button></div>
+    <div className="pulse-summary-bottom"><button ref={detailsTriggerRef} type="button" className="pulse-text-button" aria-expanded={expanded} aria-controls={targetId} onClick={() => changeExpanded(!expanded)}>{summary("details")}<ChevronDown size={14}/></button></div>
     {coach.resetNotice?.isUnread ? <button type="button" className="pulse-summary-notice" aria-controls={targetId} aria-expanded={expanded} onClick={() => changeExpanded(true)}><Bell size={14}/>{quotaCoachFeedback(language, "noticeCompact")}</button> : null}
     {props.noticeFailed && (!external || !expanded) ? <p role="alert">{copy("markFailed")}</p> : null}
     {!external ? <div id={targetId} hidden={!expanded}>{expanded ? <PulsePaceCard {...props} variant="workspace"/> : null}</div> : null}

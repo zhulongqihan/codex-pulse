@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { Download, FileSpreadsheet, FileText, ArrowUpRight, ArrowRight } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { RangeSwitcher } from "@/components/range-switcher";
+import { ReadingInfo } from "@/components/reading-info";
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import type { ExportFormat, OverviewResponse, RangeKey } from "@/lib/api";
@@ -69,13 +70,19 @@ export function DashboardHeroCard({ timezone, todayOverview = null, todayLoading
   const today = <section data-testid="today-summary" className="pulse-today-summary pulse-dashboard-today" aria-labelledby="pulse-today-title" aria-busy={todayLoading}>
       <div className="pulse-dashboard-today-heading">
         <h2 id="pulse-today-title">{dashboard("todayLocalUsage")}</h2>
-        <time dateTime={todayDate}>{todayDate}</time>
-        {todayTimezone ? <span className="pulse-time-context" data-testid="today-timezone">{t("reading_context.statistics_short", { zone: timeZoneLabel(todayTimezone, i18n.resolvedLanguage ?? i18n.language) })}</span> : null}
+        <div className="pulse-reading-context-label">
+          <time dateTime={todayDate}>{todayDate}</time>
+          <ReadingInfo label={dashboard("todayLocalUsage")}>
+            <p>{dashboard("separateQuota")}</p>
+            <p>{dashboard("estimateNote")}</p>
+            {todayTimezone ? <p data-testid="today-timezone">{t("reading_context.statistics_short", { zone: timeZoneLabel(todayTimezone, i18n.resolvedLanguage ?? i18n.language) })}</p> : null}
+          </ReadingInfo>
+        </div>
       </div>
       <div className="pulse-dashboard-today-readings">
         <dl className="pulse-dashboard-today-values">
-          <div><dt>{dashboard("todayTokens")}</dt><dd data-testid="today-tokens" title={todayKnown ? formatNumber(todayRow.totalTokens) : undefined}>{todayKnown ? formatCompactNumber(todayRow.totalTokens) : "—"}</dd><small>{dashboard("separateQuota")}</small></div>
-          <div className="pulse-dashboard-today-cost"><dt>{dashboard("todayCost")}</dt><dd data-testid="today-estimate">{todayKnown ? formatCurrencyShort(todayRow.costUSD) : "—"}</dd><small>{dashboard("estimateNote")}</small></div>
+          <div><dt>{dashboard("todayTokens")}</dt><dd data-testid="today-tokens" title={todayKnown ? formatNumber(todayRow.totalTokens) : undefined}>{todayKnown ? formatCompactNumber(todayRow.totalTokens) : "—"}</dd></div>
+          <div className="pulse-dashboard-today-cost"><dt>{dashboard("todayCost")}</dt><dd data-testid="today-estimate">{todayKnown ? formatCurrencyShort(todayRow.costUSD) : "—"}</dd></div>
         </dl>
         <div className="pulse-today-actions pulse-dashboard-today-actions">
           {onOpenToday ? <Button type="button" variant="secondary" size="sm" onClick={onOpenToday} disabled={!todayKnown}>{home("todaySessions")}<ArrowRight size={14} aria-hidden="true"/></Button> : null}
@@ -150,8 +157,14 @@ export function UsageAnalysisView({ overview, range, isBusy, isExporting, export
       </header>
       {exportError ? <p role="alert" data-testid="export-error" className="pulse-analysis-export-error"><strong>{t("export.failed")}</strong><span>{exportError}</span></p> : null}
       <div className="pulse-analysis-totals">
-        <dl><div><dt>{home("periodTokens")}</dt><dd>{formatCompactNumber(totals.totalTokens)}</dd></div><div><dt>{dashboard("periodCost")}</dt><dd>{formatCurrencyShort(totals.costUSD)}</dd></div></dl>
-        <p>{dashboard("estimateNote")}<span className="pulse-time-context" data-testid="analysis-timezone">{t("reading_context.statistics_short", { zone: timeZoneLabel(overview.timezone, i18n.resolvedLanguage ?? i18n.language) })}</span></p>
+        <dl>
+          <div><dt>{home("periodTokens")}</dt><dd>{formatCompactNumber(totals.totalTokens)}</dd></div>
+          <div>
+            <dt className="pulse-reading-context-label">{dashboard("periodCost")}<ReadingInfo label={dashboard("periodCost")}>{dashboard("estimateNote")}</ReadingInfo></dt>
+            <dd>{formatCurrencyShort(totals.costUSD)}</dd>
+          </div>
+        </dl>
+        <p className="pulse-time-context" data-testid="analysis-timezone">{t("reading_context.statistics_short", { zone: timeZoneLabel(overview.timezone, i18n.resolvedLanguage ?? i18n.language) })}</p>
       </div>
       {unknownPricing > 0 ? <p className="pulse-analysis-pricing" data-testid="analysis-pricing-coverage">{copy("pricingCoverage")} {formatPercent(totals.totalTokens > 0 ? (totals.totalTokens - unknownPricing) / totals.totalTokens : 0)} · {copy("partial")}</p> : null}
       <details className="pulse-period-details"><summary>{home("periodDetails")}</summary><dl className="pulse-period-breakdown">

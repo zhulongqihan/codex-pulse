@@ -4,7 +4,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import i18n from "../i18n";
 import { syntheticCoachSnapshot } from "@/lib/pulse-pace";
 import { paceSummaryCopy } from "@/lib/pace-summary-copy";
-import { quotaCoachCopy, quotaCoachFeedback } from "@/lib/quota-pace-coach-copy";
+import { quotaCoachClarity, quotaCoachCopy, quotaCoachFeedback } from "@/lib/quota-pace-coach-copy";
 import { paceCopy } from "@/lib/pulse-pace-copy";
 import { PulsePaceSummary } from "./pulse-pace-summary";
 
@@ -27,7 +27,11 @@ describe("dashboard quota summary", () => {
     render(<PulsePaceSummary data={syntheticCoachSnapshot("roomy", new Date(now))} {...actions()}/>);
     expect(screen.getByTestId("summary-remaining")).toHaveTextContent("80");
     expect(screen.getByText(paceSummaryCopy(language, "roomy"))).toBeInTheDocument();
-    expect(screen.getByText(quotaCoachFeedback(language, "unknownWindows"))).toBeInTheDocument();
+    expect(screen.queryByText(quotaCoachFeedback(language, "unknownWindows"))).not.toBeInTheDocument();
+    const info = screen.getByRole("button", { name: quotaCoachClarity(language, "explain") });
+    fireEvent.click(info);
+    expect(await screen.findByRole("tooltip")).toHaveTextContent(quotaCoachFeedback(language, "unknownWindows"));
+    fireEvent.click(info);
     expect(screen.queryByTestId("coach-reference")).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: paceSummaryCopy(language, "details") }));
     expect(screen.getByTestId("coach-reference")).toBeInTheDocument();

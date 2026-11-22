@@ -199,9 +199,10 @@ describe('Pulse attached titlebar in a real owned native host', () => {
     expect(clientSize).toEqual({width: nativeFocusBeforeDriverSwitch.panelRect!.width,
       height: nativeFocusBeforeDriverSwitch.panelRect!.height});
     const popup = await browser.execute(() => ({ fields: document.querySelectorAll('input,textarea,[contenteditable="true"]').length,
+      dailyObservations: document.querySelectorAll('[data-testid="coach-cycle-observations"]').length,
       noHorizontalOverflow: document.documentElement.scrollWidth <= innerWidth + 1,
       hasButtons: document.querySelectorAll('button').length > 0 }));
-    expect(popup.fields).toBe(0); expect(popup.noHorizontalOverflow).toBe(true); expect(popup.hasButtons).toBe(true);
+    expect(popup.fields).toBe(0); expect(popup.dailyObservations).toBe(0); expect(popup.noHorizontalOverflow).toBe(true); expect(popup.hasButtons).toBe(true);
     await browser.saveScreenshot(join(output, 'native-titlebar-popover.png'));
     const styles: Record<string, unknown> = {};
     for (const skinId of ['clear', 'meter', 'paper']) {
@@ -224,8 +225,14 @@ describe('Pulse attached titlebar in a real owned native host', () => {
       try {
         if (skinId === 'paper') {
           await invoke('plugin:event|emit', { event: 'pulse-pace-updated', payload: null });
+          const info = $('.coach-reference .pulse-reading-info');
+          const tip = $('[role="tooltip"]');
+          await info.waitForDisplayed();
+          await tip.waitForExist({ reverse: true });
+          await info.click();
+          await tip.waitForDisplayed();
           const selectors = ['.pulse-pace-header h2', '.coach-window-tag', '.coach-key-readings strong',
-            '.coach-countdown', '.coach-reference h3', '.coach-reference strong', '.coach-reference p',
+            '.coach-countdown', '.coach-reference h3', '.coach-reference strong', '[role="tooltip"]',
             '.pulse-pace-footer time', '.pace-details'];
           for (const selector of selectors) await $(selector).waitForExist();
           const fonts = await browser.execute((required) => required.flatMap(selector => {
@@ -238,6 +245,14 @@ describe('Pulse attached titlebar in a real owned native host', () => {
             expect(font.family).toMatch(/Segoe UI/);
             expect(font.family).not.toMatch(/KaiTi|STKaiti|Georgia|Times New Roman|SimSun|楷体|宋体/i);
           }
+          const tipFits = await browser.execute(() => {
+            const rect = document.querySelector('[role="tooltip"]')?.getBoundingClientRect();
+            return !!rect && rect.left >= 0 && rect.right <= innerWidth + 1 && rect.top >= 0 && rect.bottom <= innerHeight + 1;
+          });
+          expect(tipFits).toBe(true);
+          await browser.keys('Escape');
+          await tip.waitForExist({ reverse: true });
+          expect((await status()).popupOpen).toBe(true);
         }
         styles[skinId] = await browser.execute(() => ({ skin: document.documentElement.dataset.skin,
           bodyHeight: document.body.scrollHeight, viewport: innerHeight,

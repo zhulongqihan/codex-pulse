@@ -7,7 +7,6 @@
 .pulse-widget-coach .pulse-widget-header>button:focus-visible{outline:2px solid rgb(var(--primary));outline-offset:1px}
 .pulse-widget-coach .pulse-widget-header>.pulse-widget-pin[aria-pressed=true]{color:rgb(var(--primary));background:rgb(var(--primary)/.1)}
 .pulse-widget-coach .pulse-widget-header>button:disabled{cursor:wait;opacity:.65}
-.pulse-widget-close-hint{flex-shrink:0;font-size:12px;line-height:1.5;color:rgb(var(--muted-foreground));margin:6px 0;overflow-wrap:anywhere}
 .pulse-widget-coach .pulse-widget-grip{flex:0 0 15px}
 .pulse-widget-coach-content{display:flex;flex:1;min-height:0;overflow:hidden;overscroll-behavior:contain}
 .pulse-widget-coach-content>.quota-coach-card{height:100%;min-height:0}
@@ -35,7 +34,6 @@ html[data-skin=paper]:has(.paper-widget),html[data-skin=paper]:has(.paper-widget
 .paper-widget .pulse-widget-header>button:not(.pulse-widget-notice){width:26px;height:28px;min-height:28px;min-width:26px;flex-basis:26px;color:var(--pw-muted)}
 .paper-widget .pulse-widget-header>button:hover{background:#7a8e5d22;color:var(--pw-ink)}
 .paper-widget .pulse-widget-grip{display:none}
-.paper-widget .pulse-widget-close-hint{font-size:12px;color:var(--pw-muted);line-height:1.45;margin:4px 0 5px}
 .paper-widget:not(.is-expanded){padding-block:5px}
 .paper-widget:not(.is-expanded) .pulse-widget-header{border-bottom:0;padding-bottom:2px}
 .paper-widget:not(.is-expanded) .pulse-widget-header>strong{font-family:inherit;font-size:12px;font-weight:600}

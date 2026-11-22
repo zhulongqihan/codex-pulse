@@ -98,7 +98,7 @@ describe('Notice read state across real native WebViews', () => {
     // Wait for the loaded dashboard: its summary replaces the initial loading
     // summary. Reopen its details before comparing all three durable notices.
     await browser.switchToWindow('main');
-    const paceDetailsSelector = '[data-testid="dashboard-hero"] .pulse-summary-bottom button';
+    const paceDetailsSelector = '[data-testid="dashboard-hero"] .pulse-summary-bottom button[aria-expanded]';
     const paceDetails = $(paceDetailsSelector);
     await paceDetails.waitForDisplayed();
     await expect(paceDetails).toHaveAttribute('aria-expanded', 'false');

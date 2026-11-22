@@ -13,7 +13,7 @@ A quiet quota-pacing companion for Codex on Windows: view remaining quota and re
 - **Shared quota pacing:** the corner card, desktop widget and workspace share remaining quota, personal reset time, plain-language advice and daily/hourly reference allocations. Basic readings do not depend on a depletion forecast, and accounts returning only a weekly window remain useful.
 - **Daily official quota history:** retain weekly and short-window observed consumption across resets, with daily coverage, gaps, cycle details and separate exports in Usage analysis.
 - **Smooth client shortcut:** a shared icon and compact status without a brand word. The input-free card follows verified Microsoft Store Codex windows through Windows location events, hiding when another app is active, Codex is minimized or space is insufficient.
-- **Grounded extra indicators:** daily recorded changes and coverage in this cycle, a surplus-near-reset hint, and conditional remaining-at-reset ranges when sufficient observations exist. Missing history is not zero. Allocations are not new quota, and forecasts do not guarantee working time.
+- **Pacing indicators** include a surplus hint near reset and a conditional remaining-at-reset range when enough observations are available. Open the information icon beside a reading to see how reference allocations are calculated.
 - **Visible reset notices:** background notices show their source, expected window and unconfirmed state, with read state shared across windows. Expand explanations for expired, stale, unavailable or no-current-notice states and actual check times; a missing response is not inferred as withdrawal. Third-party global news stays separate from personal window expiry and is not presented as a personal reset confirmation.
 - **A focused daily dashboard:** account quota and reset time appear separately from today's local activity. Today's local tokens lead, with the API cost estimate alongside them. Open pacing details and token breakdowns as needed.
 - **Separate Usage analysis:** open selected-period totals, complete trends and project/model distributions, select a date for detail, and export the same range as XLSX or Markdown.
@@ -26,14 +26,14 @@ A quiet quota-pacing companion for Codex on Windows: view remaining quota and re
 - **Optional per-session Credits:** off by default; query only the real thread IDs currently being viewed, without sending conversation bodies. Preserve exact decimals, negative adjustments, cached values, cooldowns and unavailable states.
 - **Local sources and maintenance:** incremental scanning, compressed archives, one selected native/WSL environment, targeted session/project rescans, diagnostics and cache rebuilding.
 - **Desktop companions:** a configurable tray information panel and an independent draggable, pinnable, expandable quota-pacing widget. Launch at sign-in and automatic refresh are supported.
-- **Codex desktop entry:** a local MCP plugin shows quota, today's summary, cycle observations and sourced notices in a desktop client with MCP Apps support. Open the dashboard, widget or consumption details. The six-language panel follows Pulse preferences by default, with optional panel-only Clear, Meter or Paper selection; see the [installation guide](docs/CODEX_INTEGRATION.en.md).
+- **Codex desktop entry:** a local MCP plugin shows quota, today's summary and sourced notices in a desktop client with MCP Apps support. Open the dashboard, widget or consumption details. The six-language panel follows Pulse preferences by default, with optional panel-only Clear, Meter or Paper selection; see the [installation guide](docs/CODEX_INTEGRATION.en.md).
 - **Three styles and six languages:** choose Clear, Meter or Paper under **Settings → Appearance**. Light/dark/system, density and motion are independent preferences. Switching styles preserves your working state. The floating widget follows the workspace style by default and can use a different style under **Settings → Desktop & Codex**. Supports Simplified Chinese, Traditional Chinese, English, Japanese, Korean and German.
 - **Exports and updates:** XLSX/Markdown contain range summary, daily, model and project statistics. Pulse updates verify the release signature, product, platform and package digest, preserving data and restoring the previous executable if startup fails.
 - **Help and feedback:** find usage guidance, experience discussions and bug reporting in settings. Preview a minimal summary of visible environment and selected options before copying it; account data, logs and conversations are not uploaded automatically.
 
-0.14.2 simplifies the dashboard and first-run experience by bringing account quota and today's local tokens forward. [Release notes](docs/releases/v0.14.2.md#english).
+0.14.3 simplifies pacing and usage readings. Hover, focus or tap an information icon to read the supporting explanation. [Release notes](docs/releases/v0.14.3.md#english).
 
-Paper companion views with synthetic data: [pacing details](docs/screenshots/paper-0.13.2-pace-panel.png) · [system tray](docs/screenshots/paper-0.13.2-tray.png) · [Codex panel styling](docs/screenshots/paper-0.13.2-mcp.png).
+Paper companion views with synthetic data: [pacing details](docs/screenshots/paper-0.14.3-pace-panel.png) · [system tray](docs/screenshots/paper-0.13.2-tray.png) · [Codex panel styling](docs/screenshots/paper-0.14.3-mcp.png).
 
 ## Work context and interactive pace preview
 
@@ -47,7 +47,7 @@ Try the [roomy quota](https://zhulongqihan.github.io/codex-pulse/?demo=1&coachSc
 
 | Clear | Meter | Paper |
 |---|---| --- |
-| ![Clear with synthetic data](docs/screenshots/clear-overview.png) | ![Meter with synthetic data](docs/screenshots/meter-overview.png) | ![Paper dashboard with synthetic data](docs/screenshots/paper-0.14.2-dashboard.png) |
+| ![Clear with synthetic data](docs/screenshots/clear-overview.png) | ![Meter with synthetic data](docs/screenshots/meter-overview.png) | ![Paper dashboard with synthetic data](docs/screenshots/paper-0.14.3-dashboard.png) |
 
 All three styles share the same capabilities. The dashboard shows remaining account quota, reset time and today's local tokens. Usage analysis offers complete-range trends, distributions and exports. Clear uses lightweight comparisons and continuous tables. Meter emphasizes one dark trend field, and Paper uses a bound-journal layout with page tabs and textured paper. Daily detail, a data table, fullscreen viewing and keyboard controls remain available.
 
@@ -118,7 +118,7 @@ The pace sampler makes a read-only query about every 60 seconds by default, with
 
 Slower weekly changes accumulate a longer continuous observation span. An unchanged percentage does not mean no usage. Basic pacing still shows known quota and reset time without a forecast; local daily tokens remain in the workspace. Some accounts return only a weekly window; an omitted short window does not mean zero remaining quota.
 
-Time progress is derived from the official window duration and reset time, independently of when Pulse was installed. Daily pace observations use the time zone stored for their current cycle; reset timestamps use the current local time zone. Consumption shares describe local tokens within the selected period, separately from account quota shares.
+Time progress is derived from the official window duration and reset time, independently of when Pulse was installed. Official quota history uses the ledger time zone. Reset timestamps use the current local time zone. Consumption shares describe local tokens within the selected period, separately from account quota shares.
 
 **Activate window** sends a minimal model request through Codex CLI after explicit confirmation and may consume quota. Ordinary refresh never activates a window. Completion of the CLI request is checked separately from confirmation that the quota window became active.
 

@@ -181,10 +181,25 @@ describe("sidebar quota colors", () => {
     expect(screen.getByRole("progressbar")).toHaveAttribute("aria-valuetext",expect.stringContaining("79%"));
     expect(screen.queryByText("100%")).not.toBeInTheDocument();
   });
-  it("does not offer a five-hour activation for a weekly-only account", () => {
-    const onActivate=vi.fn();render(<CodexSidebarLimits limits={{session:null,weekly:{usedPercent:20,remainingPercent:80,windowMinutes:10080,resetsAt:null},updatedAt:new Date().toISOString(),source:"test",membershipLevel:"plus"}} error={null} onRefreshLimits={vi.fn()} onActivateWindow={onActivate}/>);
-    expect(screen.getByRole("button",{name:"Check quota"})).toBeEnabled();expect(screen.queryByRole("button",{name:"Start limit window"})).not.toBeInTheDocument();
-    expect(screen.getByText(/No 5-hour window was returned/)).toBeInTheDocument();expect(onActivate).not.toHaveBeenCalled();
+  it.each([false, true])("keeps weekly-only quota available without a five-hour activation (paper: %s)", paper => {
+    const onActivate = vi.fn();
+    const onRefresh = vi.fn();
+    const limits = { session: null, weekly: { usedPercent: 20, remainingPercent: 80, windowMinutes: 10080, resetsAt: null }, updatedAt: new Date().toISOString(), source: "test", membershipLevel: "plus" };
+    render(<CodexSidebarLimits paper={paper} limits={limits} error={null} onRefreshLimits={onRefresh} onActivateWindow={onActivate}/>);
+    expect(screen.getByRole("progressbar")).toHaveAttribute("aria-valuenow", "80");
+    expect(screen.queryByRole("button", { name: "Start limit window" })).not.toBeInTheDocument();
+    if (paper) {
+      expect(screen.queryByText(/No 5-hour window was returned/)).not.toBeInTheDocument();
+      expect(screen.queryByTestId("limits-timezone")).not.toBeInTheDocument();
+      fireEvent.pointerOver(screen.getByRole("button", { name: "Quota overview" }));
+      expect(screen.getByRole("tooltip")).toHaveTextContent("No 5-hour window was returned");
+    } else {
+      expect(screen.getByText(/No 5-hour window was returned/)).toBeVisible();
+    }
+    expect(screen.getByTestId("limits-timezone")).toHaveTextContent("Reset times are shown in local time");
+    fireEvent.click(screen.getByRole("button", { name: "Check quota" }));
+    expect(onRefresh).toHaveBeenCalledOnce();
+    expect(onActivate).not.toHaveBeenCalled();
   });
   it("restores the original thresholds as mocked quota values change", () => {
     const { rerender } = render(<CodexSidebarLimits limits={null} error={null} />);

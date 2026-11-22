@@ -2,15 +2,14 @@
 .pulse-dashboard-home.pulse-home-overview .pulse-dashboard-today { display: block; padding: 24px 0 24px; border-bottom: 0; }
 .pulse-dashboard-today-heading { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px 12px; margin-bottom: 20px; }
 .pulse-dashboard-today-heading h2 { font-size: 18px; font-weight: 650; line-height: 1.4; }
-.pulse-dashboard-today-heading time, .pulse-dashboard-today-heading .pulse-time-context { color: rgb(var(--muted-foreground)); font-size: 12px; }
-.pulse-dashboard-today-heading .pulse-time-context { margin-left: auto; }
+.pulse-dashboard-today-heading time { color: rgb(var(--muted-foreground)); font-size: 12px; }
+.pulse-reading-context-label { display: flex; align-items: center; gap: 2px 5px; min-width: 0; }
 .pulse-dashboard-today-readings { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 20px 30px; }
 .pulse-dashboard-today-values { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 22px 36px; min-width: 0; }
 .pulse-dashboard-today-values dt, .pulse-analysis-totals dt { color: rgb(var(--muted-foreground)); font-size: 13px; line-height: 1.6; }
 .pulse-dashboard-today-values dd { font-size: 32px; font-weight: 600; line-height: 1.4; letter-spacing: -.025em; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; margin-top: 6px; }
 .pulse-dashboard-today-values > div:first-child dd { font-size: 39px; }
 .pulse-dashboard-today-values .pulse-dashboard-today-cost dd { font-size: 25px; }
-.pulse-dashboard-today-values small { display: block; max-width: 38ch; color: rgb(var(--muted-foreground)); font-size: 12px; line-height: 1.6; margin-top: 6px; }
 .pulse-dashboard-home .pulse-dashboard-today-actions { display: grid; grid-column: auto; grid-row: auto; justify-self: auto; justify-items: end; gap: 9px; max-width: 220px; text-align: right; }
 .pulse-dashboard-today-actions button { min-height: 36px; height: auto; white-space: normal; text-wrap: balance; }
 .pulse-dashboard-home .pulse-today-breakdown { margin-top: 13px; }
@@ -44,8 +43,6 @@
   .pulse-dashboard-home:not(.pulse-paper-dashboard-spread) .pulse-summary-readings p { margin-bottom: 3px; }
   .pulse-dashboard-home:not(.pulse-paper-dashboard-spread) .pulse-summary-readings strong { font-size: 38px; }
   .pulse-dashboard-home:not(.pulse-paper-dashboard-spread) .pulse-summary-readings .pulse-summary-countdown { font-size: 24px; line-height: 1.5; }
-  .pulse-dashboard-home:not(.pulse-paper-dashboard-spread) .pulse-summary-reset { margin-top: 3px !important; }
-  .pulse-dashboard-home:not(.pulse-paper-dashboard-spread) .pulse-summary-reset span { display: inline; margin-inline-start: 6px; }
   .pulse-dashboard-home:not(.pulse-paper-dashboard-spread) .pulse-summary-judgment { padding: 8px 0 0; min-height: 0; }
   .pulse-dashboard-home:not(.pulse-paper-dashboard-spread) .pulse-summary-judgment h3 { display: inline; margin: 0 0 0 8px; font-size: 13px; }
   .pulse-dashboard-home:not(.pulse-paper-dashboard-spread) .pulse-summary-comparison { display: none; }
@@ -55,7 +52,6 @@
   .pulse-dashboard-today-readings { grid-template-columns: minmax(0, 1fr); gap: 18px; }
   .pulse-dashboard-home .pulse-dashboard-today-actions { max-width: none; width: 100%; justify-items: start; text-align: left; }
   .pulse-dashboard-today-values { gap: 18px; }
-  .pulse-dashboard-today-heading .pulse-time-context { margin-left: 0; }
   .pulse-analysis-heading { margin-bottom: 22px; }
   .pulse-analysis-totals > dl { gap: 15px 23px; }
   .pulse-analysis-totals > dl > div + div { padding-left: 23px; }

@@ -312,7 +312,7 @@ describe("App", () => {
 
   it.each([
     ["sessions", "clear"], ["settings", "clear"], ["sessions", "paper"], ["settings", "paper"],
-  ] as const)("opens cycle pace observations from %s in %s after a native request", async (source, skinId) => {
+  ] as const)("opens and focuses pace details from %s in %s after a native request", async (source, skinId) => {
     mockLoadedDashboard();
     if (skinId === "paper") {
       onTestFinished(async () => { await act(async () => { await updatePulsePreferences({ skinId: "clear" }); }); });
@@ -337,20 +337,23 @@ describe("App", () => {
     setPageActive(true);
     fireEvent.focus(window);
     await waitFor(() => expect(document.activeElement).toBe(document.getElementById("pulse-pace-details")));
-    const observations = document.querySelector<HTMLDetailsElement>("#pulse-pace-details .coach-daily")!;
-    expect(observations.open).toBe(true);
+    const details = document.getElementById("pulse-pace-details")!;
+    expect(within(details).getByTestId("pace-popover")).toBeVisible();
+    expect(within(details).getByTestId("coach-window-details")).not.toHaveAttribute("open");
+    expect(within(details).queryByTestId("coach-cycle-observations")).not.toBeInTheDocument();
     if (skinId === "paper") {
-      expect(screen.getByTestId("dashboard-hero").lastElementChild).toContainElement(document.getElementById("pulse-pace-details"));
-      fireEvent.keyDown(document.getElementById("pulse-pace-details")!, { key: "Escape" });
-      expect(document.getElementById("pulse-pace-details")).toHaveAttribute("hidden");
+      expect(screen.getByTestId("dashboard-hero").lastElementChild).toContainElement(details);
+      fireEvent.keyDown(details, { key: "Escape" });
+      expect(details).toHaveAttribute("hidden");
       expect(document.activeElement).toHaveAttribute("aria-controls", "pulse-pace-details");
     } else {
-      observations.open = false;
+      await userEvent.click(screen.getByTestId("sessions-nav-tab"));
     }
     await act(async () => {
       for (const callback of eventListeners.get("pulse-show-pace-details") ?? []) callback({ payload: null });
     });
-    await waitFor(() => expect(document.querySelector("#pulse-pace-details .coach-daily")).toHaveAttribute("open"));
+    await waitFor(() => expect(document.getElementById("pulse-pace-details")).toHaveFocus());
+    expect(within(document.getElementById("pulse-pace-details")!).getByTestId("pace-popover")).toBeVisible();
   });
   it("keeps a Paper companion request open and focused when the first overview arrives late", async () => {
     onTestFinished(async () => { await act(async () => { await updatePulsePreferences({ skinId: "clear" }); }); });
@@ -386,7 +389,8 @@ describe("App", () => {
     expect(within(dashboard).getByTestId("today-tokens")).toHaveTextContent("—");
     const details = within(dashboard).getByTestId("pulse-coach-overview");
     expect(details).toBeVisible();
-    expect(within(details).getByTestId("coach-cycle-observations")).toHaveAttribute("open");
+    expect(within(details).getByTestId("pace-popover")).toBeVisible();
+    expect(within(details).getByTestId("coach-window-details")).not.toHaveAttribute("open");
     await waitFor(() => expect(details).toHaveFocus());
     await act(async () => { resolveOverview(overview()); });
     expect(within(dashboard).getByTestId("pulse-coach-overview")).toBe(details);

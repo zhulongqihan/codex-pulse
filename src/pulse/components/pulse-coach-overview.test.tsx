@@ -28,7 +28,7 @@ beforeEach(async () => {
 describe("workspace pace slots", () => {
   it("opens one separate details region and returns focus to its summary trigger on close", async () => {
     const user = userEvent.setup();
-    render(<PulseCoachOverview {...actions} observationsExpanded={false}>{split}</PulseCoachOverview>);
+    render(<PulseCoachOverview {...actions} detailsRequested={false}>{split}</PulseCoachOverview>);
     const entry = screen.getByRole("button", { name: paceSummaryCopy("en", "details") });
     const details = screen.getByTestId("details-slot");
     expect(entry).toHaveAttribute("aria-expanded", "false");
@@ -48,23 +48,20 @@ describe("workspace pace slots", () => {
     expect(entry).toHaveAttribute("aria-expanded", "false");
   });
 
-  it("reopens the observations whenever a new companion request arrives", async () => {
-    const user = userEvent.setup();
-    const { rerender } = render(<PulseCoachOverview {...actions} observationsExpanded={false}>{split}</PulseCoachOverview>);
+  it("reopens the pace details whenever a new companion request arrives", async () => {
+    const { rerender } = render(<PulseCoachOverview {...actions} detailsRequested={false}>{split}</PulseCoachOverview>);
     await screen.findByTestId("coach-reference");
-    rerender(<PulseCoachOverview {...actions} observationsExpanded>{split}</PulseCoachOverview>);
-    expect(screen.getByTestId("coach-cycle-observations")).toHaveAttribute("open");
-    rerender(<PulseCoachOverview {...actions} observationsExpanded={false}>{split}</PulseCoachOverview>);
-    expect(screen.getByTestId("coach-cycle-observations")).toHaveAttribute("open");
-    await user.click(within(screen.getByTestId("coach-cycle-observations")).getByText("Observation basis this cycle"));
-    expect(screen.getByTestId("coach-cycle-observations")).not.toHaveAttribute("open");
-    rerender(<PulseCoachOverview {...actions} observationsExpanded>{split}</PulseCoachOverview>);
-    expect(screen.getByTestId("coach-cycle-observations")).toHaveAttribute("open");
-    rerender(<PulseCoachOverview {...actions} observationsExpanded={false}>{split}</PulseCoachOverview>);
+    rerender(<PulseCoachOverview {...actions} detailsRequested>{split}</PulseCoachOverview>);
+    expect(screen.getByTestId("pace-popover")).toBeVisible();
+    expect(screen.getByTestId("coach-window-details")).not.toHaveAttribute("open");
+    expect(screen.queryByTestId("coach-cycle-observations")).not.toBeInTheDocument();
+    rerender(<PulseCoachOverview {...actions} detailsRequested={false}>{split}</PulseCoachOverview>);
+    expect(screen.getByTestId("pace-popover")).toBeVisible();
     fireEvent.click(screen.getByRole("button", { name: "Close usage rhythm" }));
     expect(screen.queryByTestId("pace-popover")).not.toBeInTheDocument();
-    rerender(<PulseCoachOverview {...actions} observationsExpanded>{split}</PulseCoachOverview>);
-    expect(screen.getByTestId("coach-cycle-observations")).toHaveAttribute("open");
+    rerender(<PulseCoachOverview {...actions} detailsRequested>{split}</PulseCoachOverview>);
+    expect(screen.getByTestId("pace-popover")).toBeVisible();
+    expect(screen.getByTestId("coach-window-details")).not.toHaveAttribute("open");
   });
 
   it("keeps a failed acknowledgement visible in the same unread notice", async () => {
@@ -73,7 +70,7 @@ describe("workspace pace slots", () => {
       return syntheticCoachSnapshot("notice", new Date(now));
     });
     const user = userEvent.setup();
-    render(<PulseCoachOverview {...actions} observationsExpanded={false}>{split}</PulseCoachOverview>);
+    render(<PulseCoachOverview {...actions} detailsRequested={false}>{split}</PulseCoachOverview>);
     await user.click(await screen.findByRole("button", { name: quotaCoachFeedback("en", "noticeCompact") }));
     const details = screen.getByTestId("details-slot");
     const notice = within(details).getByRole("note");

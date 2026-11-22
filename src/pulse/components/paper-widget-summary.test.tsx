@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { render, screen, within } from '@testing-library/react';
-import { describe, expect, it } from 'vitest';
+import userEvent from '@testing-library/user-event';
+import { describe, expect, it, vi } from 'vitest';
 import { syntheticPaceSnapshot } from '@/lib/pulse-pace';
 import type { TrayPopoverData } from '@/lib/tray-popover';
 import { PaperWidgetSummary } from './paper-widget-summary';
@@ -10,14 +11,23 @@ function snapshot(date=now.toISOString().slice(0,10),tokens:number|null=0,cost:n
   return {account:null,membership:null,workspace:null,quotas:[],tokens:null,cost:null,labels:{remaining:'Remaining',today:'Today',cost:'API estimate',unavailable:'Unknown',showMain:'Open',quit:'Quit'},integration:{schemaVersion:1,quotas:[],quotaUpdatedAt:now.toISOString(),quotaStale:false,today:{date,timezone:'UTC',totalTokens:tokens,costUSD:cost,updatedAt:now.toISOString(),stale:false}}};
 }
 describe('paper widget live data scopes',()=>{
-  it('distinguishes measured zero token/cost values from missing values without inventing official observations',()=>{
+  it('keeps known zero values and article details separate from contextual help',async()=>{
+    const user=userEvent.setup();
+    const onDetails=vi.fn();
     const data=syntheticPaceSnapshot('forecast',now);
-    render(<PaperWidgetSummary data={data} snapshot={snapshot()} failed={false} language="en" onDetails={()=>{}}/>);
+    render(<PaperWidgetSummary data={data} snapshot={snapshot()} failed={false} language="en" onDetails={onDetails}/>);
     const today=screen.getByTestId('paper-widget-today');
     expect(within(today).getByText('0')).toBeVisible();
     expect(within(today).getByText('$0.00')).toBeVisible();
-    expect(screen.getByRole('button',{name:/Today's observed quota/})).toHaveTextContent('Not provided');
+    const official=screen.getByRole('button',{name:/^Today's observed quota/});
+    expect(official).toHaveTextContent('Not provided');
     expect(screen.getByTestId('paper-widget-quotas').querySelectorAll('[data-reading-state=ready]')).toHaveLength(2);
+    expect(screen.queryByText(/Each quota window is measured separately/)).not.toBeInTheDocument();
+    await user.hover(screen.getByRole('button',{name:'Observed window'}));
+    expect(screen.getByRole('tooltip')).toHaveTextContent('Each quota window is measured separately.');
+    expect(onDetails).not.toHaveBeenCalled();
+    await user.click(official);
+    expect(onDetails).toHaveBeenCalledOnce();
   });
   it('does not present yesterday’s local values as today after midnight',()=>{
     const data=syntheticPaceSnapshot('forecast',now);data.localUsage=null;

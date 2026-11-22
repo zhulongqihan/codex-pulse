@@ -199,7 +199,7 @@ export default function App() {
   useEffect(() => { try { localStorage.setItem(ACCOUNT_EXPANDED, String(accountExpanded)); } catch { /* The panel remains usable without storage. */ } }, [accountExpanded]);
 
   const [paceDetailsRequested, setPaceDetailsRequested] = useState(false);
-  const [paceObservationsExpanded, setPaceObservationsExpanded] = useState(false);
+  const [paceDetailsExpanded, setPaceDetailsExpanded] = useState(false);
   useEffect(() => {
     if (!paceDetailsRequested || view !== "dashboard" || (!hasScanned && !overview?.updatedAt)) return;
     let frame = 0;
@@ -208,8 +208,6 @@ export default function App() {
       frame = requestAnimationFrame(() => {
         const target = document.getElementById("pulse-pace-details");
         if (!target || !document.hasFocus()) return;
-        const observations = target.querySelector<HTMLDetailsElement>(".coach-daily");
-        if (observations) observations.open = true;
         target.scrollIntoView({ block: "start", behavior: "auto" });
         target.focus({ preventScroll: true });
         if (document.activeElement === target) setPaceDetailsRequested(false);
@@ -226,7 +224,7 @@ export default function App() {
     setIsResetHistoryOpen(false);
     setAccountDrawerOpen(false);
     savedScroll.current.dashboard = 0;
-    setPaceObservationsExpanded(true);
+    setPaceDetailsExpanded(true);
     setPaceDetailsRequested(true);
     void handleViewChange("dashboard");
   };
@@ -439,7 +437,7 @@ export default function App() {
   const quotaAvailable = hasReturnedQuota(codexLimits);
   const openQuotaHistory = () => { setAnalysisSource("official"); navigate("analysis"); };
   const coachProps = { onDetails: () => paceDetails.current(), onRecover: showAccount };
-  const dashboardCoach = <PulseCoachOverview {...coachProps} summary={!paceObservationsExpanded} observationsExpanded={paceObservationsExpanded}/>;
+  const dashboardCoach = <PulseCoachOverview {...coachProps} summary={!paceDetailsExpanded} detailsRequested={paceDetailsRequested}/>;
   const dashboardToday = awaitingFirstScan && !todayOverview?.updatedAt ? null : todayOverview;
   const scanWait = <ScanWaitNotice active={isLoading || isScanning} diagnostics={diagnostics}/>;
   const recovery = showRecovery && view !== "settings" ? <UsageRecoveryCard
@@ -668,7 +666,7 @@ export default function App() {
             <Activity mode={view === "dashboard" ? "visible" : "hidden"}>
             <div className="space-y-5">
               {helpOpen ? <PulseGettingStarted panelRef={helpPanel} accountReady={!!codexLimits} quotaAvailable={quotaAvailable} busy={desktopAction !== null} notice={desktopNotice} error={desktopError} onSource={() => openSettings("source")} onAccount={showAccount} onWidget={() => void runDesktopAction("widget")} onShortcuts={() => void runDesktopAction("shortcuts")} onDismiss={closeHelp}/> : null}
-              {paperDashboard ? <PulseCoachOverview {...coachProps} observationsExpanded={paceDetailsRequested} pacingOnly={quotaAvailable}>
+              {paperDashboard ? <PulseCoachOverview {...coachProps} detailsRequested={paceDetailsRequested} pacingOnly={quotaAvailable}>
                 {({ summary, details }) => renderDashboard(summary, details)}
               </PulseCoachOverview> : renderDashboard(dashboardCoach)}
               {view === "dashboard" ? scanHeader : null}

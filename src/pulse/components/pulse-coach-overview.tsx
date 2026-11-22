@@ -5,14 +5,14 @@ import { PulsePaceCard } from "./pulse-pace";
 import { PulsePaceSummary } from "./pulse-pace-summary";
 
 /** The workspace shares observations and presentation with both companions. */
-export function PulseCoachOverview({ onDetails, onRecover, observationsExpanded, summary = false, pacingOnly = false, children }: {
-  onDetails: () => void; onRecover: () => void; observationsExpanded: boolean; summary?: boolean;
+export function PulseCoachOverview({ onDetails, onRecover, detailsRequested, summary = false, pacingOnly = false, children }: {
+  onDetails: () => void; onRecover: () => void; detailsRequested: boolean; summary?: boolean;
   pacingOnly?: boolean;
   children?: (slots: { summary: ReactNode; details: ReactNode }) => ReactNode;
 }) {
   const { data, error, refreshing, refresh, markNoticeRead, noticePending, noticeError } = usePulsePace();
   const copy = useShellCopy();
-  const [expanded, setExpanded] = useState(observationsExpanded);
+  const [expanded, setExpanded] = useState(detailsRequested);
   const detailsRef = useRef<HTMLElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const moveFocusOnOpen = useRef(false);
@@ -29,8 +29,8 @@ export function PulseCoachOverview({ onDetails, onRecover, observationsExpanded,
   const detailsId = "pulse-pace-details";
   const split = children != null;
   useLayoutEffect(() => {
-    if (split && observationsExpanded) setExpanded(true);
-  }, [split, observationsExpanded]);
+    if (split && detailsRequested) setExpanded(true);
+  }, [split, detailsRequested]);
   useLayoutEffect(() => {
     if (expanded && moveFocusOnOpen.current) {
       moveFocusOnOpen.current = false;
@@ -39,7 +39,7 @@ export function PulseCoachOverview({ onDetails, onRecover, observationsExpanded,
   }, [expanded]);
 
   const props = {
-    variant: "workspace" as const, data, failed: error, refreshing, observationsExpanded, onDetails, onRecover,
+    variant: "workspace" as const, data, failed: error, refreshing, onDetails, onRecover,
     onRefresh: () => void refresh(), onMarkNoticeRead: markNoticeRead, noticePending, noticeFailed: noticeError,
   };
   if (children) {

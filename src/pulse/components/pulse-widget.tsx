@@ -12,6 +12,7 @@ import { PulseBrandMark } from "./pulse-brand-mark";
 import { PulsePaceCard } from "./pulse-pace";
 import { useWidgetContentSize } from "@/hooks/use-widget-content-size";
 import { PaperWidgetSummary, usePaperWidgetSnapshot } from "./paper-widget-summary";
+import { ReadingInfo } from "./reading-info";
 import "./pulse-widget.css";
 
 export function PulseWidget() {
@@ -56,12 +57,14 @@ export function PulseWidget() {
       <button type="button" onClick={() => action("showMain")} aria-label={copy("open")} title={copy("open")}><ExternalLink size={14}/></button>
       <button type="button" className="pulse-widget-pin" data-testid="widget-pin" onClick={() => void togglePin()} disabled={pinPending} aria-busy={pinPending} aria-pressed={preferences.widgetAlwaysOnTop} aria-label={pinLabel} title={pinLabel}>{preferences.widgetAlwaysOnTop ? <Pin size={14} aria-hidden="true"/> : <PinOff size={14} aria-hidden="true"/>}</button>
       <button type="button" onClick={() => action(preferences.widgetExpanded ? "collapse" : "expand")} aria-label={copy(preferences.widgetExpanded ? "collapse" : "expand")} title={copy(preferences.widgetExpanded ? "collapse" : "expand")}>{preferences.widgetExpanded ? <ChevronUp size={15}/> : <ChevronDown size={15}/>}</button>
+      {preferences.widgetExpanded ? <ReadingInfo label={closeBehaviorCopy(language, "hideOnly")}>
+        <span data-testid="widget-close-hint">{closeBehaviorCopy(language, "widgetHint", { quit: t("settings.menu_bar_quit") })}</span>
+      </ReadingInfo> : null}
       <button type="button" data-testid="widget-hide" onClick={() => action("hide")} aria-label={copy("hide")} aria-describedby={hideHintId} title={closeBehaviorCopy(language, "hideOnly")}><X size={14} aria-hidden="true"/></button>
     </header>
     <span id={hideHintId} className="sr-only">{closeBehaviorCopy(language, "hideOnly")}</span>
-    {preferences.widgetExpanded ? <p className="pulse-widget-close-hint" data-testid="widget-close-hint">{closeBehaviorCopy(language, "widgetHint", { quit: t("settings.menu_bar_quit") })}</p> : null}
     {paper && !preferences.widgetExpanded ? <div className="paper-widget-compact"><div className={`paper-widget-track ${coach.status!=='ready'?'is-last':''}`} role="meter" aria-label={coach.status==='ready'?quotaCoachCopy(language,'remaining'):quotaCoachFeedback(language,'last')} aria-valuemin={0} aria-valuemax={100} aria-valuenow={coach.remainingPercent??undefined} aria-valuetext={coach.remainingPercent==null?copy('unknown'):undefined}><i style={{width:`${coach.remainingPercent??0}%`}}/></div>{compactNotice?<small>{compactReading}</small>:null}{coach.status!=='ready'?<small>{coach.remainingPercent!=null?`${quotaCoachFeedback(language,'last')} · `:''}{quotaCoachCopy(language,coach.status)}</small>:null}</div> : <div className="pulse-widget-coach-content">
-      {paper ? <div className="paper-widget-expanded-scroll"><PaperWidgetSummary data={pace.data} snapshot={local.snapshot} failed={pace.error} localFailed={local.failed} language={language} onDetails={details}/><details className="paper-widget-pace-details" open={coach.resetNotice?.isUnread}><summary>{quotaCoachFeedback(language,'basis')}{coach.resetNotice?.isUnread?` · ${quotaCoachFeedback(language,'noticeCompact')}`:''}</summary>
+      {paper ? <div className="paper-widget-expanded-scroll"><PaperWidgetSummary data={pace.data} snapshot={local.snapshot} failed={pace.error} localFailed={local.failed} language={language} onDetails={details}/><details className="paper-widget-pace-details" open={coach.resetNotice?.isUnread}><summary>{quotaCoachCopy(language,'title')}{coach.resetNotice?.isUnread?` · ${quotaCoachFeedback(language,'noticeCompact')}`:''}</summary>
       <PulsePaceCard variant="widget" showCompactNotice={false} data={pace.data} failed={pace.error} refreshing={pace.refreshing} onRefresh={()=>void pace.refresh()} onDetails={details} onRecover={()=>{setActionFailed(false);void titlebarAction('account').catch(()=>setActionFailed(true));}} onMarkNoticeRead={pace.markNoticeRead} noticePending={pace.noticePending} noticeFailed={pace.noticeError}/></details></div> :
       <PulsePaceCard variant={preferences.widgetExpanded ? "widget" : "compact"}
         showCompactNotice={false}

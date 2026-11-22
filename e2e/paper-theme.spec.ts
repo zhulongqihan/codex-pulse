@@ -178,7 +178,6 @@ describe('paper theme in the native app', () => {
     await expectWidgetSize('paperExpanded', height => Math.abs(height - 480) <= 1);
     await expectReadingFonts([
       '.pulse-widget-header > strong',
-      '.pulse-widget-close-hint',
       '.paper-widget-quota strong',
       '.paper-widget-quota small',
       '.paper-widget-judgment',
@@ -188,6 +187,11 @@ describe('paper theme in the native app', () => {
       '.paper-widget-style select',
       '.paper-widget-style > button',
     ]);
+    await expect($('[data-testid="widget-close-hint"]')).not.toExist();
+    await header.$('.pulse-reading-info').click();
+    await expectReadingFonts(['[data-testid="widget-close-hint"]']);
+    await browser.keys('Escape');
+    await expect($('[data-testid="widget-close-hint"]')).not.toExist();
 
     const pin = $('[data-testid="widget-pin"]');
     const initiallyPinned = (await preferences()).widgetAlwaysOnTop;

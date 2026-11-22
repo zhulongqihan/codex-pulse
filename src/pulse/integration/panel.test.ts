@@ -76,8 +76,8 @@ describe("the shipped MCP panel script", () => {
     await p.respond(usage, { structuredContent: { ...data, coach: { ...data.coach, resetNotice: null, noticeState: { status: "unavailable", checkedAt, validUntil } } } });
     expect(p.get("notice-content").hidden).toBe(true); expect(p.get("notice-section").dataset.noticeState).toBe("unavailable");
     expect(p.get("notice-empty")).toHaveTextContent(panelCopy[language].noticeStateUnavailable);
-    expect((p.get("notice-state") as HTMLDetailsElement).open).toBe(false);
-    p.get("notice-empty").click(); expect((p.get("notice-state") as HTMLDetailsElement).open).toBe(true);
+    expect(p.get("notice-explanation").hidden).toBe(true);
+    p.button("notice-info").click(); expect(p.get("notice-explanation").hidden).toBe(false);
     expect(p.get("notice-state-detail")).toHaveTextContent(panelCopy[language].noticeStateUnavailableDetail);
     expect(p.get("notice-state-checked").hidden).toBe(false); expect(p.get("notice-state-until").hidden).toBe(false);
     expect(p.get("notice-state")).not.toHaveTextContent("undefined"); expect(p.get("notice-state")).not.toHaveTextContent("Invalid Date");
@@ -121,6 +121,7 @@ describe("the shipped MCP panel script", () => {
     expect(p.doc.documentElement.lang).toBe(language === "zh" ? "zh-CN" : language);
     expect(p.doc.documentElement.dataset.theme).toBe("dark"); expect(p.doc.querySelector("main")!.dataset.style).toBe("meter");
     expect(p.get("details-button")).toHaveTextContent(panelCopy[language].details);
+    for (const topic of ["pace", "today", "notice"]) expect(p.button(`${topic}-info`)).toHaveAttribute("aria-label", panelCopy[language][`${topic}Info`]);
     p.receive({ jsonrpc: "2.0", method: "ui/notifications/host-context-changed", params: { theme: "light", locale: "en-US" } });
     expect(p.doc.documentElement.lang).toBe(language === "zh" ? "zh-CN" : language); expect(p.doc.documentElement.dataset.theme).toBe("dark");
     p.doc.querySelector<HTMLButtonElement>('[data-style-choice="clear"]')!.click(); expect(p.doc.querySelector("main")!.dataset.style).toBe("clear");
@@ -139,16 +140,38 @@ describe("the shipped MCP panel script", () => {
     expect(p.get("presentation-fallback").hidden).toBe(false); expect(p.get("presentation-fallback")).toHaveTextContent(panelCopy.en.prefsMissing);
   });
 
-  it("shows scoped daily zero, unknown/partial coverage and a legitimate 25-hour DST date distinctly", async () => {
+  it("accepts prior daily observation payloads without showing a daily table or static explanations", async () => {
     const now = Date.parse("2026-11-02T18:00:00Z"), p = panel(); vi.spyOn(p.child.Date, "now").mockReturnValue(now);
     const usage = await p.connect(), data = companionSnapshot(now); await p.respond(usage, { structuredContent: data });
-    expect(p.get("observation-zone")).toHaveTextContent("America/New_York"); expect(p.get("observation-list").children).toHaveLength(2);
-    expect(p.get("observation-list").children[0]).toHaveTextContent(panelCopy.en.unobserved); expect(p.get("observation-list").children[0]).toHaveTextContent(panelCopy.en.partial);
-    expect(p.get("observation-list").children[1]).toHaveTextContent("0"); expect(p.get("observation-list").children[1]).toHaveTextContent("1,500");
-    expect(p.get("observation-list").children[1]).not.toHaveTextContent(panelCopy.en.partial);
-    const details = p.get("observations") as HTMLDetailsElement; expect(details.querySelector("summary")).not.toBeNull(); details.querySelector("summary")!.click(); expect(details.open).toBe(true);
-    data.coach.observedWindow.resetsAt = new Date(now - 1).toISOString(); p.receive({ jsonrpc: "2.0", method: "ui/notifications/tool-result", params: { structuredContent: data } });
-    expect(p.get("observation-list").children).toHaveLength(0); expect(p.get("no-daily").hidden).toBe(false);
+    expect(p.get("observations")).toBeNull();
+    expect(p.doc.body).not.toHaveTextContent("America/New_York");
+    expect(p.get("pace-reading")).toHaveTextContent("65%");
+    expect(p.get("coach-reference").hidden).toBe(false);
+    expect(p.get("pace-explanation").hidden).toBe(true);
+    expect(p.get("today-explanation").hidden).toBe(true);
+    expect(p.get("notice-explanation").hidden).toBe(true);
+  });
+
+  it("reveals explanations on hover, keyboard focus and tap, then dismisses them without moving focus", async () => {
+    const now = Date.parse("2026-11-02T18:00:00Z"), p = panel(); vi.spyOn(p.child.Date, "now").mockReturnValue(now);
+    const usage = await p.connect(); await p.respond(usage, { structuredContent: companionSnapshot(now) });
+    const pace = p.button("pace-info"), explanation = p.get("pace-explanation");
+    pace.parentElement!.dispatchEvent(new p.child.MouseEvent("mouseenter"));
+    expect(explanation.hidden).toBe(false); expect(explanation).toHaveTextContent(panelCopy.en.paceNote);
+    pace.parentElement!.dispatchEvent(new p.child.MouseEvent("mouseleave"));
+    expect(explanation.hidden).toBe(true);
+    pace.focus();
+    expect(pace).toHaveAttribute("aria-expanded", "true");
+    p.doc.dispatchEvent(new p.child.KeyboardEvent("keydown", { key: "Escape", cancelable: true }));
+    expect(explanation.hidden).toBe(true); expect(p.doc.activeElement).toBe(pace);
+    const today = p.button("today-info"), todayExplanation = p.get("today-explanation");
+    today.click();
+    expect(todayExplanation.hidden).toBe(false); expect(todayExplanation).toHaveTextContent(panelCopy.en.estimate);
+    today.click();
+    expect(todayExplanation.hidden).toBe(true);
+    today.click();
+    p.doc.body.dispatchEvent(new p.child.Event("pointerdown", { bubbles: true }));
+    expect(todayExplanation.hidden).toBe(true);
   });
 
   it("renders notice text without HTML and rejects unsafe, expired or stale source data", async () => {
@@ -174,12 +197,12 @@ describe("the shipped MCP panel script", () => {
     expect(p.messages.filter(message => message.method === "tools/call").every(message => ["pulse_usage", "pulse_open"].includes(String(message.params?.name)))).toBe(true);
   });
 
-  it("keeps retained values on reread failure but hides notices and observations as current data", async () => {
+  it("keeps retained values on reread failure but hides a notice as current data", async () => {
     const now = Date.parse("2026-11-02T18:00:00Z"), p = panel(); vi.spyOn(p.child.Date, "now").mockReturnValue(now);
     const usage = await p.connect(); await p.respond(usage, { structuredContent: companionSnapshot(now) }); expect(p.get("notice-content").hidden).toBe(false);
     p.button("refresh").click(); await p.respond(p.messages.at(-1)!, { isError: true });
     expect(p.get("tokens").textContent).toBe("13,600"); expect(p.get("status").dataset.error).toBe("true");
-    expect(p.get("notice-content").hidden).toBe(true); expect(p.get("observation-list").children).toHaveLength(0);
+    expect(p.get("notice-content").hidden).toBe(true);
     p.button("refresh").click(); await p.respond(p.messages.at(-1)!, { structuredContent: companionSnapshot(now) }); expect(p.get("notice-content").hidden).toBe(false);
   });
 

@@ -59,7 +59,7 @@ export function useWidgetContentSize(element: RefObject<HTMLElement | null>, exp
     };
     const schedule = () => { if (active && !frame && !rejected) frame = requestAnimationFrame(measure); };
     const observer = new ResizeObserver(schedule);
-    const observeParts = () => { for (const child of panel.querySelectorAll(".pulse-widget-header,.pulse-widget-close-hint,.coach-body>*,.pulse-pace-footer,.paper-widget-compact,.paper-widget-style,:scope > .pulse-error")) observer.observe(child); };
+    const observeParts = () => { for (const child of panel.querySelectorAll(".pulse-widget-header,.coach-body>*,.pulse-pace-footer,.paper-widget-compact,.paper-widget-style,:scope > .pulse-error")) observer.observe(child); };
     observeParts();
     const mutation = new MutationObserver(() => { observeParts(); schedule(); });
     mutation.observe(panel, { childList: true });
