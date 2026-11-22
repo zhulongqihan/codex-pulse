@@ -3,6 +3,7 @@ import { invoke, isTauri } from "@tauri-apps/api/core";
 import { useTranslation } from "react-i18next";
 import { ArrowUpRight, Bell, RefreshCw, X } from "lucide-react";
 import { PulseBrandMark } from "./pulse-brand-mark";
+import { noticeStateCopy } from "@/lib/notice-state-copy";
 import { titlebarAction, usePulsePace, type PaceSnapshot, type PaceResetNotice } from "@/lib/pulse-pace";
 import { paceCopy } from "@/lib/pulse-pace-copy";
 import { quotaCoachFromSnapshot, quotaWindowReadState, type QuotaPaceCoach } from "@/lib/quota-pace-coach";
@@ -140,13 +141,20 @@ export function PulsePaceCard({ data, failed = false, refreshing = false, onRefr
   const projection = remainingRange ? <section className="coach-projection"><p>{remainingRange.upperPercent < 1 ? copy("projectedDepletion") : copy("projected", { lower: number(Math.floor(remainingRange.lowerPercent), language), upper: number(Math.ceil(remainingRange.upperPercent), language) })}</p><ReadingInfo label={copy("title")}>{copy("projectionNote")}</ReadingInfo></section> : null;
   const noticeBanner = notice ? <NoticeBanner notice={notice} language={language} copy={copy} onRead={onMarkNoticeRead} pending={noticePending} failed={noticeFailed}/> : null;
   const clarity = (key: Parameters<typeof quotaCoachClarity>[1], values?: Record<string, string | number>) => quotaCoachClarity(language, key, values);
-  const information = <ReadingInfo label={clarity("explain")}>
+  const reset = coach.resetAt == null ? null : copy("resetAt", { time: formatCoachReset(coach.resetAt, language) });
+  const comparison = status === "ready" ? <p data-testid="coach-comparison">{copy("comparison", { used: number(coach.usedPercent, language), elapsed: number(coach.elapsedPercent, language) })}</p> : null;
+  const checkedAt = coach.noticeState.checkedAt;
+  const information = variant === "popover" ? (reset || comparison || checkedAt) && <ReadingInfo label={clarity("explain")}>
+    {reset ? <p>{reset}</p> : null}
+    {comparison}
+    {checkedAt ? <p><time dateTime={checkedAt}>{noticeStateCopy(language, "checked", { time: formatCoachReset(Date.parse(checkedAt), language) })}</time></p> : null}
+  </ReadingInfo> : <ReadingInfo label={clarity("explain")}>
     {status !== "ready" ? <p>{reason ?? copy(`${errorStatus}Detail`)}</p> : null}
     <p>{copy("scope")}</p>
     {!compact && updatedAt && Number.isFinite(updated) ? <p><time dateTime={updatedAt}>{paceCopy(language, "updated", { time: readingTime(updatedAt, language) })}</time></p> : null}
     {coach.hasUnknownWindows && coach.remainingPercent != null ? <p>{quotaCoachFeedback(language, "unknownWindows")}</p> : null}
     {coach.resetAt != null ? <p>{copy("resetAt", { time: formatCoachReset(coach.resetAt, language) })}{resetTimezone ? ` · ${clarity("resetZone", { timezone: timeZoneLabel(resetTimezone, language, coach.resetAt) })}` : null}</p> : null}
-    {status === "ready" ? <p data-testid="coach-comparison">{copy("comparison", { used: number(coach.usedPercent, language), elapsed: number(coach.elapsedPercent, language) })}</p> : null}
+    {comparison}
     {!compact ? <>
       <p data-testid="coach-time-basis">{coach.startAt != null && coach.resetAt != null ? clarity("timeRange", { start: formatCoachReset(coach.startAt, language), end: formatCoachReset(coach.resetAt, language) }) : clarity("timeMissing")}</p>
       <p>{clarity("timeMethod")}</p>

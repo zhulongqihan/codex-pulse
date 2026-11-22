@@ -3,9 +3,10 @@ import { act, fireEvent, render, screen, waitFor, within } from "@testing-librar
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import i18n from "../i18n";
+import { noticeStateCopy } from "@/lib/notice-state-copy";
 import { paceCopy } from "@/lib/pulse-pace-copy";
 import { syntheticPaceSnapshot, type PaceResetNotice, type PaceSnapshot } from "@/lib/pulse-pace";
-import { formatCoachCountdown, quotaCoachBadgeCopy, quotaCoachClarity, quotaCoachCopy, quotaCoachFeedback } from "@/lib/quota-pace-coach-copy";
+import { formatCoachCountdown, formatCoachReset, quotaCoachBadgeCopy, quotaCoachClarity, quotaCoachCopy, quotaCoachFeedback } from "@/lib/quota-pace-coach-copy";
 import { PulsePaceBadgeView, PulsePaceCard } from "./pulse-pace";
 import { readingGuidanceCopy } from "@/lib/reading-guidance-copy";
 
@@ -30,6 +31,37 @@ function recentDepletion(remaining = 77): PaceSnapshot {
 }
 
 describe("shared cycle pace card", () => {
+  it("shows only the marked reset, usage comparison and last check in the title-bar hint", async () => {
+    await i18n.changeLanguage("zh");
+    const data = cycle(56), checkedAt = iso(-10), resetsAt = iso(5342);
+    data.windows[1].resetsAt = resetsAt;
+    data.coachExtras = { dailyObservations: [], resetNotice: null, noticeState: { status: "none", checkedAt, validUntil: null } };
+    render(<PulsePaceCard data={data} {...actions()}/>);
+    fireEvent.click(timeInfo("zh"));
+    const tooltip = await screen.findByRole("tooltip");
+    expect(Array.from(tooltip.children, row => row.textContent)).toEqual([
+      quotaCoachCopy("zh", "resetAt", { time: formatCoachReset(Date.parse(resetsAt), "zh") }),
+      "额度已用44%，周期时间已过47%",
+      noticeStateCopy("zh", "checked", { time: formatCoachReset(Date.parse(checkedAt), "zh") }),
+    ]);
+    expect(tooltip.querySelector("time")).toHaveAttribute("datetime", checkedAt);
+  });
+  it("omits unavailable lines and hides the title-bar hint when no reading is available", async () => {
+    const data = cycle(), checkedAt = iso(-10);
+    const handlers = actions();
+    const { rerender } = render(<PulsePaceCard data={data} {...handlers}/>);
+    fireEvent.click(timeInfo());
+    expect((await screen.findByRole("tooltip")).children).toHaveLength(2);
+    fireEvent.click(timeInfo());
+    rerender(<PulsePaceCard data={null} {...handlers}/>);
+    expect(screen.queryByRole("button", { name: quotaCoachClarity("en", "explain") })).not.toBeInTheDocument();
+    const empty: PaceSnapshot = { ...data, windows: [], updatedAt: null, coachExtras: { dailyObservations: [], resetNotice: null, noticeState: { status: "none", checkedAt, validUntil: null } } };
+    rerender(<PulsePaceCard data={empty} {...handlers}/>);
+    fireEvent.click(timeInfo());
+    const tooltip = await screen.findByRole("tooltip");
+    expect(tooltip.children).toHaveLength(1);
+    expect(tooltip.querySelector("time")).toHaveAttribute("datetime", checkedAt);
+  });
   it.each(["en", "zh", "zh-Hant", "ja", "ko", "de"])("replaces empty expanded widget placeholders with honest guidance and recovery in %s", async language => {
     await i18n.changeLanguage(language);
     const onRecover = vi.fn(), handlers = actions();
@@ -56,10 +88,10 @@ describe("shared cycle pace card", () => {
     expect(screen.getByTestId("coach-remaining")).toHaveTextContent("80%");
     expect(screen.queryByTestId("widget-empty-guide")).not.toBeInTheDocument();
   });
-  it.each(["en", "zh", "zh-Hant", "ja", "ko", "de"])("makes the nominal time basis and every returned window inspectable without refreshing in %s", async language => {
+  it.each(["en", "zh", "zh-Hant", "ja", "ko", "de"])("keeps the nominal time basis and returned windows in the workspace in %s", async language => {
     await i18n.changeLanguage(language);
     const data = cycle(), handlers = actions();
-    const { rerender } = render(<PulsePaceCard data={data} {...handlers}/>);
+    const { rerender } = render(<PulsePaceCard data={data} variant="workspace" {...handlers}/>);
     expect(screen.queryByText(quotaCoachClarity(language, "timeMethod"))).not.toBeInTheDocument();
     fireEvent.click(timeInfo(language));
     const info = await screen.findByRole("tooltip");
@@ -80,7 +112,7 @@ describe("shared cycle pace card", () => {
     expect(handlers.onRefresh).not.toHaveBeenCalled(); expect(handlers.onDetails).not.toHaveBeenCalled();
     expect(screen.getByTestId("coach-remaining")).toHaveTextContent("80%");
     const stale = cycle(); stale.updatedAt = iso(-7);
-    rerender(<PulsePaceCard data={stale} {...handlers}/>);
+    rerender(<PulsePaceCard data={stale} variant="workspace" {...handlers}/>);
     expect(within(details).queryByText(quotaCoachClarity(language, "selected"))).not.toBeInTheDocument();
     expect(screen.getByTestId("coach-window-list").querySelector('[data-window-kind="weekly"]')).toHaveAttribute("data-reading-state", "stale");
   });
@@ -137,7 +169,7 @@ describe("shared cycle pace card", () => {
     try {
       vi.setSystemTime(now); vi.spyOn(Date, "now").mockImplementation(() => new Date().getTime());
       const data = { ...cycle(), generatedAt: iso(0), refreshAfterSeconds: 2 };
-      render(<PulsePaceCard data={data} {...actions()}/>);
+      render(<PulsePaceCard data={data} variant="workspace" {...actions()}/>);
       expect(screen.getByRole("button", { name: "Refresh account readings" })).toBeDisabled();
       expect(screen.getByTestId("coach-refresh-wait")).toHaveTextContent("Retry in 2s");
       expect(screen.getByTestId("coach-refresh-wait").tagName).toBe("SPAN");
@@ -151,7 +183,7 @@ describe("shared cycle pace card", () => {
   });
   it("keeps account recovery visible and shows the login explanation on demand", async () => {
     const data = cycle(); data.reason = "login_required"; data.windows = []; data.updatedAt = null;
-    const onRecover = vi.fn(); render(<PulsePaceCard data={data} onRecover={onRecover} {...actions()}/>);
+    const onRecover = vi.fn(); render(<PulsePaceCard data={data} variant="workspace" onRecover={onRecover} {...actions()}/>);
     expect(screen.getByRole("status")).toHaveTextContent(quotaCoachCopy("en", "unavailable"));
     expect(screen.queryByText(/Sign in with the official Codex/)).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: quotaCoachClarity("en", "explain") }));
@@ -184,13 +216,11 @@ describe("shared cycle pace card", () => {
     expect(screen.queryByRole("textbox")).not.toBeInTheDocument();
   });
 
-  it("does not let local tokens replace the quota core or treat a missing short window as exhaustion", async () => {
+  it("does not let local tokens replace the quota core or treat a missing short window as exhaustion", () => {
     const data = cycle(); data.localUsage!.totalTokens = 343_000_000;
     render(<PulsePaceCard data={data} {...actions()}/>);
     expect(screen.getByText("7-day window")).toBeVisible();
     expect(screen.queryByText(quotaCoachCopy("en", "scope"), { exact: false })).not.toBeInTheDocument();
-    fireEvent.click(timeInfo());
-    expect(await screen.findByRole("tooltip")).toHaveTextContent(quotaCoachCopy("en", "scope"));
     expect(screen.getByText(quotaCoachCopy("en", "roomyLabel"))).toBeVisible();
     expect(screen.queryByText("343,000,000")).not.toBeInTheDocument();
     expect(screen.queryByText(paceCopy("en", "sessionMissing"))).not.toBeInTheDocument();

@@ -4,6 +4,15 @@ User-facing changes are grouped by release, following [Keep a Changelog](https:/
 
 ## [Unreleased]
 
+## [0.14.4] - 2026-11-23
+
+### Changed / 调整
+
+- Show only the reset time, quota used alongside cycle progress, and the last notice check in the title-bar pacing panel's first information hint.
+- 标题栏配速浮窗的第一个 ⓘ 只显示重置时间、额度已用与周期进度、最后检查时间。
+
+[完整中英说明 / Full release notes](docs/releases/v0.14.4.md)
+
 ## [0.14.3] - 2026-11-22
 
 ### Changed / 调整
@@ -388,7 +397,8 @@ User-facing changes are grouped by release, following [Keep a Changelog](https:/
 
 Earlier releases remain available in [GitHub Releases](https://github.com/zhulongqihan/codex-pulse/releases). / 更早版本保留在 GitHub Releases。
 
-[Unreleased]: https://github.com/zhulongqihan/codex-pulse/compare/v0.14.1...HEAD
+[Unreleased]: https://github.com/zhulongqihan/codex-pulse/compare/v0.14.4...HEAD
+[0.14.4]: https://github.com/zhulongqihan/codex-pulse/compare/v0.14.3...v0.14.4
 [0.14.1]: https://github.com/zhulongqihan/codex-pulse/compare/v0.14.0...v0.14.1
 [0.14.0]: https://github.com/zhulongqihan/codex-pulse/compare/v0.13.4...v0.14.0
 [0.13.4]: https://github.com/zhulongqihan/codex-pulse/compare/v0.13.3...v0.13.4
