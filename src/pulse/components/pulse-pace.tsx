@@ -128,7 +128,8 @@ export function PulsePaceCard({ data, failed = false, refreshing = false, onRefr
   const recentRisk = recentDepletionRisk(coach);
   const generated = Date.parse(data?.generatedAt ?? "");
   const wait = data?.refreshAfterSeconds && Number.isFinite(generated) ? Math.max(0, Math.ceil(data.refreshAfterSeconds - (now - generated) / 1000)) : 0;
-  const updated = Date.parse(data?.updatedAt ?? "");
+  const updatedAt = data?.updatedAt;
+  const updated = Date.parse(updatedAt ?? "");
   const age = Number.isFinite(updated) ? Math.max(0, Math.floor((now - updated) / 60_000)) : null;
   const ageLabel = age == null ? paceCopy(language, "never") : quotaCoachFeedback(language, age ? "age" : "ageNow", { minutes: formatCoachNumber(age, language) });
   const reason = status !== "ready" ? quotaCoachReason(language, data?.reason) : null;
@@ -142,6 +143,7 @@ export function PulsePaceCard({ data, failed = false, refreshing = false, onRefr
   const information = <ReadingInfo label={clarity("explain")}>
     {status !== "ready" ? <p>{reason ?? copy(`${errorStatus}Detail`)}</p> : null}
     <p>{copy("scope")}</p>
+    {!compact && updatedAt && Number.isFinite(updated) ? <p><time dateTime={updatedAt}>{paceCopy(language, "updated", { time: readingTime(updatedAt, language) })}</time></p> : null}
     {coach.hasUnknownWindows && coach.remainingPercent != null ? <p>{quotaCoachFeedback(language, "unknownWindows")}</p> : null}
     {coach.resetAt != null ? <p>{copy("resetAt", { time: formatCoachReset(coach.resetAt, language) })}{resetTimezone ? ` · ${clarity("resetZone", { timezone: timeZoneLabel(resetTimezone, language, coach.resetAt) })}` : null}</p> : null}
     {status === "ready" ? <p data-testid="coach-comparison">{copy("comparison", { used: number(coach.usedPercent, language), elapsed: number(coach.elapsedPercent, language) })}</p> : null}

@@ -141,6 +141,9 @@ describe("shared cycle pace card", () => {
       expect(screen.getByRole("button", { name: "Refresh account readings" })).toBeDisabled();
       expect(screen.getByTestId("coach-refresh-wait")).toHaveTextContent("Retry in 2s");
       expect(screen.getByTestId("coach-refresh-wait").tagName).toBe("SPAN");
+      expect(screen.queryByText(/^Updated /)).not.toBeInTheDocument();
+      fireEvent.click(timeInfo());
+      expect(within(screen.getByRole("tooltip")).getByText(/^Updated /)).toHaveAttribute("datetime", data.updatedAt);
       act(() => { vi.advanceTimersByTime(3000); });
       expect(screen.getByRole("button", { name: "Refresh account readings" })).toBeEnabled();
       expect(screen.queryByTestId("coach-refresh-wait")).not.toBeInTheDocument();
