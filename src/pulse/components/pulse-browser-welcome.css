@@ -29,11 +29,10 @@
   --pace-muted: #515b49;
   --pace-line: #bfc0a7;
   --pace-accent: #486541;
-  border-radius: 5px 11px 5px 8px;
-  background-color: var(--pace-bg);
-  background-image: var(--paper-texture, url("../assets/paper/paper-texture.png"));
-  background-size: 480px;
-  background-blend-mode: multiply;
+  --pace-grain-wash: color-mix(in srgb, var(--pace-bg) 76%, transparent);
+  background-image: linear-gradient(var(--pace-grain-wash), var(--pace-grain-wash)), var(--paper-texture, url("../assets/paper/paper-texture.png"));
+  background-size: auto, 480px;
+  background-blend-mode: normal, multiply;
 }
 
 [data-skin=paper] .pulse-site-preview-heading {
@@ -80,16 +79,15 @@
 .pulse-site-work-sample strong{font-size:13px;line-height:1.6;font-weight:600}
 .pulse-site-work-sample span,.pulse-site-work-sample>p{font-size:12px;line-height:1.75;color:var(--site-muted)}
 .pulse-site-work-scene.is-away .pulse-site-work-sample{min-height:310px;display:flex;align-items:center;justify-content:center;padding:32px}
-.pulse-site-live-card{margin:0 16px 16px;min-width:0}
-.pulse-site-card-tools{display:flex;align-items:center;justify-content:space-between;min-height:44px;border-top:1px solid var(--site-line);font-size:11px;color:var(--site-muted)}
+.pulse-site-live-card{margin:0 16px 16px;min-width:0;border-radius:12px;overflow:hidden;background:var(--site-paper);box-shadow:0 2px 6px rgb(26 36 32 / .20)}
+.pulse-site-card-tools{display:flex;align-items:center;justify-content:space-between;min-height:44px;padding-inline:12px 4px;border-bottom:1px solid var(--site-line);font-size:11px;color:var(--site-muted)}
 .pulse-site-card-tools>button{display:grid;place-items:center;min-width:44px;min-height:44px;border:0;border-radius:6px;background:transparent;color:var(--site-muted)}
 .pulse-site-card-tools>button:hover{background:var(--site-tint)}
-.pulse-site-live-card .pulse-pace-card{height:340px;max-height:340px;border-radius:12px}
+.pulse-site-live-card .pulse-pace-card{height:340px;max-height:340px;border:0;border-radius:0}
 .pulse-site-live-card .pulse-pace-header h2{font-size:13px;font-weight:600;letter-spacing:0;line-height:1.5}
 .pulse-site-live-card .pulse-pace-header>div{flex-wrap:wrap;gap:5px 8px}
 .pulse-site-live-card .pulse-pace-header .pulse-brand-mark{width:20px;height:20px}
 .pulse-site-live-card .pulse-pace-card button{min-height:44px}
-.pulse-site-live-card .pulse-pace-scroll{scrollbar-color:var(--pace-muted) var(--pace-bg)}
 .pulse-site-preview .pulse-site-scene-status{font-size:12px;line-height:1.7;min-height:40px;margin-top:10px}
 .pulse-site-scenarios{margin-top:8px}
 .pulse-site-preview .pulse-site-synthetic{font-size:12px;line-height:1.8}

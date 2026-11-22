@@ -7,7 +7,8 @@ import { syntheticPaceSnapshot } from '../src/pulse/lib/pulse-pace';
 type Status = { enabled: boolean; supported: boolean; hostFound: boolean; badgeVisible: boolean; badgeForeground: boolean; popupOpen: boolean; popupForeground: boolean;
   reason: string;
   hostRect: { x: number; y: number; width: number; height: number } | null;
-  badgeRect: { x: number; y: number; width: number; height: number } | null; dpi: number | null };
+  badgeRect: { x: number; y: number; width: number; height: number } | null;
+  panelRect: { x: number; y: number; width: number; height: number } | null; dpi: number | null };
 const evidence: Record<string, unknown> = {};
 const output = process.env.PULSE_TEST_OUTPUT!;
 async function invoke<T>(command: string, args: Record<string, unknown> = {}): Promise<T> {
@@ -194,6 +195,9 @@ describe('Pulse attached titlebar in a real owned native host', () => {
     expect(nativeFocusEvents.some(state => state.popupForeground)).toBe(true);
     await browser.switchToWindow('pulse-pace');
     await $('[data-testid="pace-popover"]').waitForDisplayed();
+    const clientSize = await invoke<{width: number; height: number}>('plugin:window|inner_size', {label: 'pulse-pace'});
+    expect(clientSize).toEqual({width: nativeFocusBeforeDriverSwitch.panelRect!.width,
+      height: nativeFocusBeforeDriverSwitch.panelRect!.height});
     const popup = await browser.execute(() => ({ fields: document.querySelectorAll('input,textarea,[contenteditable="true"]').length,
       noHorizontalOverflow: document.documentElement.scrollWidth <= innerWidth + 1,
       hasButtons: document.querySelectorAll('button').length > 0 }));
@@ -279,6 +283,6 @@ describe('Pulse attached titlebar in a real owned native host', () => {
     expect(await browser.execute(() => document.querySelectorAll('input,textarea,[contenteditable="true"]').length)).toBe(0);
     await browser.saveScreenshot(join(output, 'native-titlebar-badge.png'));
     await browser.switchToWindow('main');
-    record('native-popup-and-dismissal', { popup, nativeStateBeforePhysicalClick, nativeFocusBeforeDriverSwitch, nativeFocusEvents, styles, escapeClosedToHost: true, badgeToggleClosedToHost: true, otherWindowClosed: true, physicalBadgeClicks: nativeState()?.physicalBadgeClicks, state: await status(), inputScope: 'Guarded Win32 SendInput on owned fixture + exact debug image. Real production Codex is a separate acceptance check' });
+    record('native-popup-and-dismissal', { popup, clientSize, nativeStateBeforePhysicalClick, nativeFocusBeforeDriverSwitch, nativeFocusEvents, styles, escapeClosedToHost: true, badgeToggleClosedToHost: true, otherWindowClosed: true, physicalBadgeClicks: nativeState()?.physicalBadgeClicks, state: await status(), inputScope: 'Guarded Win32 SendInput on owned fixture + exact debug image. Real production Codex is a separate acceptance check' });
   });
 });

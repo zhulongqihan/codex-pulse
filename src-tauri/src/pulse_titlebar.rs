@@ -195,14 +195,13 @@ pub fn setup(
     app.manage(controller.clone());
     #[cfg(windows)]
     {
-        for (label, hash, title, width, height, shadow, focusable) in [
+        for (label, hash, title, width, height, focusable) in [
             (
                 BADGE_LABEL,
                 "pulse-badge",
                 "Codex Pulse · Titlebar",
                 BADGE_WIDTH,
                 BADGE_HEIGHT,
-                false,
                 true,
             ),
             (
@@ -211,7 +210,6 @@ pub fn setup(
                 "Codex Pulse · Pace",
                 PANEL_WIDTH,
                 PANEL_HEIGHT,
-                true,
                 true,
             ),
         ] {
@@ -233,7 +231,8 @@ pub fn setup(
             .skip_taskbar(true)
             .always_on_top(true)
             .transparent(true)
-            .shadow(shadow)
+            // Windows adds a visible outline to undecorated windows with native shadows.
+            .shadow(false)
             .build()?;
             native::cache_surface(&controller, label, &window)?;
             if label == BADGE_LABEL {

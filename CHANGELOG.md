@@ -4,6 +4,15 @@ User-facing changes are grouped by release, following [Keep a Changelog](https:/
 
 ## [Unreleased]
 
+## [0.14.1] - 2026-11-22
+
+### Fixed / 修复
+
+- Remove the bright Windows outline and extra Paper frame from the title-bar pacing panel, and style its scrollbar to match the panel.
+- 去掉标题栏配速面板的 Windows 亮边和纸册重复边框，统一面板和滚动条的配色。
+
+[完整中英说明 / Full release notes](docs/releases/v0.14.1.md)
+
 ## [0.14.0] - 2026-11-22
 
 ### Added / 新增
@@ -355,7 +364,8 @@ User-facing changes are grouped by release, following [Keep a Changelog](https:/
 
 Earlier releases remain available in [GitHub Releases](https://github.com/zhulongqihan/codex-pulse/releases). / 更早版本保留在 GitHub Releases。
 
-[Unreleased]: https://github.com/zhulongqihan/codex-pulse/compare/v0.14.0...HEAD
+[Unreleased]: https://github.com/zhulongqihan/codex-pulse/compare/v0.14.1...HEAD
+[0.14.1]: https://github.com/zhulongqihan/codex-pulse/compare/v0.14.0...v0.14.1
 [0.14.0]: https://github.com/zhulongqihan/codex-pulse/compare/v0.13.4...v0.14.0
 [0.13.4]: https://github.com/zhulongqihan/codex-pulse/compare/v0.13.3...v0.13.4
 [0.13.3]: https://github.com/zhulongqihan/codex-pulse/compare/v0.13.2...v0.13.3
