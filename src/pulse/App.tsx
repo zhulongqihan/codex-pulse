@@ -44,6 +44,7 @@ import "./shell-ux.css";
 import "./shell-analysis.css";
 import { usePaceDetailsRequest } from "@/hooks/use-pace-details-request";
 import { PaperClock } from "@/components/paper-clock";
+import { ReadingInfo } from "@/components/reading-info";
 import { currentDateInTimezone } from "@/lib/trend-buckets";
 
 const ACCOUNT_EXPANDED = "codexpulse.account.expanded.v1";
@@ -861,7 +862,13 @@ export default function App() {
       </aside> : null}
       </div>
       {compactWindow && accountDrawerOpen ? <PulseAccountDrawer onClose={closeAccountDrawer}>{accountPanel}</PulseAccountDrawer> : null}
-      <footer className="pulse-statusbar"><span>{copy("local")}{diagnostics?.filesFound != null ? <> · {diagnostics.filesFound} {t("session.file", {defaultValue: "logs"})}</> : null}</span><span title={diagnostics?.codexHome}>{diagnostics?.runtime ?? "Codex"}</span><span data-testid="statistics-timezone" title={overview ? t("reading_context.statistics_dates", { zone: overview.timezone }) : undefined}>{overview ? t("reading_context.statistics_short", { zone: overview.timezone }) : ""}</span><span className="pulse-statusbar-end">{copy("motion")} {copy(preferences.motionLevel)}</span></footer>
+      <footer className="pulse-statusbar">
+        <span>{copy("local")}</span>
+        <ReadingInfo label={copy("local")}>
+          <p>{diagnostics?.runtime ?? "Codex"}{diagnostics?.filesFound != null ? <> · {diagnostics.filesFound} {t("session.file", {defaultValue: "logs"})}</> : null}</p>
+          {overview ? <p>{t("reading_context.statistics_dates", { zone: overview.timezone })}</p> : null}
+        </ReadingInfo>
+      </footer>
     </div>
   );
 }

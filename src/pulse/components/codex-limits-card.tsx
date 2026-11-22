@@ -104,8 +104,12 @@ export function CodexSidebarLimits({ compact = false, paper = false, limits, err
   const now = Date.now();
   const hasExpiredReading = [limits?.session, limits?.weekly].some(window => window?.resetsAt != null && Date.parse(window.resetsAt) <= now);
   const failedReading = paper && Boolean(error);
+  const loginRequired = isOAuthLoginError(error);
+  const paperStatus = error ? t(loginRequired ? "limits.not_logged_in" : "limits.unavailable") : !limits ? t("limits.not_fetched") : null;
+  const hasWindows = Boolean(limits?.session || limits?.weekly);
+  const showWindows = paper ? Boolean(limits && (!error || hasWindows)) : !error || limits !== null;
   const weeklyOnly = Boolean(limits?.weekly && !limits.session);
-  const resetTimeContext = !compact && (limits?.session || limits?.weekly)
+  const resetTimeContext = !compact && hasWindows
     ? t("reading_context.reset_local", { zone: localTimeZone() ?? t("reading_context.local_timezone") })
     : null;
   const title = <h2 className="font-semibold">{t("limits.sidebar_title")}</h2>;
@@ -129,24 +133,29 @@ export function CodexSidebarLimits({ compact = false, paper = false, limits, err
   return (
     <section className="sidebar-limits space-y-3" aria-label={t("limits.sidebar_title")}>
       {!compact ? <div className="pulse-limit-section-heading flex min-w-0 items-center justify-between gap-1 text-[12px]">
-        {paper && resetTimeContext ? <div className="pulse-limit-title">
+        {paper && (resetTimeContext || updatedTime || error) ? <div className="pulse-limit-title">
           {title}
           <ReadingInfo label={t("limits.sidebar_title")}>
+            {error ? loginRequired ? <>
+              <p>{t("limits.login_instruction")}</p>
+              <p><code className="select-all">codex login</code></p>
+            </> : <p>{t(quotaErrorKey(error))}</p> : null}
+            {updatedTime && limits ? <p><time dateTime={limits.updatedAt}>{updatedTime}</time></p> : null}
             {weeklyOnly ? <p>{t("ux.no_short_window")}</p> : null}
-            <p data-testid="limits-timezone">{resetTimeContext}</p>
+            {resetTimeContext ? <p data-testid="limits-timezone">{resetTimeContext}</p> : null}
           </ReadingInfo>
         </div> : title}
-        <span className="pulse-limit-freshness flex min-w-0 items-center gap-1 text-muted-foreground" title={updatedTime}>
-          <span className={cn("h-1.5 w-1.5 shrink-0 rounded-full", error ? "bg-warning" : limits && !hasExpiredReading ? "bg-success" : "bg-muted-foreground")} />
-          {!paper || !updatedTime || error || hasExpiredReading ? <span className="truncate">{t(error ? "limits.unavailable" : hasExpiredReading ? "ux.window_elapsed" : limits ? "limits.sidebar_updated" : "limits.not_fetched")}</span> : null}
-          {paper && limits && updatedTime ? <time dateTime={limits.updatedAt}>{updatedTime}</time> : null}
-        </span>
+        {paper ? paperStatus ? <span role="status" className={cn("text-sm font-medium", error ? "text-warning" : "text-muted-foreground")}>{paperStatus}</span> : null
+          : <span className="pulse-limit-freshness flex min-w-0 items-center gap-1 text-muted-foreground" title={updatedTime}>
+            <span className={cn("h-1.5 w-1.5 shrink-0 rounded-full", error ? "bg-warning" : limits && !hasExpiredReading ? "bg-success" : "bg-muted-foreground")} />
+            <span className="truncate">{t(error ? "limits.unavailable" : hasExpiredReading ? "ux.window_elapsed" : limits ? "limits.sidebar_updated" : "limits.not_fetched")}</span>
+          </span>}
         {paper ? actions : null}
       </div> : null}
       {!paper ? actions : null}
       {!paper && weeklyOnly ? <p className="text-[12px] text-muted-foreground">{t("ux.no_short_window")}</p> : null}
-      {error ? (
-        compact ? <p className="break-words text-center text-[12px] text-warning" title={error}>{t("limits.unavailable")}</p> : isOAuthLoginError(error) ? (
+      {error && (!paper || compact) ? (
+        compact ? <p className="break-words text-center text-[12px] text-warning" title={error}>{t("limits.unavailable")}</p> : loginRequired ? (
           <div className="rounded-xl border border-warning/20 bg-warning/5 p-4 text-sm flex flex-col justify-between h-full">
             <div className="space-y-2">
               <div className="flex items-center gap-2 text-warning font-semibold">
@@ -172,11 +181,11 @@ export function CodexSidebarLimits({ compact = false, paper = false, limits, err
         )
 
       ) : null}
-      {!error || limits ? (
+      {showWindows ? (
         <div className={paper ? "pulse-limit-windows" : "space-y-3"}>
           {limits?.session ? <LimitRow label={quotaWindowKind(limits.session) === "5h" ? "5 hour" : quotaWindowKind(limits.session)} window={limits.session} now={now} compact={compact} failedReading={failedReading}/> : null}
           {limits?.weekly ? <LimitRow label={quotaWindowKind(limits.weekly) === "weekly" ? "Weekly" : quotaWindowKind(limits.weekly)} window={limits.weekly} now={now} compact={compact} failedReading={failedReading}/> : null}
-          {!limits?.session && !limits?.weekly ? <p className="text-[12px] leading-6 text-muted-foreground">{t("limits.no_window_returned")}</p> : null}
+          {!hasWindows ? <p className={cn("leading-6 text-muted-foreground", paper ? "text-sm" : "text-[12px]")}>{t("limits.no_window_returned")}</p> : null}
           {!paper && resetTimeContext ? <p data-testid="limits-timezone" className="pulse-time-context">{resetTimeContext}</p> : null}
         </div>
       ) : null}

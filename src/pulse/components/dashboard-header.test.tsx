@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 import { fireEvent, render, screen, within } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import i18n from "@/i18n";
 import { DashboardHeader } from "./dashboard-header";
@@ -11,7 +12,8 @@ const overview: OverviewResponse = {
 };
 
 describe("dashboard synchronization header", () => {
-  it("retains the complete long status while the refresh action remains named, usable, and busy-safe", async () => {
+  it("keeps scan details behind the information button and shows failed refreshes directly", async () => {
+    const user = userEvent.setup();
     await i18n.changeLanguage("de");
     const message = "18 Tage synchronisiert (18 aus dem Cache, 0 ausgewertet) – vollständige Statusmeldung";
     const onRefresh = vi.fn();
@@ -21,14 +23,19 @@ describe("dashboard synchronization header", () => {
       overview, scanMessage: message, lastRescanDurationMs: 1234 };
     const { rerender } = render(<DashboardHeader {...props} />);
     const status = screen.getByTestId("dashboard-sync-status");
-    expect(within(status).getByTitle(message)).toHaveTextContent(message);
-    expect(within(status).getByTitle(i18n.t("hero.cache_synced"))).toHaveTextContent(i18n.t("hero.cache_synced"));
+    expect(screen.queryByText(message)).not.toBeInTheDocument();
+    expect(screen.queryByText(i18n.t("hero.cache_synced"))).not.toBeInTheDocument();
+    expect(screen.queryByText(/^Zuletzt aktualisiert:/)).not.toBeInTheDocument();
+    await user.hover(within(status).getByRole("button", { name: i18n.t("hero.cache_synced") }));
+    const tooltip = screen.getByRole("tooltip");
+    expect(tooltip).toHaveTextContent(message);
+    expect(tooltip).toHaveTextContent(/^.*Zuletzt aktualisiert:/);
+    expect(tooltip).toHaveTextContent("Erneuter Scan in");
     const refresh = screen.getByRole("button", { name: i18n.t("hero.rescan") });
     fireEvent.click(refresh);
     expect(onRefresh).toHaveBeenCalledOnce();
     rerender(<DashboardHeader {...props} isBusy isRefreshing syncFailed />);
     expect(screen.getByRole("button", { name: i18n.t("hero.rescan") })).toBeDisabled();
-    expect(within(status).getByTitle(message)).toHaveTextContent(message);
-    expect(within(status).getByTitle(i18n.t("hero.out_of_sync"))).toHaveTextContent(i18n.t("hero.out_of_sync"));
+    expect(within(status).getByText(i18n.t("recovery.last_scan_failed"))).toBeVisible();
   });
 });

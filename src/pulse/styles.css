@@ -560,7 +560,6 @@ a { text-underline-offset: 3px; }
 .pulse-source-note { font-size: 12px; line-height: 1.8; color: rgb(var(--muted-foreground)); margin: 24px 0; }
 .pulse-statusbar { min-height: 27px; display: flex; align-items: center; gap: 16px; padding: 4px 20px; border-top: 1px solid rgb(var(--border)); color: rgb(var(--muted-foreground)); background: rgb(var(--sidebar)); font-size: 11px; }
 .pulse-statusbar > span { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
-.pulse-statusbar-end { margin-left: auto; }
 .pulse-page-heading { display: flex; align-items: center; gap: 18px; flex-wrap: wrap; margin: 8px 0 24px; }
 .pulse-page-heading h1 { font-size: 25px; font-weight: 700; letter-spacing: -.025em; }
 .pulse-page-heading > span { color: rgb(var(--muted-foreground)); font-size: 11px; }

@@ -3,6 +3,7 @@ import type { OverviewResponse, UpdateCheckResponse } from "@/lib/api";
 import type { UpdateInstallStatus, UpdateProgressState } from "@/hooks/use-usage-dashboard";
 import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
+import { ReadingInfo } from "@/components/reading-info";
 import { formatDuration } from "@/lib/usage-dashboard";
 import dayjs from "dayjs";
 
@@ -41,8 +42,8 @@ export function DashboardHeader({
 }: DashboardHeaderProps) {
   const { t } = useTranslation();
 
-  const isSynced = !!overview?.updatedAt && !syncFailed;
-  const syncLabel = isSynced ? t("hero.cache_synced", { defaultValue: "Cache Synced" }) : t("hero.out_of_sync", { defaultValue: "Out of Sync" });
+  const syncLabel = syncFailed ? t("recovery.last_scan_failed")
+    : overview?.updatedAt ? t("hero.cache_synced") : t("hero.out_of_sync");
   const isInstallingUpdate = updateInstallStatus === "downloading";
   const headerUpgradeLabel = updateInstallStatus === "installed"
     ? t("header.restart_update")
@@ -62,11 +63,8 @@ export function DashboardHeader({
   };
 
   const updatedLabel = overview?.updatedAt
-      ? t("hero.last_updated", {
-        time: formatUpdatedTime(overview.updatedAt),
-        duration: lastRescanDurationMs === null ? "" : ` · ${t("hero.rescan_duration", { duration: formatDuration(lastRescanDurationMs) })}`
-      })
-      : t("hero.last_updated_never");
+    ? t("hero.last_updated", { time: formatUpdatedTime(overview.updatedAt) })
+    : t("hero.last_updated_never");
 
   return (
     <header className="pb-2">
@@ -86,25 +84,19 @@ export function DashboardHeader({
           )}
         </div>
 
-        <div className="pb-2 min-w-0 flex flex-1 items-center justify-end gap-3">
-          {overview && (
-            <div data-testid="dashboard-sync-status" className="hidden min-w-0 sm:flex flex-col items-end text-right leading-tight select-none">
-              <div className="flex max-w-full min-w-0 items-center justify-end gap-1.5 text-[11px] font-medium text-foreground">
-                <span className="relative flex h-1.5 w-1.5 shrink-0">
-                  <span className={`absolute inline-flex h-full w-full animate-ping rounded-full bg-success opacity-75 ${isSynced ? "" : "hidden"}`}></span>
-                  <span className={`relative inline-flex h-1.5 w-1.5 rounded-full ${isSynced ? "bg-success" : "bg-warning"}`}></span>
-                </span>
-                <span className="truncate max-w-[280px]" title={syncLabel}>{syncLabel}</span>
-                <span className="text-muted-foreground/30">·</span>
-                <span className="text-muted-foreground font-normal truncate max-w-[280px]" title={scanMessage}>{scanMessage}</span>
-              </div>
-              <div className="max-w-full truncate text-[10px] text-muted-foreground/75 mt-0.5" title={updatedLabel}>
-                {updatedLabel}
-              </div>
+        <div className="pb-2 min-w-0 flex flex-1 flex-wrap items-center justify-end gap-2">
+          {(overview || syncFailed) && (
+            <div data-testid="dashboard-sync-status" className="flex min-w-0 items-center gap-1">
+              {syncFailed ? <span role="status" className="text-sm font-medium text-warning">{syncLabel}</span> : null}
+              <ReadingInfo label={syncLabel}>
+                {scanMessage && scanMessage !== syncLabel ? <p>{scanMessage}</p> : null}
+                <p>{updatedLabel}</p>
+                {lastRescanDurationMs !== null ? <p>{t("hero.rescan_duration", { duration: formatDuration(lastRescanDurationMs) })}</p> : null}
+              </ReadingInfo>
             </div>
           )}
-          <Button variant={secondaryRefresh ? "secondary" : "primary"} size="sm" className="relative z-20" onClick={onRefresh} disabled={isBusy}>
-            <RefreshCcw className={`h-3.5 w-3.5 ${isRefreshing ? "animate-spin" : ""}`} />
+          <Button variant={secondaryRefresh ? "secondary" : "primary"} size="sm" className="relative z-20" onClick={onRefresh} disabled={isBusy} aria-busy={isRefreshing}>
+            <RefreshCcw aria-hidden="true" className={`h-3.5 w-3.5 ${isRefreshing ? "animate-spin" : ""}`} />
             {t("hero.rescan", { defaultValue: "Rescan local logs" })}
           </Button>
         </div>

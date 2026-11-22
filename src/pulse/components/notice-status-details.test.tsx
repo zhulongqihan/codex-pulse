@@ -26,9 +26,11 @@ describe("notice disappearance explanation", () => {
       fireEvent.click(within(details).getByText(noticeStateCopy(language, status)));
     }
   });
-  it("keeps unknown explanation available without quota, and omits it in the compact widget", () => {
+  it("keeps a quiet default and provides the unknown notice explanation on request", async () => {
     const { rerender } = render(<PulsePaceCard data={null} variant="widget" {...handlers}/>);
-    expect(screen.getByTestId("notice-status-details")).toHaveAttribute("data-notice-state", "unknown");
+    expect(screen.queryByTestId("notice-status-details")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Time and window details" }));
+    expect(await screen.findByRole("tooltip")).toHaveTextContent(noticeStateCopy("en", "unknownDetail"));
     rerender(<PulsePaceCard data={null} variant="compact" {...handlers}/>);
     expect(screen.queryByTestId("notice-status-details")).not.toBeInTheDocument();
   });

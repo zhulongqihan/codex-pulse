@@ -250,7 +250,7 @@ describe('Official quota history in the real offline Tauri app', () => {
       const unknown = await summary.$$('dd');
       expect(unknown.length).toBe(2);
       for (const reading of unknown) expect(await reading.getText()).toBe('—');
-      await focusAndActivate('[data-testid="quota-history-summary"] button');
+      await focusAndActivate('[data-testid="open-quota-history"]');
       await expect($('[data-testid="analysis-nav-tab"]')).toHaveAttribute('aria-selected', 'true');
       await $('[data-testid="quota-history-view"]').waitForDisplayed();
       await expect($('.pulse-analysis-source-tabs button:nth-child(2)')).toHaveText('官方额度记录');
@@ -397,7 +397,7 @@ describe('Official quota history in the real offline Tauri app', () => {
         await browser.refresh();
         await browser.waitUntil(async () => await browser.execute(() => document.documentElement.dataset.skin) === skinId);
         await $('[data-testid="dashboard-nav-tab"]').click();
-        const entry = $('[data-testid="quota-history-summary"] button');
+        const entry = $('[data-testid="open-quota-history"]');
         await entry.waitForDisplayed();
         await entry.click();
         const view = $('[data-testid="quota-history-view"]');

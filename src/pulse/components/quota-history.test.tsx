@@ -120,9 +120,42 @@ describe("official quota history", () => {
     const summary = await screen.findByTestId("quota-history-summary");
     await waitFor(() => expect(summary).toHaveTextContent("8 pp"));
     expect(summary).toHaveTextContent("—");
-    expect(summary).toHaveTextContent("Ledger timezone: Asia/Shanghai");
+    expect(within(summary).queryByRole("alert")).not.toBeInTheDocument();
+    expect(screen.queryByText("Ledger timezone: Asia/Shanghai")).not.toBeInTheDocument();
+    expect(screen.queryByText("Partial observations")).not.toBeInTheDocument();
+    await userEvent.click(within(summary).getByRole("button", { name: "About today's quota readings" }));
+    expect(await screen.findByRole("tooltip")).toHaveTextContent("Ledger timezone: Asia/Shanghai");
+    expect(screen.getByRole("tooltip")).toHaveTextContent("Partial observations");
+    await userEvent.keyboard("{Escape}");
     expect(native.invoke).toHaveBeenCalledWith("fetch_quota_history", { range: "1d" });
     await userEvent.click(within(summary).getByRole("button", { name: "View quota history" })); expect(open).toHaveBeenCalledOnce();
+  });
+
+  it("shows a short official refresh failure beside the retained readings and keeps the explanation on demand", async () => {
+    native.invoke.mockResolvedValue(history({ readStatus: "read_failed", daily: [daily("session", 300, 0)] }));
+    const open = vi.fn();
+    render(<QuotaHistorySummary onOpenHistory={open}/>);
+    const summary = screen.getByTestId("quota-history-summary");
+    expect(await within(summary).findByRole("alert")).toHaveTextContent(/^Quota refresh failed$/);
+    expect(summary).toHaveTextContent("0 pp");
+    expect(summary).toHaveTextContent("—");
+    expect(screen.queryByText(/Saved history remains available/)).not.toBeInTheDocument();
+    expect(screen.queryByText("Reading unchanged")).not.toBeInTheDocument();
+    await userEvent.click(within(summary).getByRole("button", { name: "About today's quota readings" }));
+    expect(await screen.findByRole("tooltip")).toHaveTextContent("Saved history remains available");
+    await userEvent.keyboard("{Escape}");
+    await userEvent.click(within(summary).getByRole("button", { name: "View quota history" }));
+    expect(open).toHaveBeenCalledOnce();
+  });
+
+  it("keeps local history read errors directly retryable from the dashboard summary", async () => {
+    native.invoke.mockRejectedValueOnce(new Error("ledger read failed"));
+    render(<QuotaHistorySummary onOpenHistory={() => {}}/>);
+    const summary = screen.getByTestId("quota-history-summary");
+    expect(await within(summary).findByRole("alert")).toHaveTextContent(/^History unavailable$/);
+    await userEvent.click(within(summary).getByRole("button", { name: "Read history again" }));
+    await waitFor(() => expect(summary).toHaveTextContent("8 pp"));
+    expect(within(summary).queryByRole("alert")).not.toBeInTheDocument();
   });
 
   it("keeps saved day segments readable when the latest official reading failed", async () => {

@@ -98,7 +98,12 @@ describe("shared cycle pace card", () => {
     const { rerender } = render(<PulsePaceCard data={empty} variant="compact" onRecover={onRecover} {...actions()}/>);
     expect(screen.queryByTestId("coach-remaining")).not.toBeInTheDocument();
     expect(screen.queryByTestId("coach-countdown")).not.toBeInTheDocument();
-    expect(screen.getByRole("status")).toHaveTextContent("Offline mode");
+    expect(screen.getByRole("status")).toHaveTextContent(quotaCoachCopy("en", "unavailable"));
+    expect(screen.queryByText(/Offline mode/)).not.toBeInTheDocument();
+    const info = screen.getByRole("button", { name: quotaCoachClarity("en", "explain") });
+    fireEvent.click(info);
+    expect(screen.getByRole("tooltip")).toHaveTextContent("Offline mode");
+    fireEvent.click(info);
     fireEvent.click(screen.getByRole("button", { name: "Check account and connection" }));
     expect(onRecover).toHaveBeenCalledOnce();
     const stale = cycle(); stale.updatedAt = iso(-10);
@@ -134,16 +139,21 @@ describe("shared cycle pace card", () => {
       const data = { ...cycle(), generatedAt: iso(0), refreshAfterSeconds: 2 };
       render(<PulsePaceCard data={data} {...actions()}/>);
       expect(screen.getByRole("button", { name: "Refresh account readings" })).toBeDisabled();
-      expect(screen.getByTestId("coach-refresh-wait")).toHaveTextContent("retry in 2s");
+      expect(screen.getByTestId("coach-refresh-wait")).toHaveTextContent("Retry in 2s");
+      expect(screen.getByTestId("coach-refresh-wait").tagName).toBe("SPAN");
       act(() => { vi.advanceTimersByTime(3000); });
       expect(screen.getByRole("button", { name: "Refresh account readings" })).toBeEnabled();
       expect(screen.queryByTestId("coach-refresh-wait")).not.toBeInTheDocument();
     } finally { vi.useRealTimers(); }
   });
-  it("keeps the login reason and account recovery visible when quota is unavailable", () => {
+  it("keeps account recovery visible and shows the login explanation on demand", async () => {
     const data = cycle(); data.reason = "login_required"; data.windows = []; data.updatedAt = null;
     const onRecover = vi.fn(); render(<PulsePaceCard data={data} onRecover={onRecover} {...actions()}/>);
-    expect(screen.getByRole("status")).toHaveTextContent("Sign in with the official Codex");
+    expect(screen.getByRole("status")).toHaveTextContent(quotaCoachCopy("en", "unavailable"));
+    expect(screen.queryByText(/Sign in with the official Codex/)).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: quotaCoachClarity("en", "explain") }));
+    expect(await screen.findByRole("tooltip")).toHaveTextContent("Sign in with the official Codex");
+    fireEvent.click(screen.getByRole("button", { name: quotaCoachClarity("en", "explain") }));
     fireEvent.click(screen.getByRole("button", { name: "Check account and connection" })); expect(onRecover).toHaveBeenCalledOnce();
     expect(screen.queryByTestId("coach-cycle-observations")).not.toBeInTheDocument();
   });

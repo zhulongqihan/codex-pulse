@@ -1032,6 +1032,7 @@ describe("App", () => {
     mockLoadedDashboard();
 
     render(<App />);
+    await userEvent.click(await screen.findByRole("button", { name: "Cache Synced" }));
     await screen.findByText("Synced 1 days (1 cached, 0 parsed)");
 
     await act(async () => {
@@ -3268,7 +3269,8 @@ describe("App", () => {
     await userEvent.click(screen.getByRole("button", { name: "Reset cache" }));
 
     await userEvent.click(screen.getByRole("button", { name: "Back" }));
-    await waitFor(() => expect(screen.getByText("Reset local cache and rebuilt usage data from local Codex logs.")).toBeInTheDocument());
+    await userEvent.click(await screen.findByRole("button", { name: "Cache Synced" }));
+    expect(await screen.findByText("Reset local cache and rebuilt usage data from local Codex logs.")).toBeVisible();
     expect(confirmMock).toHaveBeenCalledWith(expect.stringContaining("Source logs will not be deleted"));
 
     const calls = invokeMock.mock.calls.map(([command, args]) => [command, args]);

@@ -10,5 +10,5 @@ export function PaperClock() {
   useEffect(()=>{const tick=()=>setNow(new Date());const timer=window.setInterval(tick,60_000);window.addEventListener("focus",tick);return()=>{window.clearInterval(timer);window.removeEventListener("focus",tick);};},[]);
   const locale=languages[getLanguage(i18n.resolvedLanguage??i18n.language)].intlLocale;
   const timezone=Intl.DateTimeFormat().resolvedOptions().timeZone;
-  return <div className="pulse-paper-clock"><CalendarDays size={19} aria-hidden="true"/><time dateTime={now.toISOString()}>{new Intl.DateTimeFormat(locale,{year:"numeric",month:"2-digit",day:"2-digit",weekday:"short",hour:"2-digit",minute:"2-digit"}).format(now)}</time><span>{timezone}</span></div>;
+  return <div className="pulse-paper-clock"><CalendarDays size={19} aria-hidden="true"/><time dateTime={now.toISOString()} title={timezone}>{new Intl.DateTimeFormat(locale,{year:"numeric",month:"2-digit",day:"2-digit",weekday:"short",hour:"2-digit",minute:"2-digit"}).format(now)}</time></div>;
 }

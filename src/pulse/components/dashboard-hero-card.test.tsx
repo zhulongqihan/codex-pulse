@@ -42,7 +42,7 @@ describe("focused dashboard", () => {
     const user = userEvent.setup();
     const onOpenAnalysis = vi.fn(), onOpenToday = vi.fn(), onOpenHistory = vi.fn();
     render(<DashboardHeroCard timezone={overview.timezone} paperSpread
-      todayOverview={{ ...overview, daily: [row(today(), 77, 1.2)] }}
+      todayOverview={{ ...overview, updatedAt: new Date().toISOString(), daily: [row(today(), 77, 1.2)] }}
       quotaLimits={<h2>Account quota</h2>} coach={<h2>Account pace</h2>}
       coachDetails={<h2>Full pace details</h2>}
       quotaHistory={<button onClick={onOpenHistory}>Open quota records</button>}
@@ -53,6 +53,11 @@ describe("focused dashboard", () => {
     const todaysSessions = within(todayPage as HTMLElement).getByRole("button", { name: "Today's sessions" });
     const quotaRecords = within(todayPage as HTMLElement).getByRole("button", { name: "Open quota records" });
     const usageAnalysis = within(todayPage as HTMLElement).getByRole("button", { name: "Open usage analysis" });
+    expect(screen.queryByRole("heading", { name: dashboardCopy("en", "history") })).not.toBeInTheDocument();
+    expect(screen.queryByText(dashboardCopy("en", "historyDescription"))).not.toBeInTheDocument();
+    expect(screen.queryByText(/Local logs · Updated/)).not.toBeInTheDocument();
+    await user.hover(within(todayPage as HTMLElement).getByRole("button", { name: dashboardCopy("en", "todayLocalUsage") }));
+    expect(screen.getByRole("tooltip")).toHaveTextContent(/Local logs · Updated/);
     expect(todayPage.querySelector(".pulse-dashboard-today-values > div:first-child")).toContainElement(screen.getByTestId("today-tokens"));
     expect(todayPage.querySelector(".pulse-today-breakdown")).not.toHaveAttribute("open");
     expect(details).toContainElement(screen.getByRole("heading", { name: "Full pace details" }));

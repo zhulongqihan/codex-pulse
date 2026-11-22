@@ -1,11 +1,14 @@
-.pulse-quota-summary { display:flex; align-items:baseline; flex-wrap:wrap; gap:10px 20px; padding:14px 0; border-top:1px solid rgb(var(--border)); font-size:13px; }
-.pulse-quota-summary > strong { font-size:13px; font-weight:600; }
+.pulse-quota-summary { display:flex; align-items:baseline; flex-wrap:wrap; gap:8px 18px; padding:12px 0; border-top:1px solid rgb(var(--border)); color:rgb(var(--foreground)); font-size:13px; }
+.pulse-quota-summary-heading { display:flex; align-items:center; gap:4px; min-width:0; }
+.pulse-quota-summary-heading > strong { font-size:14px; font-weight:600; }
+:root[data-skin="paper"] .pulse-quota-summary-heading > strong { font:600 16px/1.4 var(--pulse-reading); }
 .pulse-quota-summary dl { display:flex; flex-wrap:wrap; gap:8px 22px; margin:0; }
 .pulse-quota-summary dl > div { display:flex; align-items:baseline; gap:8px; }
-.pulse-quota-summary dt,.pulse-quota-partial { color:rgb(var(--muted-foreground)); }
+.pulse-quota-summary dt { color:rgb(var(--muted-foreground)); }
 .pulse-quota-summary dd { margin:0; font-variant-numeric:tabular-nums; }
-.pulse-quota-summary dd small { margin-inline-start:6px; color:rgb(var(--muted-foreground)); }
-.pulse-quota-summary > .pulse-text-button { margin-inline-start:auto; }
+.pulse-quota-summary-actions { display:flex; flex-wrap:wrap; align-items:baseline; gap:4px 14px; min-width:0; margin-inline-start:auto; overflow-wrap:anywhere; }
+.pulse-quota-summary-actions [role=alert] { color:rgb(var(--error)); font-weight:600; }
+.pulse-quota-summary-actions [role=status] { color:rgb(var(--muted-foreground)); }
 .pulse-quota-status { flex-basis:100%; font-size:13px; }
 .pulse-quota-status:empty { display:none; }
 .pulse-quota-status p { margin:0 0 6px; max-width:80ch; overflow-wrap:anywhere; }
@@ -61,4 +64,4 @@
 .pulse-analysis-source-tabs button { max-width:100%; padding:8px 12px; border-radius:6px; font-size:13px; text-align:start; color:rgb(var(--muted-foreground)); }
 .pulse-analysis-source-tabs button[aria-pressed=true] { background:rgb(var(--primary) / .09); color:rgb(var(--primary)); }
 .pulse-analysis-source-tabs button:focus-visible { outline:2px solid rgb(var(--primary)); outline-offset:2px; }
-@media(max-width:640px) { .pulse-quota-summary > .pulse-text-button { margin-inline-start:0; } .pulse-quota-export { margin-inline-start:0; width:100%; } .pulse-quota-controls > label { width:100%; } .pulse-quota-table-scroll th,.pulse-quota-table-scroll td { padding:10px 7px; min-width:115px; } .pulse-quota-day { padding:12px; } }
+@media(max-width:640px) { .pulse-quota-summary-actions { margin-inline-start:0; } .pulse-quota-export { margin-inline-start:0; width:100%; } .pulse-quota-controls > label { width:100%; } .pulse-quota-table-scroll th,.pulse-quota-table-scroll td { padding:10px 7px; min-width:115px; } .pulse-quota-day { padding:12px; } }

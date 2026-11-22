@@ -3,12 +3,13 @@ import { useTranslation } from "react-i18next";
 import { save } from "@tauri-apps/plugin-dialog";
 import { listen } from "@tauri-apps/api/event";
 import { isTauri } from "@tauri-apps/api/core";
+import { ReadingInfo } from "./reading-info";
 import { Button } from "./ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "./ui/card";
 import { getPulsePaths, type ExportFormat } from "@/lib/api";
 import { getExportDialogOptions } from "@/lib/usage-dashboard";
 import { getLanguage, languages } from "@/lib/languages";
-import { quotaHistoryCopy, type QuotaHistoryCopyKey } from "@/lib/quota-history-copy";
+import { quotaHistoryCopy, quotaHistorySummaryCopy, type QuotaHistoryCopyKey } from "@/lib/quota-history-copy";
 import {
   exportQuotaHistory, fetchQuotaHistoryDay, getQuotaRecordingPreferences, quotaHistoryDays, quotaHistoryReadError,
   setQuotaRecordingEnabled, useQuotaHistory, type QuotaHistoryDaily, type QuotaHistoryDayResponse, type QuotaHistoryResponse,
@@ -28,41 +29,72 @@ function useCopy() {
     if (!Number.isFinite(date.getTime())) return "—";
     return date.toLocaleString(languages[getLanguage(language)].intlLocale, { timeZone: timezone, year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" });
   };
-  return { copy, number, points, windowName, time, t };
+  return { copy, language, number, points, windowName, time, t };
 }
 function statusKey(row: QuotaHistoryDaily): QuotaHistoryCopyKey {
   if (row.status === "historical_partial") return "historical";
   if (row.consumedPercentPoints === null) return row.sampleCount === 0 ? "unknown" : "insufficient";
   return row.consumedPercentPoints === 0 ? "unchanged" : "partial";
 }
-function HistoryStatus({ data, error, loading, onRetry }: { data: (Pick<QuotaHistoryResponse, "readStatus" | "storageStatus" | "scopeAvailable"> & { enabled?: boolean }) | null; error: QuotaHistoryReadError | null; loading: boolean; onRetry: () => void }) {
-  const { copy } = useCopy();
+type HistoryNotice = "readFailed" | "unavailable" | "providerReadFailed" | "writeFailed" | "identity" | "paused" | "loading";
+type HistoryStatusProps = {
+  data: (Pick<QuotaHistoryResponse, "readStatus" | "storageStatus" | "scopeAvailable"> & { enabled?: boolean }) | null;
+  error: QuotaHistoryReadError | null;
+  loading: boolean;
+};
+
+function historyNotices({ data, error, loading }: HistoryStatusProps): HistoryNotice[] {
+  const notices: HistoryNotice[] = [];
   const storage = data?.storageStatus;
   const unavailable = error === "storage_unavailable" || (storage && storage !== "ready" && storage !== "write_failed");
+  if (error === "local_read_failed") notices.push("readFailed");
+  if (unavailable) notices.push("unavailable");
+  if (data?.readStatus === "read_failed") notices.push("providerReadFailed");
+  if (storage === "write_failed") notices.push("writeFailed");
+  if (data && !data.scopeAvailable) notices.push("identity");
+  if (data?.enabled === false) notices.push("paused");
+  if (loading && !data) notices.push("loading");
+  return notices;
+}
+
+function noticeRole(notice: HistoryNotice) {
+  return notice === "identity" || notice === "paused" || notice === "loading" ? "status" : "alert";
+}
+
+function HistoryStatus({ data, error, loading, onRetry }: HistoryStatusProps & { onRetry: () => void }) {
+  const { copy } = useCopy();
   return <div className="pulse-quota-status" aria-live="polite">
-    {error === "local_read_failed" ? <p role="alert">{copy("readFailed")} <button type="button" className="pulse-text-button" onClick={onRetry}>{copy("retry")}</button></p> : null}
-    {unavailable ? <p role="alert">{copy("unavailable")}</p> : null}
-    {data?.readStatus === "read_failed" ? <p role="alert">{copy("providerReadFailed")}</p> : null}
-    {storage === "write_failed" ? <p role="alert">{copy("writeFailed")}</p> : null}
-    {data && !data.scopeAvailable ? <p role="status">{copy("identity")}</p> : null}
-    {data?.enabled === false ? <p role="status">{copy("paused")}</p> : null}
-    {loading && !data ? <p role="status">{copy("loading")}</p> : null}
+    {historyNotices({ data, error, loading }).map(notice => (
+      <p key={notice} role={noticeRole(notice)}>
+        {copy(notice)}{notice === "readFailed" ? <> <button type="button" className="pulse-text-button" onClick={onRetry}>{copy("retry")}</button></> : null}
+      </p>
+    ))}
   </div>;
 }
 
 export function QuotaHistorySummary({ onOpenHistory }: { onOpenHistory: () => void }) {
   const { data, error, loading, refresh } = useQuotaHistory("1d");
-  const { copy, windowName, points } = useCopy();
+  const { copy, language, windowName, points } = useCopy();
+  const notices = historyNotices({ data, error, loading });
+  const [visibleNotice] = notices;
   return <section data-testid="quota-history-summary" className="pulse-quota-summary" aria-label={copy("today")}>
-    <strong>{copy("today")}</strong>
+    <div className="pulse-quota-summary-heading">
+      <strong>{copy("today")}</strong>
+      <ReadingInfo label={quotaHistorySummaryCopy(language, "info")}>
+        {notices.filter(notice => notice !== "loading").map(notice => <p key={notice}>{copy(notice)}</p>)}
+        <p>{copy("partial")} · {copy("note")}</p>
+        {data?.timezone ? <p>{copy("timezone", { zone: data.timezone })}</p> : null}
+      </ReadingInfo>
+    </div>
     <dl>{(["weekly", "session"] as const).map(kind => {
       const rows = data?.scopeAvailable ? data.daily.filter(row => row.kind === kind && row.date === data.endDate) ?? [] : [];
-      return rows.length ? rows.map(row => <div key={`${kind}-${row.windowMinutes}`}><dt>{windowName(kind, row.windowMinutes)}</dt><dd>{points(row.consumedPercentPoints)}{row.consumedPercentPoints === 0 ? <small>{copy("unchanged")}</small> : null}</dd></div>) : <div key={kind}><dt>{windowName(kind)}</dt><dd>—</dd></div>;
+      return rows.length ? rows.map(row => <div key={`${kind}-${row.windowMinutes}`}><dt>{windowName(kind, row.windowMinutes)}</dt><dd>{points(row.consumedPercentPoints)}</dd></div>) : <div key={kind}><dt>{windowName(kind)}</dt><dd>—</dd></div>;
     })}</dl>
-    <span className="pulse-quota-partial">{copy("partial")}</span>
-    {data?.timezone ? <span className="pulse-quota-partial">{copy("timezone", { zone: data.timezone })}</span> : null}
-    <button type="button" className="pulse-text-button" onClick={onOpenHistory}>{copy("open")}</button>
-    <HistoryStatus data={data} error={error} loading={loading} onRetry={refresh}/>
+    <div className="pulse-quota-summary-actions">
+      {visibleNotice ? <span role={noticeRole(visibleNotice)}>{quotaHistorySummaryCopy(language, visibleNotice)}</span> : null}
+      {visibleNotice === "readFailed" ? <button type="button" className="pulse-text-button" onClick={refresh}>{copy("retry")}</button> : null}
+      <button type="button" className="pulse-text-button" data-testid="open-quota-history" onClick={onOpenHistory}>{copy("open")}</button>
+    </div>
   </section>;
 }
 

@@ -15,9 +15,7 @@
 .pulse-dashboard-home .pulse-today-breakdown { margin-top: 13px; }
 .pulse-dashboard-home .pulse-today-breakdown summary, .pulse-usage-analysis .pulse-period-details summary { font-size: 12px; line-height: 1.6; padding: 4px 0; }
 .pulse-dashboard-home .pulse-today-breakdown summary:focus-visible, .pulse-usage-analysis .pulse-period-details summary:focus-visible { outline: 2px solid rgb(var(--ring)); outline-offset: 4px; border-radius: 2px; }
-.pulse-dashboard-analysis-entry { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 14px 28px; padding-top: 23px; border-top: 1px solid rgb(var(--border)); }
-.pulse-dashboard-analysis-entry h2 { font-size: 14px; font-weight: 550; line-height: 1.5; }
-.pulse-dashboard-analysis-entry p { margin-top: 5px; color: rgb(var(--muted-foreground)); font-size: 12px; line-height: 1.7; max-width: 65ch; }
+.pulse-dashboard-analysis-entry { display: flex; align-items: center; padding-top: 12px; border-top: 1px solid rgb(var(--border)); }
 .pulse-dashboard-analysis-entry > button { min-height: 36px; flex-shrink: 0; }
 .pulse-usage-analysis { min-width: 0; }
 .pulse-analysis-heading { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 18px 28px; align-items: flex-start; margin-bottom: 26px; }
@@ -45,7 +43,6 @@
   .pulse-dashboard-home:not(.pulse-paper-dashboard-spread) .pulse-summary-readings .pulse-summary-countdown { font-size: 24px; line-height: 1.5; }
   .pulse-dashboard-home:not(.pulse-paper-dashboard-spread) .pulse-summary-judgment { padding: 8px 0 0; min-height: 0; }
   .pulse-dashboard-home:not(.pulse-paper-dashboard-spread) .pulse-summary-judgment h3 { display: inline; margin: 0 0 0 8px; font-size: 13px; }
-  .pulse-dashboard-home:not(.pulse-paper-dashboard-spread) .pulse-summary-comparison { display: none; }
   .pulse-dashboard-home:not(.pulse-paper-dashboard-spread) .pulse-summary-bottom { margin-top: 7px; padding: 7px 0; }
   .pulse-dashboard-home.pulse-home-overview:not(.pulse-paper-dashboard-spread) .pulse-dashboard-today { padding: 15px 0; }
   .pulse-dashboard-home:not(.pulse-paper-dashboard-spread) .pulse-dashboard-today-heading { margin-bottom: 10px; }

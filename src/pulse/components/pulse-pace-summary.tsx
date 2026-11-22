@@ -46,22 +46,25 @@ export function PulsePaceSummary({
   const reason = !ready ? quotaCoachReason(language, data?.reason) : null;
   const readingLabel = ["stale", "failed", "expired", "unavailable"].includes(coach.status) && coach.remainingPercent != null ? quotaCoachFeedback(language, "last") : copy("remaining");
   const updatedDate = data?.updatedAt && Number.isFinite(Date.parse(data.updatedAt)) ? new Date(data.updatedAt) : null;
+  const updated = updatedDate ? paceCopy(language, "updated", { time: updatedDate.toLocaleTimeString(language, { hour: "2-digit", minute: "2-digit" }) }) : paceCopy(language, "never");
   const formatted = (value: number) => formatCoachNumber(value, language, 1);
   const errorStatus = coach.status === "ready" ? "unavailable" : coach.status;
-  const status = ready ? copy(recentRisk ? "recentRiskLabel" : `${coach.tone!}Label`) : copy(errorStatus);
   const resetTimezone = localTimeZone();
-  const advice = ready ? recentRisk ? copy("recentRiskAdvice") : coach.tone === "roomy" ? summary("roomy") : copy(`${coach.tone!}Advice`) : reason ?? copy(`${errorStatus}Detail`);
+  const advice = ready ? recentRisk ? copy("recentRiskAdvice") : coach.tone === "roomy" ? summary("roomy") : copy(`${coach.tone!}Advice`) : null;
   return <section className={`pulse-summary coach-${coach.status}${pacingOnly ? " pulse-summary-pacing-only" : ""}`} aria-labelledby={`${generatedId}-title`} data-testid="pulse-pace-summary">
     <header className="pulse-summary-heading">
       <div><h2 id={`${generatedId}-title`}>{summary(pacingOnly ? "pacing" : "title")}</h2><span>{formatCoachWindow(coach.window, language)}</span>
         <ReadingInfo label={quotaCoachClarity(language, "explain")}>
+          {!ready ? <p>{reason ?? copy(`${errorStatus}Detail`)}</p> : null}
+          {ready ? <p>{quotaCoachCopy(language, "comparison", { used: formatted(coach.usedPercent!), elapsed: formatted(coach.elapsedPercent!) })}</p> : null}
           <p>{copy("scope")}</p>
           {coach.hasUnknownWindows ? <p>{quotaCoachFeedback(language, "unknownWindows")}</p> : null}
           {coach.resetAt != null ? <p>{quotaCoachCopy(language, "resetAt", { time: formatCoachReset(coach.resetAt, language) })}
             {resetTimezone ? ` · ${timeZoneLabel(resetTimezone, language, coach.resetAt)}` : null}</p> : null}
+          <p><time dateTime={updatedDate?.toISOString()}>{updated}</time></p>
         </ReadingInfo>
       </div>
-      <div className="pulse-summary-updated"><time dateTime={updatedDate?.toISOString()} title={updatedDate?.toLocaleString(language)}>{updatedDate ? paceCopy(language, "updated", { time: updatedDate.toLocaleTimeString(language, { hour: "2-digit", minute: "2-digit" }) }) : paceCopy(language, "never")}</time><button type="button" onClick={onRefresh} disabled={refreshing || wait > 0} aria-busy={refreshing} aria-label={paceCopy(language, "refresh")} title={wait ? quotaCoachFeedback(language, "cooldown", { seconds: wait }) : paceCopy(language, "refresh")}><RefreshCw size={16}/></button></div>
+      <div className="pulse-summary-updated">{wait > 0 ? <span role="timer">{quotaCoachFeedback(language, "cooldownShort", { seconds: wait })}</span> : null}<button type="button" onClick={onRefresh} disabled={refreshing || wait > 0} aria-busy={refreshing} aria-label={paceCopy(language, "refresh")} title={paceCopy(language, "refresh")}><RefreshCw size={16}/></button></div>
     </header>
     <div className="pulse-summary-readings">
       {!pacingOnly ? <><div>
@@ -73,19 +76,14 @@ export function PulsePaceSummary({
         <strong className="pulse-summary-countdown">{formatCoachCountdown(coach.remainingMinutes, language)}</strong>
       </div></> : null}
       <div className="pulse-summary-judgment" role={!ready ? "status" : undefined}>
-        <span className="pulse-summary-status">{status}</span>
-        <h3>{advice}</h3>
-        {ready ? <div className="pulse-summary-comparison" aria-label={quotaCoachCopy(language, "comparison", { used: formatted(coach.usedPercent!), elapsed: formatted(coach.elapsedPercent!) })}>
-          {([["used", coach.usedPercent], ["elapsed", coach.elapsedPercent]] as const).map(([key, value]) =>
-            <div key={key}><span>{summary(key)}</span><i aria-hidden="true"><b style={{ width: `${value ?? 0}%` }}/></i><span>{formatted(value!)}%</span></div>
-          )}
-        </div> : onRecover ? <button className="pulse-text-button" type="button" onClick={onRecover}>{quotaCoachFeedback(language, "recover")}</button> : null}
+        {ready ? <h3>{advice}</h3> : <>
+          <span className="pulse-summary-status">{copy(errorStatus)}</span>
+          {onRecover ? <button className="pulse-text-button" type="button" onClick={onRecover}>{quotaCoachFeedback(language, "recover")}</button> : null}
+        </>}
         {external && projectedDepletion && !recentRisk ? <p className="pulse-summary-advice">{copy("projectedDepletion")}</p> : null}
-        {external && ready && coach.tone === "roomy" && !recentRisk ? <p className="pulse-summary-advice">{copy("roomyAdvice")}</p> : null}
       </div>
     </div>
     {external && !pacingOnly && ready && coach.reference ? <CoachReference reference={coach.reference} language={language}/> : null}
-    {wait > 0 ? <p className="pulse-summary-wait" role="status">{quotaCoachFeedback(language, "cooldown", { seconds: wait })}</p> : null}
     <div className="pulse-summary-bottom"><button ref={detailsTriggerRef} type="button" className="pulse-text-button" aria-expanded={expanded} aria-controls={targetId} onClick={() => changeExpanded(!expanded)}>{summary("details")}<ChevronDown size={14}/></button></div>
     {coach.resetNotice?.isUnread ? <button type="button" className="pulse-summary-notice" aria-controls={targetId} aria-expanded={expanded} onClick={() => changeExpanded(true)}><Bell size={14}/>{quotaCoachFeedback(language, "noticeCompact")}</button> : null}
     {props.noticeFailed && (!external || !expanded) ? <p role="alert">{copy("markFailed")}</p> : null}

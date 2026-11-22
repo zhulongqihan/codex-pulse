@@ -1,5 +1,19 @@
 import { getLanguage, type Language } from "./languages";
 
+const summary = {
+  en: { info: "About today's quota readings", providerReadFailed: "Quota refresh failed", readFailed: "History unavailable", writeFailed: "Quota recording failed", unavailable: "Quota storage unavailable", identity: "Cannot verify account", paused: "Recording off", loading: "Loading history…" },
+  zh: { info: "今日额度读数说明", providerReadFailed: "额度刷新失败", readFailed: "历史读取失败", writeFailed: "额度记录保存失败", unavailable: "额度存储不可用", identity: "暂时无法确认当前账号", paused: "记录已关闭", loading: "正在读取历史…" },
+  "zh-Hant": { info: "今日額度讀數說明", providerReadFailed: "額度更新失敗", readFailed: "歷史讀取失敗", writeFailed: "額度記錄儲存失敗", unavailable: "額度儲存無法使用", identity: "暫時無法確認目前帳號", paused: "記錄已關閉", loading: "正在讀取歷史…" },
+  ja: { info: "今日の上限の記録について", providerReadFailed: "上限の更新に失敗", readFailed: "履歴を読み込めません", writeFailed: "上限の記録に失敗", unavailable: "上限の記録領域を利用できません", identity: "アカウントを確認できません", paused: "記録オフ", loading: "履歴を読み込み中…" },
+  ko: { info: "오늘의 한도 관측 안내", providerReadFailed: "한도 새로 고침 실패", readFailed: "기록을 읽을 수 없음", writeFailed: "한도 기록 저장 실패", unavailable: "한도 저장소를 사용할 수 없음", identity: "계정을 확인할 수 없음", paused: "기록 꺼짐", loading: "기록을 읽는 중…" },
+  de: { info: "Zu den heutigen Kontingentwerten", providerReadFailed: "Kontingent nicht aktualisiert", readFailed: "Historie nicht lesbar", writeFailed: "Kontingent nicht gespeichert", unavailable: "Kontingentspeicher nicht verfügbar", identity: "Konto nicht bestätigt", paused: "Aufzeichnung aus", loading: "Historie wird geladen…" },
+} satisfies Record<Language, Record<string, string>>;
+type SummaryCopyKey = keyof typeof summary.en;
+
+export function quotaHistorySummaryCopy(language: string, key: SummaryCopyKey): string {
+  return summary[getLanguage(language)][key];
+}
+
 const en = {
   localEstimate: "Local quota estimate",
   localEstimateCoverage: "Days observed ({observed}/{total})",

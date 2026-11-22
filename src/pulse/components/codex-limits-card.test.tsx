@@ -164,13 +164,35 @@ describe("sidebar quota colors", () => {
   it("marks retained Paper quota as a last reading after a failed query", () => {
     const updatedAt = new Date().toISOString();
     const session = { usedPercent: 100, remainingPercent: 0, windowMinutes: 300, resetsAt: null };
-    render(<CodexSidebarLimits paper limits={{ session, weekly: null, updatedAt, source: "test" }} error="HTTP 429"/>);
+    const onRefresh = vi.fn();
+    render(<CodexSidebarLimits paper limits={{ session, weekly: null, updatedAt, source: "test" }} error="HTTP 429"
+      onRefreshLimits={onRefresh} onActivateWindow={vi.fn()}/>);
+    expect(screen.getByRole("status")).toHaveTextContent("Unavailable");
     expect(screen.getByText("Last reading")).toBeInTheDocument();
     expect(screen.getByText("0%")).toBeInTheDocument();
     expect(screen.getByRole("progressbar")).toHaveAttribute("data-quota-level", "unknown");
     expect(screen.getByRole("progressbar")).toHaveAttribute("aria-valuenow", "0");
     expect(screen.getByRole("progressbar")).toHaveAttribute("aria-valuetext", expect.stringContaining("Last reading"));
-    expect(document.querySelector("time")).toHaveAttribute("datetime", updatedAt);
+    expect(screen.queryByText(/temporarily rate limited/)).not.toBeInTheDocument();
+    expect(document.querySelector("time")).toBeNull();
+    const info = screen.getByRole("button", { name: "Quota overview" });
+    fireEvent.click(info);
+    expect(screen.getByRole("tooltip")).toHaveTextContent("Quota requests are temporarily rate limited");
+    expect(screen.getByRole("tooltip").querySelector("time")).toHaveAttribute("datetime", updatedAt);
+    fireEvent.click(info);
+    expect(screen.queryByRole("tooltip")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Check quota" }));
+    expect(onRefresh).toHaveBeenCalledOnce();
+  });
+
+  it("offers the Paper login instructions on demand without duplicating the empty state", () => {
+    render(<CodexSidebarLimits paper limits={null} error="chatgptLoginRequired"/>);
+    expect(screen.getByRole("status")).toHaveTextContent("Not Logged In");
+    expect(screen.queryByText("Unavailable")).not.toBeInTheDocument();
+    expect(screen.queryByText("codex login")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Quota overview" }));
+    expect(screen.getByRole("tooltip")).toHaveTextContent("Sign in through official Codex");
+    expect(screen.getByRole("tooltip")).toHaveTextContent("codex login");
   });
 
   it("keeps an expired quota as a neutral last reading and does not invent a reset", () => {

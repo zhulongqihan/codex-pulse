@@ -19,6 +19,8 @@ describe("dashboard quota summary", () => {
     expect(screen.getByText(quotaCoachCopy("en", "remaining"))).toBeInTheDocument();
     expect(screen.queryByText(quotaCoachFeedback("en", "last"))).not.toBeInTheDocument();
     rerender(<PulsePaceSummary data={{...data,updatedAt:"invalid-timestamp"}} {...actions()}/>);
+    expect(screen.queryByText(paceCopy("en", "never"))).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: quotaCoachClarity("en", "explain") }));
     expect(screen.getByText(paceCopy("en", "never"))).toBeInTheDocument();
     expect(screen.queryByText(/Invalid Date/)).not.toBeInTheDocument();
   });
@@ -28,6 +30,7 @@ describe("dashboard quota summary", () => {
     expect(screen.getByTestId("summary-remaining")).toHaveTextContent("80");
     expect(screen.getByText(paceSummaryCopy(language, "roomy"))).toBeInTheDocument();
     expect(screen.queryByText(quotaCoachFeedback(language, "unknownWindows"))).not.toBeInTheDocument();
+    expect(screen.queryByText(paceSummaryCopy(language, "used"))).not.toBeInTheDocument();
     const info = screen.getByRole("button", { name: quotaCoachClarity(language, "explain") });
     fireEvent.click(info);
     expect(await screen.findByRole("tooltip")).toHaveTextContent(quotaCoachFeedback(language, "unknownWindows"));
@@ -36,13 +39,18 @@ describe("dashboard quota summary", () => {
     fireEvent.click(screen.getByRole("button", { name: paceSummaryCopy(language, "details") }));
     expect(screen.getByTestId("coach-reference")).toBeInTheDocument();
   });
-  it("retains an old reading with recovery instead of current pacing advice", () => {
+  it("shows one failure status and a recovery action with the explanation in the info button", async () => {
     const data = syntheticCoachSnapshot("roomy", new Date(now));
     const handlers = actions();
     render(<PulsePaceSummary data={{...data,refreshFailed:true}} {...handlers}/>);
     expect(screen.getByText(quotaCoachFeedback("en", "last"))).toBeInTheDocument();
     expect(screen.getByTestId("summary-remaining")).toHaveTextContent("80");
     expect(screen.queryByText(paceSummaryCopy("en", "roomy"))).not.toBeInTheDocument();
+    expect(screen.getByRole("status")).toHaveTextContent(quotaCoachCopy("en", "failed"));
+    expect(screen.queryByText(quotaCoachCopy("en", "failedDetail"))).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: quotaCoachClarity("en", "explain") }));
+    expect(await screen.findByRole("tooltip")).toHaveTextContent(quotaCoachCopy("en", "failedDetail"));
+    fireEvent.click(screen.getByRole("button", { name: quotaCoachClarity("en", "explain") }));
     fireEvent.click(screen.getByRole("button", { name: quotaCoachFeedback("en", "recover") }));
     expect(handlers.onRecover).toHaveBeenCalledOnce();
   });
@@ -72,7 +80,7 @@ describe("dashboard quota summary", () => {
     expect(screen.getByTestId("summary-remaining")).toHaveTextContent("—");
     rerender(<PulsePaceSummary data={{...data,refreshAfterSeconds:300}} {...handlers}/>);
     expect(screen.getByRole("button", { name: paceCopy("en", "refresh") })).toBeDisabled();
-    expect(screen.getByRole("status")).toHaveTextContent("300");
+    expect(screen.getByRole("timer")).toHaveTextContent("300");
     expect(handlers.onRefresh).not.toHaveBeenCalled();
   });
   it("keeps a valid unread notice visible and preserves the mark-read action in details", () => {

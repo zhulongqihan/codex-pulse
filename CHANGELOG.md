@@ -12,6 +12,8 @@ User-facing changes are grouped by release, following [Keep a Changelog](https:/
 - 配速界面和 Codex 面板移除本轮每日观测表。逐日记录仍可从「官方额度记录」查看。
 - Show supporting explanations on hover, keyboard focus or tap beside the relevant quota, cost and reference readings.
 - 额度、费用及参考分配的补充说明改为读数旁的 ⓘ，悬停、键盘聚焦或点按即可查看。
+- Reduce the dashboard and pacing details to key readings, concise errors and direct actions. Sync counts and report context are available on demand.
+- 首页和配速详情精简为主要读数、简短异常提示和直接操作。同步计数和统计口径可以按需查看。
 
 [完整中英说明 / Full release notes](docs/releases/v0.14.3.md)
 

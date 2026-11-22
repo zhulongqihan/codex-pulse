@@ -65,7 +65,7 @@ export function DashboardHeroCard({ timezone, todayOverview = null, todayLoading
   }
 
   const todayStatus = todayKnown
-    ? todayStale ? home("stale") : updatedTime ? `${dashboard("localLogs")} · ${home("updated")} ${updatedTime}` : home("noUpdated")
+    ? todayStale ? home("stale") : null
     : todayLoading ? t("loading.preparing_cache") : home("todayUnavailable");
   const today = <section data-testid="today-summary" className="pulse-today-summary pulse-dashboard-today" aria-labelledby="pulse-today-title" aria-busy={todayLoading}>
       <div className="pulse-dashboard-today-heading">
@@ -75,6 +75,7 @@ export function DashboardHeroCard({ timezone, todayOverview = null, todayLoading
           <ReadingInfo label={dashboard("todayLocalUsage")}>
             <p>{dashboard("separateQuota")}</p>
             <p>{dashboard("estimateNote")}</p>
+            {todayKnown ? <p>{updatedTime ? `${dashboard("localLogs")} · ${home("updated")} ${updatedTime}` : home("noUpdated")}</p> : null}
             {todayTimezone ? <p data-testid="today-timezone">{t("reading_context.statistics_short", { zone: timeZoneLabel(todayTimezone, i18n.resolvedLanguage ?? i18n.language) })}</p> : null}
           </ReadingInfo>
         </div>
@@ -86,7 +87,7 @@ export function DashboardHeroCard({ timezone, todayOverview = null, todayLoading
         </dl>
         <div className="pulse-today-actions pulse-dashboard-today-actions">
           {onOpenToday ? <Button type="button" variant="secondary" size="sm" data-testid="open-today-sessions" onClick={onOpenToday} disabled={!todayKnown}>{home("todaySessions")}<ArrowRight size={14} aria-hidden="true"/></Button> : null}
-          <p role="status" className={todayStale ? "pulse-today-stale" : undefined}>{todayStatus}</p>
+          {todayStatus ? <p role="status" className={todayStale ? "pulse-today-stale" : undefined}>{todayStatus}</p> : null}
         </div>
       </div>
       {todayKnown ? <details className="pulse-today-breakdown"><summary>{home("todayBreakdown")}</summary><dl>
@@ -96,10 +97,9 @@ export function DashboardHeroCard({ timezone, todayOverview = null, todayLoading
         <div><dt>{copy("cache")}</dt><dd>{todayRow!.inputTokens > 0 ? formatPercent(todayRow!.cachedInputTokens / todayRow!.inputTokens) : "—"}</dd></div>
       </dl></details> : null}
   </section>;
-  const analysis = <section className="pulse-dashboard-analysis-entry" aria-labelledby="pulse-analysis-entry-title">
-    <div><h2 id="pulse-analysis-entry-title">{dashboard("history")}</h2><p>{dashboard("historyDescription")}</p></div>
-    {onOpenAnalysis ? <button type="button" className="pulse-text-button" onClick={onOpenAnalysis}>{dashboard("openAnalysis")}<ArrowRight size={15} aria-hidden="true"/></button> : null}
-  </section>;
+  const analysis = onOpenAnalysis ? <div className="pulse-dashboard-analysis-entry">
+    <button type="button" className="pulse-text-button" onClick={onOpenAnalysis}>{dashboard("openAnalysis")}<ArrowRight size={15} aria-hidden="true"/></button>
+  </div> : null;
 
   return <section data-testid="dashboard-hero" className={`pulse-overview pulse-home-overview pulse-dashboard-home${paperSpread ? " pulse-paper-dashboard-spread" : ""}`}>
     {paperSpread ? <>
