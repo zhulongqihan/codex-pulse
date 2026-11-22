@@ -78,7 +78,7 @@ export function UsageTrendsCard({daily,metrics,cacheHitRate,chartHeight,classNam
   const scrollPositions = useRef<Record<string,{top:number;left:number}>>({});
   const scopeRef = useRef("");
   const rangeIdentity = `${daily[0]?.date ?? ""}:${daily.at(-1)?.date ?? ""}:${daily.length}`;
-  const items = useMemo(() => buildTrendBuckets(daily, detail ? daily.length || 1 : 60), [daily, detail]);
+  const items = useMemo(() => buildTrendBuckets(daily, detail ? daily.length || 1 : 60, { observedQuotaPeaks: showLocalQuota }), [daily, detail, showLocalQuota]);
   const selected = items.find(day => selectedDate != null && selectedDate >= day.startDate && selectedDate <= day.endDate) ?? (deferInspection ? undefined : items.at(-1));
   const preview = items.find(day => day.date === hoveredDate);
   const inspected = deferInspection && !selected ? undefined : preview ?? selected;
@@ -186,11 +186,11 @@ export function UsageTrendsCard({daily,metrics,cacheHitRate,chartHeight,classNam
       </div>}
       {showTokenRetention ? <p className="pulse-source-note">{t("ux.retained_since", {date: showTokenRetention})}</p> : null}
       <div className="pulse-chart-caption"><span>{home("fullPeriod")} · {daily[0]?.date} — {daily.at(-1)?.date}</span><span>{showLocalQuota ? quotaHistoryCopy(language, "chart") : mode === "tokens" ? copy("input") : mode === "cost" ? copy("notBill") : t("trends.quota_note")}</span></div>
-      {grouped && !table ? <p className="pulse-aggregation-note">{home("grouped",{count:maximumGroup})}{mode === "quota" ? ` · ${home("groupQuota")}` : ""}</p> : null}
+      {grouped && !table ? <p className="pulse-aggregation-note">{home("grouped",{count:maximumGroup})}{mode === "quota" ? ` · ${showLocalQuota ? quotaHistoryCopy(language, "localEstimatePeaks") : home("groupQuota")}` : ""}</p> : null}
       {hasAggregateOnly ? <p className="pulse-aggregation-note">{home("partUnknown")}</p> : null}
     </div>
     {!compact && inspected ? <aside className="pulse-day-inspector" data-testid="trend-inspector" data-preview={Boolean(preview)}>
-      <header><div><b>{inspected.startDate===inspected.endDate ? inspected.date : `${inspected.startDate} — ${inspected.endDate}`}</b><span>{preview ? home("preview") : inspected.date===today && inspected.count===1 ? home("today") : home("selected")}{inspected.count>1 ? ` · ${home("groupDays",{count:inspected.count})}` : ""}</span></div>
+      <header><div><b>{inspected.startDate===inspected.endDate ? inspected.date : `${inspected.startDate} — ${inspected.endDate}`}</b><span>{preview ? home("preview") : inspected.date===today && inspected.count===1 ? home("today") : home("selected")}{inspected.count>1 ? ` · ${showLocalQuota ? quotaHistoryCopy(language, "localEstimateGroupDays", { count: inspected.count }) : home("groupDays",{count:inspected.count})}` : ""}</span></div>
         {hasToday ? <button type="button" className="pulse-text-button" disabled={selectedDate===today && !preview} onClick={backToToday}>{home("backToday")}</button> : <small>{home("noTodayInRange")}</small>}
       </header>
       {noRetention(inspected) ? <p className="pulse-source-note">{t("ux.no_retained_record")}</p> : mode === "quota" ? <dl><div><dt>{shortWindowLabel}</dt><dd>{inspected.fiveHourPercent == null ? t("ux.no_quota_samples") : formatQuota(inspected.fiveHourPercent)}</dd></div><div><dt>{longWindowLabel}</dt><dd>{inspected.weeklyPercent == null ? t("ux.no_quota_samples") : formatQuota(inspected.weeklyPercent)}</dd></div></dl> : <dl><div><dt>{copy("total")}</dt><dd>{formatCompactNumber(inspected.totalTokens)}</dd></div><div><dt>{copy("estimate")}</dt><dd>{inspected.costUSD == null ? "—" : formatCurrencyShort(inspected.costUSD)}</dd></div></dl>}

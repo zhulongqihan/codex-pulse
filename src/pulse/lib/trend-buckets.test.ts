@@ -17,6 +17,15 @@ describe("complete-period overview buckets",()=>{
     expect(buckets[0].costUSD).toBeNull();expect(buckets[1].costUSD).toBe(0);expect(buckets[0].fiveHourPercent).toBe(150);expect(buckets[0].weeklyPercent).toBeNull();
     expect(buckets[1].fiveHourPercent).toBe(10);expect(buckets[1].weeklyPercent).toBe(2);
   });
+  it("takes a window's peak from observed days only when requested", () => {
+    const source = days(4).map((day, index) => ({
+      ...day, fiveHourPercent: index === 0 ? 0 : null, weeklyPercent: index === 1 ? 5 : null,
+    }));
+    expect(buildTrendBuckets(source, 2)[0]).toMatchObject({ fiveHourPercent: null, weeklyPercent: null });
+    const buckets = buildTrendBuckets(source, 2, { observedQuotaPeaks: true });
+    expect(buckets[0]).toMatchObject({ fiveHourPercent: 0, weeklyPercent: 5 });
+    expect(buckets[1]).toMatchObject({ fiveHourPercent: null, weeklyPercent: null });
+  });
   it("uses the source timezone at midnight rather than the host's date",()=>{
     const now=new Date("2026-11-07T00:15:00Z");expect(currentDateInTimezone("America/Los_Angeles",now)).toBe("2026-11-06");expect(currentDateInTimezone("Asia/Shanghai",now)).toBe("2026-11-07");
   });

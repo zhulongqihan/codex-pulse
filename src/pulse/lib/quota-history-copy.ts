@@ -3,6 +3,8 @@ import { getLanguage, type Language } from "./languages";
 const en = {
   localEstimate: "Local quota estimate",
   localEstimateCoverage: "Days observed ({observed}/{total})",
+  localEstimatePeaks: "Groups show the highest observed day for each window. Groups without readings stay unknown.",
+  localEstimateGroupDays: "{count}-day group",
   localEstimateNote: "Estimates use account readings saved in local session logs and total only dates with enough readings. These readings may include other devices. Each account uses its own quota window, so the total cannot measure this device’s quota use or the share of one plan used.",
   otherScopeHistory: "Quota history from another account or source is saved locally. To view it, switch back to that account in Codex or restore the previous source in Pulse settings. Each account and source has its own total.",
   observedDays: "{observed} of {total} days had enough readings to calculate consumption.",
@@ -29,6 +31,8 @@ const messages: Record<Language, Record<QuotaHistoryCopyKey, string>> = {
   zh: {
     localEstimate: "本机日志额度估算",
     localEstimateCoverage: "所选 {total} 天中有 {observed} 天可估算",
+    localEstimatePeaks: "每组显示各窗口已观测的最高单日值。无读数的组保持未知。",
+    localEstimateGroupDays: "{count} 天一组",
     localEstimateNote: "根据本机会话日志中的账号额度读数估算，只合计读数足够的日期。读数可能包含其他设备的用量，各账号窗口以各自额度为基准。合计无法核算本机扣减或单个套餐的已用比例。",
     otherScopeHistory: "本地还保留其他账号或来源的额度历史。请在 Codex 切回原账号，或在 Pulse 设置切回原数据来源后查看。各账号与来源分别统计。",
     observedDays: "所选 {total} 天中，有 {observed} 天的样本足以计算观测消耗。",
@@ -46,6 +50,8 @@ const messages: Record<Language, Record<QuotaHistoryCopyKey, string>> = {
   "zh-Hant": {
     localEstimate: "本機日誌額度估算",
     localEstimateCoverage: "所選 {total} 天中有 {observed} 天可估算",
+    localEstimatePeaks: "每組顯示各視窗已觀測的最高單日值。無讀數的組維持未知。",
+    localEstimateGroupDays: "{count} 天一組",
     localEstimateNote: "根據本機工作階段日誌中的帳號額度讀數估算，只合計讀數足夠的日期。讀數可能包含其他裝置的用量，各帳號視窗以各自額度為基準。合計無法計算本機扣減或單一方案的已用比例。",
     otherScopeHistory: "本機還保留其他帳號或來源的額度歷史。請在 Codex 切回原帳號，或在 Pulse 設定切回原資料來源後查看。各帳號與來源分開統計。",
     observedDays: "所選 {total} 天中，有 {observed} 天的樣本足以計算觀測消耗。",
@@ -61,6 +67,8 @@ const messages: Record<Language, Record<QuotaHistoryCopyKey, string>> = {
   ja: {
     localEstimate: "ローカルログからの上限推計",
     localEstimateCoverage: "選択した{total}日中{observed}日を観測",
+    localEstimatePeaks: "グループごとに各期間の観測日最高値を表示します。測定値がないグループは不明です。",
+    localEstimateGroupDays: "{count}日間のグループ",
     localEstimateNote: "ローカルのセッションログの測定値から、十分な記録がある日だけを集計します。他の端末の利用を含む場合があり、上限の期間はアカウントごとに異なります。合計から、この端末の消費量や単一プランの使用割合は算出できません。",
     otherScopeHistory: "別のアカウントまたはデータソースの上限履歴もこの端末に保存されています。表示するには、Codex で元のアカウントに切り替えるか、Pulse の設定で元のデータソースに戻してください。アカウントとデータソースごとに集計します。",
     observedDays: "選択した {total} 日のうち、{observed} 日で消費量を計算できるだけの測定値がありました。",
@@ -73,6 +81,8 @@ const messages: Record<Language, Record<QuotaHistoryCopyKey, string>> = {
   ko: {
     localEstimate: "로컬 로그 한도 추정",
     localEstimateCoverage: "선택한 {total}일 중 {observed}일 관측",
+    localEstimatePeaks: "그룹별로 각 기간의 관측 일일 최댓값을 표시합니다. 측정값이 없는 그룹은 알 수 없음으로 표시합니다.",
+    localEstimateGroupDays: "{count}일 그룹",
     localEstimateNote: "로컬 세션 로그의 계정 한도 측정값을 사용해 측정값이 충분한 날짜만 합산합니다. 다른 기기의 사용량이 포함될 수 있고 계정마다 한도 기간이 다릅니다. 합계로 이 기기의 사용량이나 한 요금제에서 사용한 비율을 알 수 없습니다.",
     otherScopeHistory: "다른 계정이나 데이터 소스의 한도 기록도 이 기기에 저장되어 있습니다. 해당 기록을 보려면 Codex에서 이전 계정으로 전환하거나 Pulse 설정에서 이전 데이터 소스를 선택하세요. 계정과 데이터 소스별로 따로 집계합니다.",
     observedDays: "선택한 {total}일 중 {observed}일은 사용량을 계산할 수 있는 충분한 측정값이 있습니다.",
@@ -84,6 +94,8 @@ const messages: Record<Language, Record<QuotaHistoryCopyKey, string>> = {
   de: {
     localEstimate: "Lokale Kontingentschätzung",
     localEstimateCoverage: "Erfasste Tage ({observed}/{total})",
+    localEstimatePeaks: "Gruppen zeigen den höchsten beobachteten Tageswert je Fenster. Gruppen ohne Messwerte bleiben unbekannt.",
+    localEstimateGroupDays: "Gruppe mit {count} Tagen",
     localEstimateNote: "Die Schätzung summiert Tage mit genügend Kontomesswerten aus lokalen Sitzungsprotokollen. Nutzung anderer Geräte kann einfließen, und jedes Konto hat ein eigenes Kontingentfenster. Die Summe gibt weder den Verbrauch dieses Geräts noch den genutzten Anteil eines Tarifs an.",
     otherScopeHistory: "Der Kontingentverlauf eines anderen Kontos oder einer anderen Quelle ist lokal gespeichert. Wechseln Sie in Codex zurück zum betreffenden Konto oder wählen Sie in den Pulse-Einstellungen die frühere Quelle. Die Summe wird je Konto und Quelle berechnet.",
     observedDays: "An {observed} von {total} Tagen reichen die Messwerte zur Berechnung des Verbrauchs aus.",

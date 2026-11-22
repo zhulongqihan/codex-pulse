@@ -93,6 +93,27 @@ describe("Pulse full-range trends",()=>{
     await user.click(screen.getByRole("button",{name:"Day by day"}));expect(container.querySelectorAll(".pulse-trend-day")).toHaveLength(365);expect(screen.queryByText("Grouped into up to 7 days per point")).not.toBeInTheDocument();
     await user.click(screen.getByRole("button",{name:"Show data table"}));expect(within(screen.getByRole("table")).getAllByRole("row")).toHaveLength(366);
   });
+  it("plots sparse local quota peaks per window without inventing missing dates", async () => {
+    const user = userEvent.setup();
+    const days = Array.from({ length: 90 }, (_, index) => ({
+      ...daily[0], date: new Date(Date.UTC(2025, 0, index + 1)).toISOString().slice(0, 10),
+      fiveHourPercent: index === 1 ? 25 : null,
+      weeklyPercent: index === 0 ? 0 : null,
+    }));
+    render(<UsageTrendsCard daily={days} metrics={[]} cacheHitRate={0} localQuotaRangeDays={90}/>);
+    await user.click(screen.getByRole("button", { name: "Local quota estimate" }));
+    const peak = screen.getByRole("button", { name: "2025-01-01 — 2025-01-02 · Local quota estimate 25 pp" });
+    expect(screen.getByRole("button", { name: "2025-01-03 — 2025-01-04 · Local quota estimate —" })).toBeVisible();
+    expect(screen.getByText(/Groups show the highest observed day for each window/)).toBeVisible();
+    await user.click(peak);
+    const inspector = screen.getByTestId("trend-inspector");
+    const readings = within(inspector.querySelector<HTMLElement>(":scope > dl")!);
+    expect(readings.getByText("25 pp")).toBeVisible();
+    expect(readings.getByText("0 pp")).toBeVisible();
+    expect(within(inspector).getByText(/2-day group/)).toBeVisible();
+    await user.click(screen.getByRole("button", { name: "Day by day" }));
+    expect(screen.getByRole("button", { name: "2025-01-03 · Local quota estimate —" })).toBeVisible();
+  });
   it("renders a point for a one-day overview and preserves a total-only token observation",()=>{
     const {container}=render(<UsageTrendsCard daily={[{...daily[0],inputTokens:0,cachedInputTokens:0,outputTokens:0,totalTokens:130}]} metrics={[]} cacheHitRate={0}/>);
     expect(container.querySelector("circle.pulse-line-aggregate")).not.toBeNull();expect(screen.getByText("Some records only provide a token total")).toBeInTheDocument();expect(screen.getByTestId("trend-inspector")).toHaveTextContent("130");
