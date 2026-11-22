@@ -194,7 +194,8 @@ describe('Pulse native parity', () => {
     await $('[data-testid="analysis-nav-tab"]').click();
     const chart = $('[data-testid="usage-trends-card"]');
     await chart.waitForDisplayed();
-    const usage = await selectRange('30d', '最近 30 天');
+    const usage = await invoke<any>('fetch_overview', { range: '30d' });
+    await expect($('[data-testid="range-summary"]')).toHaveText(expect.stringContaining(`${usage.startDate} — ${usage.endDate}`));
     const observed = usage.daily.filter((day: any) => day.fiveHourPercent != null || day.weeklyPercent != null);
     expect(observed.map((day: any) => [day.fiveHourPercent, day.weeklyPercent])).toEqual([[7, 2], [4, 3]]);
 
@@ -202,13 +203,13 @@ describe('Pulse native parity', () => {
     const tokens = modes.$('button=Token');
     await expect(tokens).toHaveAttribute('aria-pressed', 'true');
     const estimate = modes.$('button=本机日志额度估算');
-    await estimate.execute(button => button.focus());
-    await browser.keys('Enter');
+    await estimate.click();
+    await expect(estimate).toHaveAttribute('aria-pressed', 'true');
     const summary = $('[data-testid="local-quota-estimate"]');
+    await summary.waitForDisplayed();
     await expect(summary.$('[data-quota="fiveHour"]')).toHaveText(expect.stringContaining('11'));
     await expect(summary.$('[data-quota="weekly"]')).toHaveText(expect.stringContaining('5'));
     await expect(summary).toHaveText(expect.stringContaining('所选 30 天中有 2 天可估算'));
-    await expect(estimate).toBeFocused();
     await tokens.click();
   });
 

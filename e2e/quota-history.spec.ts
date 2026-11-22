@@ -273,7 +273,7 @@ describe('Official quota history in the real offline Tauri app', () => {
         await browser.saveScreenshot(join(output, `quota-history-${skinId}-${width}-unknown.png`));
         checks.push({ skinId, ...geometry, unknownSummary: ['—', '—'], unknownTotal: '—', identityUnavailableVisible: true });
       }
-      await expect($('.pulse-analysis-source-tabs button:first-child')).toHaveText('本机 Token 与参考成本');
+      await expect($('.pulse-analysis-source-tabs button:first-child')).toHaveText('本机用量');
       await focusAndActivate('.pulse-analysis-source-tabs button:first-child');
       await $('[data-testid="usage-analysis"]').waitForDisplayed();
       await expect($('[data-testid="quota-history-view"]')).not.toBeDisplayed();
