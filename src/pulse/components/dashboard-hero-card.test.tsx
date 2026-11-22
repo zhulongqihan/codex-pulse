@@ -6,6 +6,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import i18n from "../i18n";
 import type { CodexLimitsResponse, OverviewResponse } from "../lib/api";
 import { dashboardCopy } from "../lib/dashboard-copy";
+import { quotaHistoryCopy } from "../lib/quota-history-copy";
 import { DashboardHeroCard, UsageAnalysisView } from "./dashboard-hero-card";
 import { currentDateInTimezone } from "../lib/trend-buckets";
 
@@ -149,21 +150,55 @@ describe("focused dashboard", () => {
 });
 
 describe("usage analysis", () => {
-  it("defaults to cost, then changes the share denominator and ranking when tokens are selected", async () => {
+  it("defaults both the trend and distribution to tokens and can rank by estimated cost", async () => {
     const user = userEvent.setup();
     render(analysis(breakdownOverview([{ name: "high-volume", tokens: 900, cost: 10 }, { name: "high-cost", tokens: 100, cost: 90 }], 100)));
     const region = screen.getByRole("region", { name: "Period usage breakdown" });
     const explanation = within(region).getByTestId("distribution-scope");
     expect(explanation).toHaveTextContent("2026-10-01 — 2026-10-30");
-    expect(explanation).toHaveTextContent("Share of this period’s API estimate");
-    expect(region.querySelector(".pulse-rank-row")).toHaveTextContent("high-cost");
-    expect(region.querySelector(".pulse-rank-row")).toHaveTextContent("90.0%");
-    expect(within(region).getByRole("button", { name: /^API estimate$/ })).toHaveAttribute("aria-pressed", "true");
-    await user.click(within(region).getByRole("button", { name: /^Tokens$/ }));
     expect(explanation).toHaveTextContent("Share of local tokens in the selected period; separate from account quota.");
     expect(region.querySelector(".pulse-rank-row")).toHaveTextContent("high-volume");
     expect(region.querySelector(".pulse-rank-row")).toHaveTextContent("90.0%");
+    expect(within(region).getByRole("button", { name: "Tokens" })).toHaveAttribute("aria-pressed", "true");
+    expect(within(screen.getByRole("group", { name: "Trend view" })).getByRole("button", { name: "Tokens" })).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByTestId("range-summary").querySelector(".pulse-analysis-totals dt")).toHaveTextContent("Period tokens");
+    await user.click(within(region).getByRole("button", { name: "API estimate" }));
+    expect(explanation).toHaveTextContent("Share of this period’s API estimate");
+    expect(region.querySelector(".pulse-rank-row")).toHaveTextContent("high-cost");
+    expect(region.querySelector(".pulse-rank-row")).toHaveTextContent("90.0%");
     expect(screen.queryByTestId("today-summary")).not.toBeInTheDocument();
+  });
+
+  it("shows local estimates for the selected period, including quota-only dates and known zero", async () => {
+    const user = userEvent.setup();
+    const daily = [
+      { ...row("2026-10-01", 0, null), fiveHourPercent: 150.5 },
+      { ...row("2026-10-02", 100, 1), fiveHourPercent: 2, weeklyPercent: 0 },
+      row("2026-10-03", 100, 1),
+    ];
+    const { rerender } = render(analysis({ ...overview, daily, retainedFrom: "2026-10-02" }));
+    const mode = screen.getByRole("button", { name: "Local quota estimate" });
+    expect(mode).toHaveAttribute("aria-pressed", "false");
+    mode.focus();
+    await user.keyboard("{Enter}");
+    expect(mode).toHaveFocus();
+    const summary = screen.getByRole("group", { name: "Sum of recorded portions" });
+    expect(summary).toHaveTextContent("5-hour window152.5 ppDays observed (2/30)");
+    expect(summary).toHaveTextContent("7-day window0 ppDays observed (1/30)");
+    expect(summary).toHaveTextContent("local session logs");
+    expect(summary).toHaveTextContent("other devices");
+    expect(screen.getByRole("button", { name: "2026-10-01 · Local quota estimate 150.5 pp" })).toBeVisible();
+    await user.click(screen.getByRole("button", { name: "Show data table" }));
+    const table = within(screen.getByRole("table"));
+    expect(table.getByRole("columnheader", { name: "5-hour window" })).toBeVisible();
+    expect(table.getByText("150.5 pp")).toBeVisible();
+    expect(table.getByText("0 pp")).toBeVisible();
+    expect(table.getAllByText("No samples")).toHaveLength(3);
+
+    rerender(analysis({ ...overview, daily: [daily[2]], days: 7 }));
+    expect(within(summary).getAllByText("Not observed")).toHaveLength(2);
+    expect(within(summary).getAllByText("Days observed (0/7)")).toHaveLength(2);
+    expect(within(summary).queryByText("0 pp")).not.toBeInTheDocument();
   });
 
   it.each([
@@ -178,12 +213,15 @@ describe("usage analysis", () => {
     expect(screen.getByTestId("analysis-timezone")).toHaveTextContent("America/New_York");
     expect(screen.getByTestId("analysis-timezone")).not.toHaveTextContent("reading_context");
     expect(region).not.toHaveTextContent("reading_context");
+    await userEvent.click(screen.getByRole("button", { name: quotaHistoryCopy(language, "localEstimate") }));
+    expect(screen.getByText(quotaHistoryCopy(language, "localEstimateNote"))).toBeVisible();
   });
 
   it.each(["Project", "Model", "Dates"])("ranks %s by actual costs when token order disagrees", async dimension => {
     const user = userEvent.setup();
     render(analysis(breakdownOverview([{ name: "high-volume", tokens: 900, cost: 10 }, { name: "high-cost", tokens: 100, cost: 90 }], 100)));
     const region = screen.getByRole("region", { name: "Period usage breakdown" });
+    await user.click(within(region).getByRole("button", { name: "API estimate" }));
     await user.click(within(region).getByRole("button", { name: new RegExp(`^${dimension}$`) }));
     const rows = Array.from(region.querySelectorAll(".pulse-rank-row"));
     const labels = dimension === "Dates" ? ["2026-10-02", "2026-10-01"] : ["high-cost", "high-volume"];
@@ -200,6 +238,7 @@ describe("usage analysis", () => {
     const user = userEvent.setup();
     render(analysis(breakdownOverview([{ name: "missing-price", tokens: 600, cost: null }, { name: "known-price", tokens: 100, cost: 90 }, { name: "free-route", tokens: 300, cost: 0 }], null)));
     const region = screen.getByRole("region", { name: "Period usage breakdown" });
+    await user.click(within(region).getByRole("button", { name: "API estimate" }));
     await user.click(within(region).getByRole("button", { name: new RegExp(`^${dimension}$`) }));
     const rows = Array.from(region.querySelectorAll(".pulse-rank-row"));
     const labels = dimension === "Dates" ? ["2026-10-02", "2026-10-03", "2026-10-01"] : ["known-price", "free-route", "missing-price"];
@@ -211,15 +250,16 @@ describe("usage analysis", () => {
     expect(region).not.toHaveTextContent("100.0%");
     expect(region).not.toHaveTextContent("NaN");
     expect(screen.getByTestId("analysis-pricing-coverage")).toHaveTextContent(/Partial estimate/);
-    expect(screen.getByTestId("range-summary").querySelector(".pulse-analysis-totals dd")).toHaveTextContent("—");
+    expect(within(screen.getByTestId("range-summary")).getByText("Period API cost estimate").nextElementSibling).toHaveTextContent("—");
   });
 
-  it("shows an empty distribution without invented rows or shares and keeps an explicit zero distinct from unknown", () => {
+  it("shows an empty distribution without invented rows or shares and keeps an explicit zero distinct from unknown", async () => {
     const { rerender } = render(analysis());
     const region = screen.getByRole("region", { name: "Period usage breakdown" });
     expect(within(region).getByText("No records in this range")).toBeInTheDocument();
     expect(region.querySelectorAll(".pulse-rank-row")).toHaveLength(0);
     rerender(analysis(breakdownOverview([{ name: "free-route", tokens: 100, cost: 0 }], 0)));
+    await userEvent.click(within(region).getByRole("button", { name: "API estimate" }));
     expect(within(region).getByText("$0.00")).toBeInTheDocument();
     expect(region.querySelector(".pulse-rank-row small")).toHaveTextContent("—");
     expect(region).not.toHaveTextContent("NaN");

@@ -808,6 +808,25 @@ fn format_reset_at(value: &Value) -> Option<String> {
         .map(|timestamp| timestamp.to_rfc3339_opts(chrono::SecondsFormat::Secs, true))
 }
 
+pub(crate) const QUOTA_RESET_DRIFT_MS: u64 = 3_000;
+
+pub(crate) fn quota_reset_millis(reset: &str) -> Option<i64> {
+    DateTime::parse_from_rfc3339(reset)
+        .ok()
+        .map(|time| time.timestamp_millis())
+}
+
+fn same_quota_reset(left: Option<&str>, right: Option<&str>) -> bool {
+    match (left, right) {
+        (Some(left), Some(right)) => match (quota_reset_millis(left), quota_reset_millis(right)) {
+            (Some(left), Some(right)) => left.abs_diff(right) <= QUOTA_RESET_DRIFT_MS,
+            _ => left == right,
+        },
+        (None, None) => true,
+        _ => false,
+    }
+}
+
 fn build_quota_rollup(
     snapshots: &[QuotaSnapshot],
     events: &[UsageEvent],
@@ -882,34 +901,61 @@ fn summarize_quota_windows(
 ) {
     let mut windows = Vec::new();
     let mut daily = BTreeMap::<String, Vec<SessionQuotaWindowUsage>>::new();
-    let mut start = 0;
-
-    for index in 1..=snapshots.len() {
-        let reset = index < snapshots.len()
-            && snapshots[index].used_percent < snapshots[index - 1].used_percent;
-        if index == snapshots.len() || reset {
-            let segment = &snapshots[start..index];
-            if segment.len() >= 2 {
-                windows.push(quota_window_usage(segment));
-                let mut daily_segments = BTreeMap::<String, Vec<QuotaSnapshot>>::new();
-                for pair in segment.windows(2) {
-                    let date = date_key_in_timezone(pair[1].timestamp, timezone);
-                    let entry = daily_segments.entry(date).or_default();
-                    if entry.is_empty() {
-                        entry.push(pair[0].clone());
-                    }
-                    entry.push(pair[1].clone());
+    let mut segment: Vec<QuotaSnapshot> = Vec::new();
+    let mut finish_segment = |segment: &mut Vec<QuotaSnapshot>| {
+        if segment.len() >= 2 {
+            windows.push(quota_window_usage(segment));
+            let mut daily_segments = BTreeMap::<String, Vec<QuotaSnapshot>>::new();
+            for pair in segment.windows(2) {
+                let date = date_key_in_timezone(pair[1].timestamp, timezone);
+                if date_key_in_timezone(pair[0].timestamp, timezone) != date {
+                    // Keep the session's day-of-observation view and let the daily
+                    // estimate leave this pair unallocated.
+                    daily.entry(date).or_default().push(quota_window_usage(pair));
+                    continue;
                 }
-                for (date, daily_segment) in daily_segments {
-                    daily
-                        .entry(date)
-                        .or_default()
-                        .push(quota_window_usage(&daily_segment));
+                let entry = daily_segments.entry(date).or_default();
+                if entry.is_empty() {
+                    entry.push(pair[0].clone());
                 }
+                entry.push(pair[1].clone());
             }
-            start = index;
+            for (date, daily_segment) in daily_segments {
+                daily
+                    .entry(date)
+                    .or_default()
+                    .push(quota_window_usage(&daily_segment));
+            }
         }
+        segment.clear();
+    };
+
+    for group in snapshots.chunk_by(|left, right| left.timestamp == right.timestamp) {
+        let snapshot = &group[0];
+        if !(0.0..=100.0).contains(&snapshot.used_percent)
+            || !group.iter().all(|reading| {
+                reading.used_percent == snapshot.used_percent
+                    && same_quota_reset(reading.resets_at.as_deref(), snapshot.resets_at.as_deref())
+            })
+        {
+            finish_segment(&mut segment);
+            continue;
+        }
+        if let (Some(first), Some(last)) = (segment.first(), segment.last()) {
+            let reset = first.resets_at.as_deref();
+            if snapshot.used_percent < last.used_percent
+                || !same_quota_reset(reset, snapshot.resets_at.as_deref())
+                || reset.and_then(quota_reset_millis).is_some_and(|reset| {
+                    last.timestamp.timestamp_millis() < reset
+                        && snapshot.timestamp.timestamp_millis() >= reset
+                })
+            {
+                finish_segment(&mut segment);
+            }
+        }
+        segment.push(snapshot.clone());
     }
+    finish_segment(&mut segment);
 
     (windows, daily)
 }
@@ -923,10 +969,7 @@ fn quota_window_usage(snapshots: &[QuotaSnapshot]) -> SessionQuotaWindowUsage {
         .sum::<f64>();
     SessionQuotaWindowUsage {
         window_minutes: first.window_minutes,
-        resets_at: snapshots
-            .iter()
-            .rev()
-            .find_map(|snapshot| snapshot.resets_at.clone()),
+        resets_at: last.resets_at.clone(),
         observed_start_at: first
             .timestamp
             .to_rfc3339_opts(chrono::SecondsFormat::Millis, true),
@@ -2313,6 +2356,35 @@ mod tests {
     }
 
     #[test]
+    fn quota_usage_does_not_bridge_reset_changes_or_conflicting_equal_timestamps() {
+        let snapshot = |time: &str, used_percent, reset: &str| QuotaSnapshot {
+            timestamp: format!("2026-07-01T{time}Z").parse().unwrap(),
+            window_minutes: 300,
+            used_percent,
+            resets_at: Some(format!("2026-07-01T{reset}Z")),
+        };
+        let snapshots = vec![
+            snapshot("10:00:00", 10.0, "15:00:00"),
+            snapshot("10:05:00", 12.0, "15:00:03"),
+            snapshot("10:30:00", 50.0, "15:30:00"),
+            snapshot("10:35:00", 53.0, "15:30:02"),
+            snapshot("10:40:00", 59.0, "15:30:02"),
+            snapshot("10:40:00", 61.0, "15:30:02"),
+            snapshot("10:45:00", 66.0, "15:30:02"),
+            snapshot("10:45:00", 66.0, "15:30:02"),
+            snapshot("10:50:00", 70.0, "15:30:02"),
+        ];
+
+        let quota = build_quota_rollup(&snapshots, &[], "UTC");
+        let deltas = quota.daily["2026-07-01"]
+            .five_hour
+            .iter()
+            .map(|window| window.observed_delta_percent)
+            .collect::<Vec<_>>();
+        assert_eq!(deltas, vec![2.0, 3.0, 4.0]);
+    }
+
+    #[test]
     fn quota_increments_belong_to_the_later_snapshot_application_date() {
         let timestamp = |value: &str| value.parse::<DateTime<Utc>>().unwrap();
         let snapshots = vec![
@@ -2338,10 +2410,12 @@ mod tests {
 
         let quota = build_quota_rollup(&snapshots, &[], "Asia/Shanghai");
 
+        let later_day = &quota.daily["2026-07-02"].weekly;
         assert_eq!(
-            quota.daily["2026-07-02"].weekly[0].observed_delta_percent,
-            3.0
+            later_day.iter().map(|part| part.observed_delta_percent).collect::<Vec<_>>(),
+            vec![2.0, 1.0]
         );
+        assert_eq!(quota.session.weekly[0].observed_delta_percent, 3.0);
         assert!(!quota.daily.contains_key("2026-07-01"));
     }
 

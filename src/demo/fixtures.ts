@@ -14,6 +14,13 @@ const dateParts = new Intl.DateTimeFormat("en-US", { timeZone: "Asia/Shanghai", 
 export const today = `${dateParts.find(p => p.type === "year")!.value}-${dateParts.find(p => p.type === "month")!.value}-${dateParts.find(p => p.type === "day")!.value}`;
 const shift = dateMs(today) - dateMs(seed.referenceDate);
 const shiftDate = (date: string) => key(dateMs(date) + shift);
+const localQuotaExamples = [
+  { daysBack: 0, fiveHourPercent: null, weeklyPercent: 0 },
+  { daysBack: 2, fiveHourPercent: 6, weeklyPercent: 3 },
+  { daysBack: 3, fiveHourPercent: 0, weeklyPercent: 1 },
+  { daysBack: 6, fiveHourPercent: 12, weeklyPercent: null },
+  { daysBack: 10, fiveHourPercent: 18, weeklyPercent: 6 },
+];
 
 export const sessions: SessionDetailRow[] = (seed.sessions as SessionDetailRow[]).map((session, index) => ({
   ...session,
@@ -46,6 +53,12 @@ export function overview(range = "30d", project?: string): OverviewResponse {
   for (let offset = 0; offset < days; offset++) {
     const date = key(dateMs(startDate) + offset * DAY);
     daily.set(date, { date, ...zero(), fiveHourPercent: null, weeklyPercent: null });
+  }
+  if (!project) {
+    for (const { daysBack, fiveHourPercent, weeklyPercent } of localQuotaExamples) {
+      const day = daily.get(key(dateMs(today) - daysBack * DAY));
+      if (day) Object.assign(day, { fiveHourPercent, weeklyPercent });
+    }
   }
   const modelTotals = new Map<string, Amounts>();
   const projectTotals = new Map<string, Amounts & { lastActiveDate: string }>();

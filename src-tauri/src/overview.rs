@@ -111,7 +111,7 @@ pub fn get_overview(
         .into_iter()
         .map(|row| (row.date.clone(), row))
         .collect::<BTreeMap<_, _>>();
-    let quota_by_date = query_daily_quota_percents(db, &start_date, &end_date)?;
+    let quota_by_date = query_daily_quota_percents(db, &start_date, &end_date, &timezone)?;
 
     let daily = list_date_keys(&start_date, &end_date)?
         .into_iter()
@@ -521,7 +521,7 @@ fn get_monthly_usage_for_end_month(
         }
     }
 
-    for (date, (five_hour, weekly)) in query_daily_quota_percents(db, &start_date, &end_date)? {
+    for (date, (five_hour, weekly)) in query_daily_quota_percents(db, &start_date, &end_date, timezone)? {
         let month = month_key_from_date_key(&date)?;
         if let Some(summary) = monthly_by_key.get_mut(&month) {
             if let Some(percent) = five_hour {

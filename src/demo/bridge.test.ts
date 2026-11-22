@@ -9,6 +9,7 @@ vi.mock("@tauri-apps/api/event", () => ({ emit: vi.fn() }));
 import { installDemoBridge } from "./bridge";
 import { fetchPulsePace } from "../pulse/lib/pulse-pace";
 import { today } from "./fixtures";
+import type { OverviewResponse } from "../pulse/lib/api";
 
 const dateBack = (days: number) => new Date(Date.parse(`${today}T00:00:00Z`) - days * 86_400_000).toISOString().slice(0, 10);
 
@@ -25,6 +26,14 @@ describe("synthetic daily quota ledger", () => {
   beforeEach(() => {
     history.replaceState(null, "", "/?demo=1");
     installDemoBridge();
+  });
+
+  it("provides independent local examples with missing and zero observations", async () => {
+    const local = await state.callback!("fetch_overview", { range: "7d" }) as OverviewResponse;
+    expect(local.daily).toHaveLength(7);
+    expect(local.daily.at(-1)).toMatchObject({ date: today, fiveHourPercent: null, weeklyPercent: 0 });
+    expect(local.daily.find(day => day.date === dateBack(2))).toMatchObject({ fiveHourPercent: 6, weeklyPercent: 3 });
+    expect(local.daily.find(day => day.date === dateBack(1))).toMatchObject({ fiveHourPercent: null, weeklyPercent: null });
   });
 
   it("returns observed percentage points independently for each real window", async () => {

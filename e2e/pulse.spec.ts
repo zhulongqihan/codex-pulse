@@ -190,6 +190,28 @@ describe('Pulse native parity', () => {
     writeFileSync(join(output, 'engine-evidence.json'), JSON.stringify({ overview, sessions, monthly, paths, detail }, null, 2));
   });
 
+  it('defaults to tokens and estimates both quota windows from the retained local logs', async () => {
+    await $('[data-testid="analysis-nav-tab"]').click();
+    const chart = $('[data-testid="usage-trends-card"]');
+    await chart.waitForDisplayed();
+    const usage = await selectRange('30d', '最近 30 天');
+    const observed = usage.daily.filter((day: any) => day.fiveHourPercent != null || day.weeklyPercent != null);
+    expect(observed.map((day: any) => [day.fiveHourPercent, day.weeklyPercent])).toEqual([[7, 2], [4, 3]]);
+
+    const modes = chart.$('[role="group"][aria-label="趋势视图"]');
+    const tokens = modes.$('button=Token');
+    await expect(tokens).toHaveAttribute('aria-pressed', 'true');
+    const estimate = modes.$('button=本机日志额度估算');
+    await estimate.execute(button => button.focus());
+    await browser.keys('Enter');
+    const summary = $('[data-testid="local-quota-estimate"]');
+    await expect(summary.$('[data-quota="fiveHour"]')).toHaveText(expect.stringContaining('11'));
+    await expect(summary.$('[data-quota="weekly"]')).toHaveText(expect.stringContaining('5'));
+    await expect(summary).toHaveText(expect.stringContaining('所选 30 天中有 2 天可估算'));
+    await expect(estimate).toBeFocused();
+    await tokens.click();
+  });
+
   it('renders every main route in both skins and preserves selections', async () => {
     await browser.refresh();
     await browser.setWindowSize(1440, 920);

@@ -1,13 +1,14 @@
 use crate::pricing::{calculate_cost_usd, PricingSource};
 use crate::types::{
     DailyUsageRow, ModelUsage, ProjectUsage, SessionDailyUsageRow, SessionDetailRow,
-    SessionQuotaUsage,
+    SessionQuotaUsage, SessionQuotaWindowUsage,
 };
+use chrono::DateTime;
 use rusqlite::{params, Connection};
 use serde::{Deserialize, Serialize};
 use std::{collections::BTreeMap, path::Path, sync::Mutex, time::Duration};
 
-const QUOTA_PARSER_VERSION: i64 = 5;
+const QUOTA_PARSER_VERSION: i64 = 6;
 static DATABASE_INITIALIZATION: Mutex<()> = Mutex::new(());
 
 pub fn open_database(database_path: &Path) -> Result<Connection, String> {
@@ -742,10 +743,133 @@ pub fn query_latest_update_at(db: &Connection) -> Result<Option<String>, String>
     .map_err(|error| error.to_string())
 }
 
+#[derive(Clone, Copy)]
+struct QuotaInterval {
+    start: i64,
+    end: i64,
+    used_start: f64,
+    used_end: f64,
+    reset: Option<i64>,
+}
+
+impl QuotaInterval {
+    fn bounded(window: &SessionQuotaWindowUsage, timezone: &chrono_tz::Tz) -> Option<Self> {
+        let start_at = DateTime::parse_from_rfc3339(&window.observed_start_at).ok()?;
+        let end_at = DateTime::parse_from_rfc3339(&window.observed_end_at).ok()?;
+        if start_at.with_timezone(timezone).date_naive() != end_at.with_timezone(timezone).date_naive() {
+            return None;
+        }
+        let start = start_at.timestamp_millis();
+        let end = end_at.timestamp_millis();
+        let used_start = window.observed_start_percent;
+        let used_end = window.observed_end_percent;
+        let reset = window
+            .resets_at
+            .as_deref()
+            .and_then(crate::scanner::quota_reset_millis);
+        let duration = match window.window_minutes {
+            300 | 10_080 => window.window_minutes * 60_000,
+            _ => return None,
+        };
+
+        // A cached aggregate can predate the parser's cycle checks. A span outside its
+        // stored reset window cannot be attributed safely without reparsing its log.
+        if start >= end
+            || end - start > duration
+            || !(0.0..=100.0).contains(&used_start)
+            || !(used_start..=100.0).contains(&used_end)
+            || !window.observed_delta_percent.is_finite()
+            || (window.observed_delta_percent - (used_end - used_start)).abs() > 1e-6
+            || reset.is_some_and(|reset| {
+                end >= reset
+                    || reset - start > duration + crate::scanner::QUOTA_RESET_DRIFT_MS as i64
+            })
+        {
+            return None;
+        }
+        Some(Self {
+            start,
+            end,
+            used_start,
+            used_end,
+            reset,
+        })
+    }
+
+    fn delta(self) -> f64 {
+        self.used_end - self.used_start
+    }
+}
+
+fn overlapping_quota(intervals: &[QuotaInterval]) -> Option<f64> {
+    let reset = intervals.first()?.reset?;
+    if !intervals.iter().all(|part| {
+        part.reset
+            .is_some_and(|other| reset.abs_diff(other) <= crate::scanner::QUOTA_RESET_DRIFT_MS)
+    }) {
+        return None;
+    }
+    let mut readings: Vec<_> = intervals
+        .iter()
+        .flat_map(|part| [(part.start, part.used_start), (part.end, part.used_end)])
+        .collect();
+    readings.sort_unstable_by_key(|reading| reading.0);
+    if readings.windows(2).any(|pair| {
+        let [(start, first), (end, last)] = [pair[0], pair[1]];
+        if start == end {
+            first != last
+        } else {
+            first > last
+        }
+    }) {
+        return None;
+    }
+
+    // Matching reset and monotonically compatible overlapping readings support
+    // counting the union of observed changes. Disconnected times are handled separately.
+    Some(readings.last()?.1 - readings.first()?.1)
+}
+
+fn distinct_quota(intervals: &mut [QuotaInterval]) -> f64 {
+    // For inconsistent overlapping streams, keep the largest measured subset with
+    // disjoint times. It never bridges an unobserved gap or adds two contested changes.
+    intervals.sort_unstable_by_key(|part| part.end);
+    let mut totals: Vec<f64> = vec![0.0];
+    for (index, part) in intervals.iter().enumerate() {
+        let earlier = intervals[..index].partition_point(|prior| prior.end <= part.start);
+        let total = totals[index].max(totals[earlier] + part.delta());
+        totals.push(total);
+    }
+    totals[intervals.len()]
+}
+
+fn quota_interval_total(intervals: &mut [QuotaInterval]) -> f64 {
+    intervals.sort_unstable_by_key(|part| (part.start, part.end));
+    let mut total = 0.0;
+    let mut start = 0;
+    while start < intervals.len() {
+        let mut end = start + 1;
+        let mut last = intervals[start].end;
+        while end < intervals.len() && intervals[end].start < last {
+            last = last.max(intervals[end].end);
+            end += 1;
+        }
+        let group = &mut intervals[start..end];
+        total += if group.len() == 1 {
+            group[0].delta()
+        } else {
+            overlapping_quota(group).unwrap_or_else(|| distinct_quota(group))
+        };
+        start = end;
+    }
+    total
+}
+
 pub fn query_daily_quota_percents(
     db: &Connection,
     start_date: &str,
     end_date: &str,
+    timezone: &str,
 ) -> Result<BTreeMap<String, (Option<f64>, Option<f64>)>, String> {
     let mut statement = db
         .prepare(
@@ -755,7 +879,8 @@ pub fn query_daily_quota_percents(
     let rollups = statement
         .query_map([], |row| row.get::<_, String>(0))
         .map_err(|error| error.to_string())?;
-    let mut windows = BTreeMap::<(String, bool, Option<String>), (f64, f64)>::new();
+    let timezone = timezone.parse().unwrap_or(chrono_tz::UTC);
+    let mut windows = BTreeMap::<(String, bool), Vec<QuotaInterval>>::new();
 
     for json in rollups {
         let json = json.map_err(|error| error.to_string())?;
@@ -767,26 +892,25 @@ pub fn query_daily_quota_percents(
                 continue;
             }
             for (is_five_hour, group) in [(true, usage.five_hour), (false, usage.weekly)] {
-                for window in group {
-                    let entry = windows
-                        .entry((date.clone(), is_five_hour, window.resets_at))
-                        .or_insert((window.observed_start_percent, window.observed_end_percent));
-                    entry.0 = entry.0.min(window.observed_start_percent);
-                    entry.1 = entry.1.max(window.observed_end_percent);
+                for interval in group.iter().filter_map(|part| QuotaInterval::bounded(part, &timezone)) {
+                    windows
+                        .entry((date.clone(), is_five_hour))
+                        .or_default()
+                        .push(interval);
                 }
             }
         }
     }
 
     let mut daily = BTreeMap::<String, (Option<f64>, Option<f64>)>::new();
-    for ((date, is_five_hour, _), (start, end)) in windows {
+    for ((date, is_five_hour), mut intervals) in windows {
         let entry = daily.entry(date).or_default();
         let percent = if is_five_hour {
             &mut entry.0
         } else {
             &mut entry.1
         };
-        *percent = Some(percent.unwrap_or(0.0) + (end - start).max(0.0));
+        *percent = Some(quota_interval_total(&mut intervals));
     }
     Ok(daily)
 }
@@ -1063,26 +1187,40 @@ mod tests {
     }
 
     #[test]
-    fn daily_quota_percents_merge_overlapping_sessions_and_add_reset_windows() {
+    fn daily_quota_percents_use_recorded_intervals_and_keep_window_lengths_separate() {
         let db = Connection::open_in_memory().unwrap();
         db.execute_batch("CREATE TABLE session_file_rollups (quota_usage_json TEXT)")
             .unwrap();
-        let window = |start, end, reset: &str| SessionQuotaWindowUsage {
-            window_minutes: 300,
-            resets_at: Some(reset.to_string()),
-            observed_start_at: "2026-04-02T00:00:00Z".to_string(),
-            observed_end_at: "2026-04-02T01:00:00Z".to_string(),
-            observed_start_percent: start,
-            observed_end_percent: end,
-            observed_delta_percent: end - start,
-            below_resolution: false,
+        let window =
+            |minutes, start, end, start_clock: &str, end_clock: &str, reset: Option<&str>| {
+                SessionQuotaWindowUsage {
+                    window_minutes: minutes,
+                    resets_at: reset.map(str::to_string),
+                    observed_start_at: format!("2026-04-02T{start_clock}Z"),
+                    observed_end_at: format!("2026-04-02T{end_clock}Z"),
+                    observed_start_percent: start,
+                    observed_end_percent: end,
+                    observed_delta_percent: end - start,
+                    below_resolution: false,
+                }
+            };
+        let early_reset = Some("2026-04-02T05:00:00Z");
+        let later_reset = Some("2026-04-02T10:00:00Z");
+        let weekly_reset = Some("2026-04-09T00:00:00Z");
+        let copied_weekly = window(10_080, 40.0, 50.0, "00:00:00", "01:00:00", weekly_reset);
+        let old_cross_day = SessionQuotaWindowUsage {
+            observed_start_at: "2026-04-01T23:30:00Z".into(),
+            ..window(10_080, 0.0, 40.0, "00:00:00", "00:30:00", Some("2026-04-08T22:00:00Z"))
         };
         let first = SessionQuotaRollup {
             daily: BTreeMap::from([(
                 "2026-04-02".to_string(),
                 SessionQuotaUsage {
-                    five_hour: vec![window(10.0, 30.0, "reset-1")],
-                    weekly: vec![window(40.0, 50.0, "weekly-reset")],
+                    five_hour: vec![
+                        window(300, 10.0, 12.0, "00:00:00", "01:00:00", early_reset),
+                        window(300, 30.0, 33.0, "02:00:00", "03:00:00", early_reset),
+                    ],
+                    weekly: vec![copied_weekly.clone(), old_cross_day],
                 },
             )]),
             ..Default::default()
@@ -1091,8 +1229,15 @@ mod tests {
             daily: BTreeMap::from([(
                 "2026-04-02".to_string(),
                 SessionQuotaUsage {
-                    five_hour: vec![window(25.0, 35.0, "reset-1"), window(0.0, 5.0, "reset-2")],
-                    weekly: vec![window(48.0, 55.0, "weekly-reset")],
+                    five_hour: vec![
+                        window(300, 31.0, 35.0, "02:30:00", "03:30:00", early_reset),
+                        window(300, 0.0, 5.0, "05:10:00", "06:00:00", later_reset),
+                        window(300, 20.0, 90.0, "00:00:00", "07:00:00", later_reset),
+                    ],
+                    weekly: vec![
+                        copied_weekly,
+                        window(10_080, 49.0, 55.0, "00:30:00", "02:00:00", weekly_reset),
+                    ],
                 },
             )]),
             ..Default::default()
@@ -1105,11 +1250,34 @@ mod tests {
             .unwrap();
         }
 
-        let daily = query_daily_quota_percents(&db, "2026-04-02", "2026-04-02").unwrap();
-        assert_eq!(daily["2026-04-02"], (Some(30.0), Some(15.0)));
-        assert!(query_daily_quota_percents(&db, "2026-04-03", "2026-04-03")
+        let daily = query_daily_quota_percents(&db, "2026-04-02", "2026-04-02", "UTC").unwrap();
+        assert_eq!(daily["2026-04-02"], (Some(12.0), Some(15.0)));
+        assert!(query_daily_quota_percents(&db, "2026-04-03", "2026-04-03", "UTC")
             .unwrap()
             .is_empty());
+    }
+
+    #[test]
+    fn contested_quota_keeps_disjoint_measured_changes_without_combining_counters() {
+        let interval = |start, end, used_start, used_end, reset| QuotaInterval {
+            start,
+            end,
+            used_start,
+            used_end,
+            reset,
+        };
+        let mut contested = [
+            interval(0, 10, 5.0, 8.0, Some(1000)),
+            interval(5, 15, 20.0, 25.0, Some(1000)),
+            interval(10, 20, 32.0, 36.0, Some(2000)),
+            interval(20, 30, 40.0, 40.0, None),
+        ];
+        assert_eq!(quota_interval_total(&mut contested), 7.0);
+        let mut unknown_reset_duplicate = [
+            interval(0, 10, 3.0, 4.0, None),
+            interval(0, 10, 3.0, 4.0, None),
+        ];
+        assert_eq!(quota_interval_total(&mut unknown_reset_duplicate), 1.0);
     }
 
     #[test]

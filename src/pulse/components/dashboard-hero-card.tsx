@@ -123,7 +123,7 @@ export function UsageAnalysisView({ overview, range, isBusy, isExporting, export
   const home = useHomeCopy();
   const dashboard = useDashboardCopy();
   const [activeTab, setActiveTab] = useState<"projects" | "models" | "dates">("projects");
-  const [metric, setMetric] = useState<"tokens" | "cost">("cost");
+  const [metric, setMetric] = useState<"tokens" | "cost">("tokens");
   const [showAll, setShowAll] = useState(false);
   const totals = overview.totals;
   const projectLabels = useMemo(() => distinctProjectLabels(overview.projects ?? []), [overview.projects]);
@@ -149,7 +149,7 @@ export function UsageAnalysisView({ overview, range, isBusy, isExporting, export
       </header>
       {exportError ? <p role="alert" data-testid="export-error" className="pulse-analysis-export-error"><strong>{t("export.failed")}</strong><span>{exportError}</span></p> : null}
       <div className="pulse-analysis-totals">
-        <dl><div><dt>{dashboard("periodCost")}</dt><dd>{formatCurrencyShort(totals.costUSD)}</dd></div><div><dt>{home("periodTokens")}</dt><dd>{formatCompactNumber(totals.totalTokens)}</dd></div></dl>
+        <dl><div><dt>{home("periodTokens")}</dt><dd>{formatCompactNumber(totals.totalTokens)}</dd></div><div><dt>{dashboard("periodCost")}</dt><dd>{formatCurrencyShort(totals.costUSD)}</dd></div></dl>
         <p>{dashboard("estimateNote")}<span className="pulse-time-context" data-testid="analysis-timezone">{t("reading_context.statistics_short", { zone: timeZoneLabel(overview.timezone, i18n.resolvedLanguage ?? i18n.language) })}</span></p>
       </div>
       {unknownPricing > 0 ? <p className="pulse-analysis-pricing" data-testid="analysis-pricing-coverage">{copy("pricingCoverage")} {formatPercent(totals.totalTokens > 0 ? (totals.totalTokens - unknownPricing) / totals.totalTokens : 0)} · {copy("partial")}</p> : null}
@@ -161,13 +161,13 @@ export function UsageAnalysisView({ overview, range, isBusy, isExporting, export
       </dl></details>
     </section>
     <div className="pulse-analysis-trend">
-      <UsageTrendsCard daily={overview.daily} retainedFrom={overview.retainedFrom} metrics={[]} cacheHitRate={totals.cacheHitRate} onOpenDay={onOpenDay} todayDate={currentDateInTimezone(overview.timezone)} deferInspection initialMode="cost"/>
+      <UsageTrendsCard daily={overview.daily} retainedFrom={overview.retainedFrom} metrics={[]} cacheHitRate={totals.cacheHitRate} onOpenDay={onOpenDay} todayDate={currentDateInTimezone(overview.timezone)} deferInspection localQuotaRangeDays={overview.days}/>
     </div>
     <section className="pulse-distribution" aria-labelledby="pulse-distribution-title">
       <div className="pulse-section-heading">
         <h2 id="pulse-distribution-title">{home("periodBreakdown")}</h2>
         <div className="pulse-segments" role="group" aria-label={copy("distribution")}>{(["projects", "models", "dates"] as const).map(tab => <button key={tab} type="button" aria-pressed={activeTab === tab} onClick={() => { setActiveTab(tab); setShowAll(false); }}>{tab === "projects" ? t("common.project") : tab === "models" ? t("common.model") : copy("dates")}</button>)}</div>
-        <div className="pulse-segments" role="group" aria-label={copy("usage")}><button type="button" aria-pressed={metric === "cost"} onClick={() => setMetric("cost")}>{copy("estimate")}</button><button type="button" aria-pressed={metric === "tokens"} onClick={() => setMetric("tokens")}>{copy("tokens")}</button></div>
+        <div className="pulse-segments" role="group" aria-label={copy("usage")}><button type="button" aria-pressed={metric === "tokens"} onClick={() => setMetric("tokens")}>{copy("tokens")}</button><button type="button" aria-pressed={metric === "cost"} onClick={() => setMetric("cost")}>{copy("estimate")}</button></div>
       </div>
       <p className="pulse-distribution-scope" data-testid="distribution-scope"><span>{overview.startDate} — {overview.endDate}</span><span>{t(metric === "tokens" ? "reading_context.distribution_tokens" : "reading_context.distribution_cost")}</span></p>
       <div className="pulse-rank-list">{visible.map((item, index) => {

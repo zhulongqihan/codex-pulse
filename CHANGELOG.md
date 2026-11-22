@@ -4,6 +4,15 @@ User-facing changes are grouped by release, following [Keep a Changelog](https:/
 
 ## [Unreleased]
 
+## [0.14.0] - 2026-11-22
+
+### Added / 新增
+
+- Use tokens by default in Local usage. The optional local quota estimate shows observed 5-hour and 7-day changes and date coverage from retained session logs, including sessions retained after an account switch.
+- 本机用量默认显示 Token。可选的本机额度估算使用留存会话日志，显示 5 小时和 7 天窗口的观测变化及日期覆盖。切换账号后，仍可查看同一数据源中保留的记录。
+
+[完整中英说明 / Full release notes](docs/releases/v0.14.0.md)
+
 ## [0.13.4] - 2026-11-21
 
 ### Fixed / 修复
@@ -346,7 +355,8 @@ User-facing changes are grouped by release, following [Keep a Changelog](https:/
 
 Earlier releases remain available in [GitHub Releases](https://github.com/zhulongqihan/codex-pulse/releases). / 更早版本保留在 GitHub Releases。
 
-[Unreleased]: https://github.com/zhulongqihan/codex-pulse/compare/v0.13.4...HEAD
+[Unreleased]: https://github.com/zhulongqihan/codex-pulse/compare/v0.14.0...HEAD
+[0.14.0]: https://github.com/zhulongqihan/codex-pulse/compare/v0.13.4...v0.14.0
 [0.13.4]: https://github.com/zhulongqihan/codex-pulse/compare/v0.13.3...v0.13.4
 [0.13.3]: https://github.com/zhulongqihan/codex-pulse/compare/v0.13.2...v0.13.3
 [0.13.2]: https://github.com/zhulongqihan/codex-pulse/compare/v0.13.1...v0.13.2

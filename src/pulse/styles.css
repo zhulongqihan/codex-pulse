@@ -887,6 +887,15 @@ a { text-underline-offset: 3px; }
 .pulse-trend-resolution button[aria-pressed="true"] { color: rgb(var(--primary)); border-color: currentColor; }
 .pulse-trend-resolution > span { margin-left: auto; color: rgb(var(--muted-foreground)); font-size: 10px; }
 .pulse-fit-trends .pulse-chart-legend { gap: 5px 13px; margin: 2px 0 7px; font-size: 10px; }
+.pulse-local-quota-summary { margin: 10px 0 12px; font-size: 12px; }
+.pulse-local-quota-summary dl {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 120px), 1fr));
+  gap: 8px 20px;
+}
+.pulse-local-quota-summary dt, .pulse-local-quota-summary dd + dd { color: rgb(var(--muted-foreground)); }
+.pulse-local-quota-summary dd:first-of-type { font-weight: 600; font-variant-numeric: tabular-nums; }
+.pulse-local-quota-summary > .pulse-source-note { margin: 8px 0 0; }
 .pulse-fit-trends.is-overview .pulse-chart-scroll { max-height: none; overflow: visible; padding: 0; }
 .pulse-fit-trends.is-overview .pulse-chart-scale { padding: 0 0 3px; font-size: 10px; }
 .pulse-fit-plot { position: relative; min-width: 0; }

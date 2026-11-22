@@ -280,7 +280,7 @@ describe("App", () => {
     await userEvent.click(distribution.getByRole("button", { name: "Model" }));
     await userEvent.click(screen.getByRole("button", { name: "Official quota history" }));
     await userEvent.selectOptions(screen.getByRole("combobox", { name: "Quota history date range" }), "7d");
-    await userEvent.click(screen.getByRole("button", { name: "Local Tokens & estimated cost" }));
+    await userEvent.click(screen.getByRole("button", { name: "Local usage" }));
     expect(within(screen.getByTestId("usage-analysis")).getByRole("button", { name: "Model" })).toHaveAttribute("aria-pressed", "true");
     await userEvent.click(screen.getByRole("button", { name: "Official quota history" }));
     expect(screen.getByRole("combobox", { name: "Quota history date range" })).toHaveValue("7d");
@@ -1510,8 +1510,8 @@ describe("App", () => {
     expect(document.querySelector(".pulse-account-identity")).toHaveTextContent("team");
     expect(screen.getByText(/Expires 2026-06-12 \(\d+ days? left\).*Auto-renew off/)).toBeInTheDocument();
     const trendsCard = screen.getByTestId("usage-trends-card");
-    expect(within(trendsCard).getByRole("button", { name: "Tokens" })).toHaveAttribute("aria-pressed", "false");
-    expect(within(trendsCard).getByRole("button", { name: "API estimate" })).toHaveAttribute("aria-pressed", "true");
+    expect(within(trendsCard).getByRole("button", { name: "Tokens" })).toHaveAttribute("aria-pressed", "true");
+    expect(within(trendsCard).getByRole("button", { name: "API estimate" })).toHaveAttribute("aria-pressed", "false");
     const hero = screen.getByTestId("usage-analysis");
     for (const metric of ["Input breakdown and daily averages", "Avg / Day", "Cache Hit", "Cost / 1M"]) expect(hero).toHaveTextContent(metric);
     expect(screen.queryByText("Cached Tokens")).not.toBeInTheDocument();

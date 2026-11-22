@@ -18,6 +18,11 @@ export function createPulseHome(root: string) {
     const input = 12000 + index * 1700;
     const cached = Math.round(input * 0.65);
     const output = 1600 + index * 230;
+    const instant = new Date(timestamp).getTime();
+    const quotaSnapshot = (after: boolean) => ({
+      primary: { window_minutes: 300, resets_at: Math.floor((instant + 2 * 3_600_000) / 1000), used_percent: (index === 0 ? 20 : 60) + (after ? (index === 0 ? 4 : 7) : 0) },
+      secondary: { window_minutes: 10080, resets_at: Math.floor((instant + 2 * 86_400_000) / 1000), used_percent: (index === 0 ? 50 : 10) + (after ? (index === 0 ? 3 : 2) : 0) },
+    });
     const rows: unknown[] = [
       { timestamp, type: 'session_meta', payload: { id, cwd: project, cli_version: '0.80.0', source: 'cli' } },
       { timestamp, type: 'turn_context', payload: { model, cwd: project } },
@@ -26,7 +31,8 @@ export function createPulseHome(root: string) {
       { timestamp, type: 'response_item', payload: { type: 'function_call', name: 'exec_command', call_id: `call-${index}`, arguments: JSON.stringify({ cmd: 'npm test' }) } },
       { timestamp, type: 'response_item', payload: { type: 'function_call_output', call_id: `call-${index}`, output: 'Synthetic test run: all checks passed. No private data.' } },
       { timestamp, type: 'event_msg', payload: { type: 'agent_message', message: '这是一段用于验收的合成会话。已检查自然日范围、缓存输入与独立项目路径。\n\n- 保留完整线程\n- 未提供的数据显示未知\n- 只读查看日志' + (index === 0 ? '\n\n' + Array.from({ length: 18 }, (_, item) => `### 合成记录 ${item + 1}\n\n本段仅用于长内容回放检查，验证阅读位置、回合导航和搜索定位。所有项目、命令与数据均为合成内容。缺失记录保持未知，不执行任何日志中的命令。`).join('\n\n') : '') } },
-      { timestamp, type: 'event_msg', payload: { type: 'token_count', info: { total_token_usage: { input_tokens: input, cached_input_tokens: cached, output_tokens: output, total_tokens: input + output }, last_token_usage: { input_tokens: input, cached_input_tokens: cached, output_tokens: output, total_tokens: input + output } } } },
+      ...(index < 2 ? [{ timestamp, type: 'event_msg', payload: { type: 'token_count', rate_limits: quotaSnapshot(false) } }] : []),
+      { timestamp: index < 2 ? new Date(instant + 5 * 60_000).toISOString() : timestamp, type: 'event_msg', payload: { type: 'token_count', info: { total_token_usage: { input_tokens: input, cached_input_tokens: cached, output_tokens: output, total_tokens: input + output }, last_token_usage: { input_tokens: input, cached_input_tokens: cached, output_tokens: output, total_tokens: input + output } }, ...(index < 2 ? { rate_limits: quotaSnapshot(true) } : {}) } },
       { timestamp: stamp(index, 13), type: 'event_msg', payload: { type: 'task_complete', turn_id: `turn-${index}`, last_agent_message: '合成任务完成' } },
     ];
     if (index === 2) rows.push(

@@ -8,15 +8,18 @@ import type { MetricCardData } from "@/lib/usage-dashboard";
 import { usePulseCopy } from "@/lib/pulse-copy";
 import { usePulsePreferences } from "@/lib/pulse-appearance";
 import { useHomeCopy } from "@/lib/home-copy";
+import { getLanguage, languages } from "@/lib/languages";
+import { quotaHistoryCopy } from "@/lib/quota-history-copy";
 import { buildTrendBuckets, currentDateInTimezone, type TrendBucket } from "@/lib/trend-buckets";
 
 type Day = OverviewResponse["daily"][number];
 type Mode = "tokens" | "cost" | "quota";
-type Series = "inputTokens" | "cachedInputTokens" | "outputTokens" | "fiveHourPercent" | "weeklyPercent";
+const quotaWindows = ["fiveHourPercent", "weeklyPercent"] as const;
+type Series = "inputTokens" | "cachedInputTokens" | "outputTokens" | typeof quotaWindows[number];
 type UsageTrendsCardProps = {
   daily: Day[]; metrics: MetricCardData[]; cacheHitRate: number; chartHeight?: number | string;
   className?: string; title?: string; compact?: boolean; onOpenDay?: (date: string) => void; todayDate?: string; retainedFrom?: string | null;
-  deferInspection?: boolean; initialMode?: Mode;
+  deferInspection?: boolean; initialMode?: Mode; localQuotaRangeDays?: number;
 };
 
 /** Export kept for embedded project charts. Missing costs remain unknown. */
@@ -41,12 +44,27 @@ export function niceScale(value: number): number {
   return ([1,2,2.5,5,10].find(step => value <= step*magnitude) ?? 10)*magnitude;
 }
 
-export function UsageTrendsCard({daily,metrics,cacheHitRate,chartHeight,className="",title,compact=false,onOpenDay,todayDate,retainedFrom,deferInspection=false,initialMode="tokens"}:UsageTrendsCardProps) {
-  const {t} = useTranslation();
+export function UsageTrendsCard({daily,metrics,cacheHitRate,chartHeight,className="",title,compact=false,onOpenDay,todayDate,retainedFrom,deferInspection=false,initialMode="tokens",localQuotaRangeDays}:UsageTrendsCardProps) {
+  const {t, i18n} = useTranslation();
   const copy = usePulseCopy();
   const home = useHomeCopy();
   const {skinId} = usePulsePreferences();
   const [mode,setMode] = useState<Mode>(initialMode);
+  const localQuota = localQuotaRangeDays != null;
+  const showLocalQuota = localQuota && mode === "quota";
+  const language = i18n.resolvedLanguage ?? i18n.language;
+  const quotaNumber = useMemo(() => new Intl.NumberFormat(languages[getLanguage(language)].intlLocale, { maximumFractionDigits: 4 }), [language]);
+  const localQuotaTotals = useMemo(() => showLocalQuota ? quotaWindows.map(key => {
+    let observed = 0;
+    let total = 0;
+    for (const day of daily) {
+      const value = day[key];
+      if (value == null) continue;
+      observed += 1;
+      total += value;
+    }
+    return {key, observed, total};
+  }) : null, [daily, showLocalQuota]);
   const [selectedDate,setSelectedDate] = useState<string | null>(deferInspection ? null : daily.at(-1)?.date ?? null);
   const [hoveredDate,setHoveredDate] = useState<string | null>(null);
   const [hidden,setHidden] = useState<Set<Series>>(() => new Set());
@@ -76,15 +94,22 @@ export function UsageTrendsCard({daily,metrics,cacheHitRate,chartHeight,classNam
     node.scrollTop = position?.top ?? (detail ? node.scrollHeight : 0);
     node.scrollLeft = position?.left ?? (detail && isMeter ? node.scrollWidth : 0);
   },[rangeIdentity,viewKey,detail,isMeter]);
+  const shortWindowLabel = localQuota ? quotaHistoryCopy(language, "hours", { hours: 5 }) : t("trends.five_hour_usage");
+  const longWindowLabel = localQuota ? quotaHistoryCopy(language, "days", { days: 7 }) : t("trends.weekly_monthly_usage");
   const series: {key:Series; label:string; style:string}[] = mode === "quota"
-    ? [{key:"fiveHourPercent",label:t("trends.five_hour_usage"),style:"five-hour"},{key:"weeklyPercent",label:t("trends.weekly_monthly_usage"),style:"long-window"}]
+    ? [{key:"fiveHourPercent",label:shortWindowLabel,style:"five-hour"},{key:"weeklyPercent",label:longWindowLabel,style:"long-window"}]
     : [{key:"inputTokens",label:copy("uncached"),style:"input"},{key:"cachedInputTokens",label:copy("cached"),style:"cached"},{key:"outputTokens",label:copy("output"),style:"output"}];
-  const noRetention = (day:Day & {endDate?: string}) => Boolean(retainedFrom && (day.endDate ?? day.date) < retainedFrom);
+  // retainedFrom tracks token history. A local log can have quota readings without token usage.
+  const showTokenRetention = !showLocalQuota && retainedFrom;
+  const noRetention = (day:Day & {endDate?: string}) => Boolean(showTokenRetention && (day.endDate ?? day.date) < showTokenRetention);
   const valueFor = (day:Day,key:Series):number | null => noRetention(day) ? null : key === "inputTokens" ? Math.max(0,day.inputTokens-day.cachedInputTokens) : day[key] ?? null;
   const valueOf = (day:Day):number | null => noRetention(day) ? null : mode === "cost" ? day.costUSD : mode === "tokens" ? day.totalTokens
     : day.fiveHourPercent == null && day.weeklyPercent == null ? null : Math.max(day.fiveHourPercent ?? 0,day.weeklyPercent ?? 0);
   const max = niceScale(items.reduce((top,day) => Math.max(top,valueOf(day) ?? 0),0));
-  const format = (value:number | null | undefined) => value == null ? "—" : mode === "cost" ? formatCurrencyShort(value) : mode === "quota" ? `${formatNumber(value)}%` : formatCompactNumber(value);
+  const formatQuota = (value: number) => localQuota ? quotaHistoryCopy(language, "points", { points: quotaNumber.format(value) }) : `${formatNumber(value)}%`;
+  const format = (value:number | null | undefined) => value == null ? "—" : mode === "cost" ? formatCurrencyShort(value) : mode === "quota" ? formatQuota(value) : formatCompactNumber(value);
+  const formatAxis = (value: number) => showLocalQuota ? quotaNumber.format(value) : format(value);
+  const modeLabel = (value: Mode) => value === "quota" && localQuota ? quotaHistoryCopy(language, "localEstimate") : copy(value === "cost" ? "estimate" : value);
   const toggle = (key:Series) => setHidden(current => { const next=new Set(current); if(next.has(key))next.delete(key);else next.add(key); return next; });
   const visibleSeries: Array<{key: Series | "cost" | "aggregate"; style: string}> = mode === "cost" ? [{key:"cost",style:"cost"}] : series.filter(item => !hidden.has(item.key));
   const grouped = items.some(item => item.count > 1);
@@ -125,14 +150,21 @@ export function UsageTrendsCard({daily,metrics,cacheHitRate,chartHeight,classNam
   }) : null;
   const plot = <section data-testid="usage-trends-card" className={`pulse-trends pulse-fit-trends ${isMeter ? "pulse-trends-meter" : "pulse-trends-clear"} ${compact ? "is-compact" : ""} ${detail ? "is-day-detail" : "is-overview"} ${className}`}>
     <div className="pulse-trend-main">
-      <div className="pulse-section-heading"><h2 className={compact ? "sr-only" : undefined}>{title ?? copy("trend")}</h2><div className="pulse-segments" role="group" aria-label={t("trends.view_label")}>{(["tokens","cost","quota"] as const).map(value => <button type="button" key={value} aria-pressed={mode===value} onClick={() => setMode(value)}>{copy(value === "cost" ? "estimate" : value)}</button>)}</div>
+      <div className="pulse-section-heading"><h2 className={compact ? "sr-only" : undefined}>{title ?? copy("trend")}</h2><div className="pulse-segments" role="group" aria-label={t("trends.view_label")}>{(["tokens","cost","quota"] as const).map(value => <button type="button" key={value} aria-pressed={mode===value} onClick={() => setMode(value)}>{modeLabel(value)}</button>)}</div>
       {!compact ? <><button type="button" className="pulse-icon-button" aria-label={copy("showTable")} aria-pressed={table} onClick={() => setTable(!table)}><Table2 size={16}/></button><button ref={fullscreenButton} type="button" className="pulse-icon-button" aria-label={copy(fullscreen?"exitFullscreen":"fullscreen")} onClick={() => setFullscreen(!fullscreen)}>{fullscreen ? <Minimize2 size={16}/> : <Maximize2 size={16}/>}</button></> : null}</div>
       {!compact ? <div className="pulse-trend-resolution" role="group" aria-label={home("fullPeriod")}><button type="button" aria-pressed={!detail && !table} onClick={()=>{setDetail(false);setTable(false);setHoveredDate(null);}}>{home("overview")}</button><button type="button" aria-pressed={detail && !table} onClick={()=>{setDetail(true);setTable(false);setHoveredDate(null);}}>{home("detail")}</button><span>{daily.length} {copy("days")}</span></div> : null}
       <div className="pulse-chart-legend" role="group" aria-label={t("trends.legend_label")}>{mode!=="cost" ? series.map(item => <button key={item.key} type="button" aria-pressed={!hidden.has(item.key)} onClick={() => toggle(item.key)}><i className={`pulse-series-${item.style}`} aria-hidden="true"/>{item.label}</button>) : <span>{copy("estimate")} · USD</span>}</div>
-      {mode === "quota" && !daily.some(day => day.fiveHourPercent != null || day.weeklyPercent != null) ? <p role="status" className="pulse-source-note">{t("trends.quota_no_data")}</p> : null}
-      {daily.length === 0 ? <p className="pulse-empty">{copy("noData")}</p> : table ? <div className="pulse-chart-table" data-mode={mode}><table><thead><tr><th>{copy("dates")}</th>{mode === "quota" ? <><th>{t("trends.five_hour_usage")}</th><th>{t("trends.weekly_monthly_usage")}</th></> : mode === "cost" ? <th>{copy("estimate")}</th> : <><th>{copy("total")}</th><th>{copy("input")}</th><th>{copy("cached")}</th><th>{copy("output")}</th><th>{copy("estimate")}</th></>}</tr></thead><tbody>{daily.map(day => <tr key={day.date}><td><button type="button" onClick={() => {setSelectedDate(day.date);setHoveredDate(null);}}>{day.date}</button></td>{noRetention(day) ? <td data-no-retention colSpan={mode === "quota" ? 2 : mode === "cost" ? 1 : 5}>{t("ux.no_retained_record")}</td> : mode === "quota" ? <><td>{day.fiveHourPercent == null ? t("ux.no_quota_samples") : `${formatNumber(day.fiveHourPercent)}%`}</td><td>{day.weeklyPercent == null ? t("ux.no_quota_samples") : `${formatNumber(day.weeklyPercent)}%`}</td></> : mode === "cost" ? <td>{day.costUSD == null ? "—" : formatCurrencyShort(day.costUSD)}</td> : <><td>{formatNumber(day.totalTokens)}</td><td>{formatNumber(day.inputTokens)}</td><td>{formatNumber(day.cachedInputTokens)}</td><td>{formatNumber(day.outputTokens)}</td><td>{day.costUSD == null ? "—" : formatCurrencyShort(day.costUSD)}</td></>}</tr>)}</tbody></table></div>
+      {localQuotaTotals && localQuotaRangeDays != null ? <div className="pulse-local-quota-summary" role="group" aria-label={quotaHistoryCopy(language, "sum")} data-testid="local-quota-estimate">
+        <dl>{localQuotaTotals.map(({ key, observed, total }) => <div key={key} data-quota={key === "fiveHourPercent" ? "fiveHour" : "weekly"}>
+          <dt>{key === "fiveHourPercent" ? shortWindowLabel : longWindowLabel}</dt>
+          <dd>{observed > 0 ? formatQuota(total) : quotaHistoryCopy(language, "unknown")}</dd>
+          <dd>{quotaHistoryCopy(language, "localEstimateCoverage", { observed, total: localQuotaRangeDays })}</dd>
+        </div>)}</dl>
+        <p className="pulse-source-note">{quotaHistoryCopy(language, "localEstimateNote")}</p>
+      </div> : mode === "quota" && !daily.some(day => day.fiveHourPercent != null || day.weeklyPercent != null) ? <p role="status" className="pulse-source-note">{t("trends.quota_no_data")}</p> : null}
+      {daily.length === 0 ? <p className="pulse-empty">{copy("noData")}</p> : table ? <div className="pulse-chart-table" data-mode={mode}><table><thead><tr><th>{copy("dates")}</th>{mode === "quota" ? <><th>{shortWindowLabel}</th><th>{longWindowLabel}</th></> : mode === "cost" ? <th>{copy("estimate")}</th> : <><th>{copy("total")}</th><th>{copy("input")}</th><th>{copy("cached")}</th><th>{copy("output")}</th><th>{copy("estimate")}</th></>}</tr></thead><tbody>{daily.map(day => <tr key={day.date}><td><button type="button" onClick={() => {setSelectedDate(day.date);setHoveredDate(null);}}>{day.date}</button></td>{noRetention(day) ? <td data-no-retention colSpan={mode === "quota" ? 2 : mode === "cost" ? 1 : 5}>{t("ux.no_retained_record")}</td> : mode === "quota" ? <><td>{day.fiveHourPercent == null ? t("ux.no_quota_samples") : formatQuota(day.fiveHourPercent)}</td><td>{day.weeklyPercent == null ? t("ux.no_quota_samples") : formatQuota(day.weeklyPercent)}</td></> : mode === "cost" ? <td>{day.costUSD == null ? "—" : formatCurrencyShort(day.costUSD)}</td> : <><td>{formatNumber(day.totalTokens)}</td><td>{formatNumber(day.inputTokens)}</td><td>{formatNumber(day.cachedInputTokens)}</td><td>{formatNumber(day.outputTokens)}</td><td>{day.costUSD == null ? "—" : formatCurrencyShort(day.costUSD)}</td></>}</tr>)}</tbody></table></div>
       : <div ref={scrollRef} onMouseLeave={()=>setHoveredDate(null)} onScroll={event => { scrollPositions.current[viewKey] = {top:event.currentTarget.scrollTop,left:event.currentTarget.scrollLeft}; }} className="pulse-chart-scroll" style={detail && typeof chartHeight==="number" ? {maxHeight:chartHeight} : undefined}>
-        <div className="pulse-chart-scale"><span>0</span><span>{format(max/2)}</span><span>{format(max)}</span></div>
+        <div className="pulse-chart-scale"><span>0</span><span>{formatAxis(max/2)}</span><span>{formatAxis(max)}</span></div>
         <div className="pulse-fit-plot" style={!detail ? {height:compact ? chartHeight ?? 96 : undefined} : undefined}>
           {!detail && !isMeter ? <svg className="pulse-fit-lines" viewBox="0 0 1000 200" preserveAspectRatio="none" aria-hidden="true">{linePaths}</svg> : null}
           <div className="pulse-trend-days" style={detail ? isMeter ? {minWidth:Math.max(320,items.length*46)} : undefined : {gridTemplateColumns:`repeat(${Math.max(1,items.length)},minmax(0,1fr))`}}>
@@ -143,7 +175,7 @@ export function UsageTrendsCard({daily,metrics,cacheHitRate,chartHeight,classNam
               if(mode === "tokens" && day.totalTokens > day.inputTokens+day.outputTokens)slices.push({key:"aggregate",amount:day.totalTokens-day.inputTokens-day.outputTokens,style:"aggregate"});
               const label = day.count === 1 ? day.date : `${day.startDate} — ${day.endDate}`;
               const axisLabel = index===0 || index===items.length-1 || index % Math.max(1,Math.ceil(items.length/5))===0;
-              return <button type="button" ref={node=>{if(node)buttonsRef.current.set(day.date,node);else buttonsRef.current.delete(day.date);}} className="pulse-trend-day" key={day.date} aria-pressed={selected?.date===day.date} aria-label={`${label} · ${copy(mode === "cost" ? "estimate" : mode)} ${noRetention(day) ? t("ux.no_retained_record") : format(value)}`} tabIndex={selected?.date===day.date || (!selected && index===0) ? 0 : -1} data-axis-label={axisLabel ? "true" : "false"} data-preview={preview?.date===day.date ? "true" : undefined} onClick={()=>select(day)} onMouseEnter={()=>setHoveredDate(day.date)} onFocus={()=>select(day)} onKeyDown={event=>navigate(event,index)}>
+              return <button type="button" ref={node=>{if(node)buttonsRef.current.set(day.date,node);else buttonsRef.current.delete(day.date);}} className="pulse-trend-day" key={day.date} aria-pressed={selected?.date===day.date} aria-label={`${label} · ${modeLabel(mode)} ${noRetention(day) ? t("ux.no_retained_record") : format(value)}`} tabIndex={selected?.date===day.date || (!selected && index===0) ? 0 : -1} data-axis-label={axisLabel ? "true" : "false"} data-preview={preview?.date===day.date ? "true" : undefined} onClick={()=>select(day)} onMouseEnter={()=>setHoveredDate(day.date)} onFocus={()=>select(day)} onKeyDown={event=>navigate(event,index)}>
                 <span className="pulse-trend-date">{day.date.slice(5).replace("-","/")}</span><span className={`pulse-trend-bar ${mode==="quota"?"pulse-quota-bars":""}`} aria-hidden="true">
                   {slices.map(slice => <i key={slice.key} className={`pulse-series-${slice.style} ${slice.amount == null ? "is-unknown" : ""}`} style={{"--amount":`${Math.max(0,(slice.amount??0)/max)*100}%`} as CSSProperties}/>)}
                 </span>{value == null ? <span className="pulse-unknown-marker" aria-hidden="true"/> : null}<strong>{format(value)}</strong>
@@ -152,8 +184,8 @@ export function UsageTrendsCard({daily,metrics,cacheHitRate,chartHeight,classNam
           </div>
         </div>
       </div>}
-      {retainedFrom ? <p className="pulse-source-note">{t("ux.retained_since", {date: retainedFrom})}</p> : null}
-      <div className="pulse-chart-caption"><span>{home("fullPeriod")} · {daily[0]?.date} — {daily.at(-1)?.date}</span><span>{mode === "tokens" ? copy("input") : mode === "cost" ? copy("notBill") : t("trends.quota_note")}</span></div>
+      {showTokenRetention ? <p className="pulse-source-note">{t("ux.retained_since", {date: showTokenRetention})}</p> : null}
+      <div className="pulse-chart-caption"><span>{home("fullPeriod")} · {daily[0]?.date} — {daily.at(-1)?.date}</span><span>{showLocalQuota ? quotaHistoryCopy(language, "chart") : mode === "tokens" ? copy("input") : mode === "cost" ? copy("notBill") : t("trends.quota_note")}</span></div>
       {grouped && !table ? <p className="pulse-aggregation-note">{home("grouped",{count:maximumGroup})}{mode === "quota" ? ` · ${home("groupQuota")}` : ""}</p> : null}
       {hasAggregateOnly ? <p className="pulse-aggregation-note">{home("partUnknown")}</p> : null}
     </div>
@@ -161,9 +193,9 @@ export function UsageTrendsCard({daily,metrics,cacheHitRate,chartHeight,classNam
       <header><div><b>{inspected.startDate===inspected.endDate ? inspected.date : `${inspected.startDate} — ${inspected.endDate}`}</b><span>{preview ? home("preview") : inspected.date===today && inspected.count===1 ? home("today") : home("selected")}{inspected.count>1 ? ` · ${home("groupDays",{count:inspected.count})}` : ""}</span></div>
         {hasToday ? <button type="button" className="pulse-text-button" disabled={selectedDate===today && !preview} onClick={backToToday}>{home("backToday")}</button> : <small>{home("noTodayInRange")}</small>}
       </header>
-      {noRetention(inspected) ? <p className="pulse-source-note">{t("ux.no_retained_record")}</p> : mode === "quota" ? <dl><div><dt>{t("trends.five_hour_usage")}</dt><dd>{inspected.fiveHourPercent == null ? t("ux.no_quota_samples") : `${formatNumber(inspected.fiveHourPercent)}%`}</dd></div><div><dt>{t("trends.weekly_monthly_usage")}</dt><dd>{inspected.weeklyPercent == null ? t("ux.no_quota_samples") : `${formatNumber(inspected.weeklyPercent)}%`}</dd></div></dl> : <dl><div><dt>{copy("total")}</dt><dd>{formatCompactNumber(inspected.totalTokens)}</dd></div><div><dt>{copy("estimate")}</dt><dd>{inspected.costUSD == null ? "—" : formatCurrencyShort(inspected.costUSD)}</dd></div></dl>}
+      {noRetention(inspected) ? <p className="pulse-source-note">{t("ux.no_retained_record")}</p> : mode === "quota" ? <dl><div><dt>{shortWindowLabel}</dt><dd>{inspected.fiveHourPercent == null ? t("ux.no_quota_samples") : formatQuota(inspected.fiveHourPercent)}</dd></div><div><dt>{longWindowLabel}</dt><dd>{inspected.weeklyPercent == null ? t("ux.no_quota_samples") : formatQuota(inspected.weeklyPercent)}</dd></div></dl> : <dl><div><dt>{copy("total")}</dt><dd>{formatCompactNumber(inspected.totalTokens)}</dd></div><div><dt>{copy("estimate")}</dt><dd>{inspected.costUSD == null ? "—" : formatCurrencyShort(inspected.costUSD)}</dd></div></dl>}
       {!noRetention(inspected) ? <details className="pulse-inspector-breakdown"><summary>{home("dayBreakdown")}</summary><dl><div><dt>{copy("input")}</dt><dd>{formatCompactNumber(inspected.inputTokens)}</dd></div><div><dt>{copy("cached")}</dt><dd>{formatCompactNumber(inspected.cachedInputTokens)}</dd></div><div><dt>{copy("output")}</dt><dd>{formatCompactNumber(inspected.outputTokens)}</dd></div><div><dt>{copy("cache")}</dt><dd>{inspected.inputTokens > 0 ? formatPercent(inspected.cachedInputTokens/inspected.inputTokens) : "—"}</dd></div>
-      {mode==="quota" ? <><div><dt>{t("trends.five_hour_usage")}</dt><dd>{inspected.fiveHourPercent == null ? "—" : `${formatNumber(inspected.fiveHourPercent)}%`}</dd></div><div><dt>{t("trends.weekly_monthly_usage")}</dt><dd>{inspected.weeklyPercent == null ? "—" : `${formatNumber(inspected.weeklyPercent)}%`}</dd></div></> : null}</dl></details> : null}
+      {mode==="quota" ? <><div><dt>{shortWindowLabel}</dt><dd>{inspected.fiveHourPercent == null ? "—" : formatQuota(inspected.fiveHourPercent)}</dd></div><div><dt>{longWindowLabel}</dt><dd>{inspected.weeklyPercent == null ? "—" : formatQuota(inspected.weeklyPercent)}</dd></div></> : null}</dl></details> : null}
       {onOpenDay ? inspected.count===1 ? <button type="button" className="pulse-text-button" onClick={()=>onOpenDay(inspected.date)}>{copy("todaySessions")}<ArrowRight size={14}/></button> : <button type="button" className="pulse-text-button" onClick={()=>{setDetail(true);setTable(false);setSelectedDate(inspected.date);setHoveredDate(null);}}>{home("inspectDays")}<ArrowRight size={14}/></button> : null}
     </aside> : null}
     {metrics.length>0 ? <div className="pulse-fact-row">{metrics.map(metric=><span key={metric.kind} title={metric.detail}>{metric.label}<strong>{metric.value}</strong></span>)}<span>{copy("cache")} {formatPercent(cacheHitRate)}</span></div> : null}
