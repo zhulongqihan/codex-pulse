@@ -4,6 +4,17 @@ User-facing changes are grouped by release, following [Keep a Changelog](https:/
 
 ## [Unreleased]
 
+## [0.14.2] - 2026-11-22
+
+### Changed / 调整
+
+- Open directly to account quota and today's local usage. Readings arrive independently, and local tokens take priority over the API cost estimate.
+- 首页直接展示账号额度和今日本机用量。两项独立加载，本机 Token 优先于 API 参考成本。
+- Open setup help only on request, distinguish the main destinations from detailed reports, and give primary readings more room in narrow windows.
+- 使用帮助按需打开，导航区分常用入口与细分报表，窄窗为主要读数留出更多空间。
+
+[完整中英说明 / Full release notes](docs/releases/v0.14.2.md)
+
 ## [0.14.1] - 2026-11-22
 
 ### Fixed / 修复

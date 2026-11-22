@@ -37,6 +37,7 @@
   },
   "header": {
     "navigation": "Main navigation",
+    "detail_views": "Detailed views",
     "collapse_sidebar": "Collapse sidebar",
     "expand_sidebar": "Expand sidebar",
     "resize_sidebar": "Resize sidebar",

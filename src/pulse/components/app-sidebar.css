@@ -1,0 +1,40 @@
+.pulse-sidebar-detail-divider {
+  margin: 12px 10px 5px;
+  padding-top: 8px;
+  border-top: 1px solid rgb(var(--border));
+  color: rgb(var(--muted-foreground));
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+:root[data-skin="paper"] .pulse-paper-navigation [data-nav-group="primary"] + [data-nav-group="detail"] {
+  margin-inline-start: 10px;
+}
+
+:root[data-skin="paper"] .pulse-paper-navigation [data-nav-group="detail"]:not([aria-selected="true"]) {
+  min-height: 42px;
+  padding-block: 8px 9px;
+  background-color: color-mix(in srgb, var(--tab) 50%, rgb(var(--surface)));
+}
+
+:root[data-skin="paper"][data-theme="dark"] .pulse-paper-navigation [data-nav-group="detail"]:not([aria-selected="true"]) {
+  background-color: color-mix(in srgb, #62694c 65%, rgb(var(--surface)));
+}
+
+@media (max-width: 680px) {
+  .pulse-sidebar-settings {
+    justify-content: center;
+  }
+
+  .pulse-sidebar-detail-divider > span,
+  .pulse-sidebar-settings > span {
+    display: none;
+  }
+}
+
+@media (max-width: 620px) {
+  :root[data-skin="paper"] .pulse-paper-navigation [data-nav-group="detail"]:not([aria-selected="true"]) {
+    min-height: 34px;
+    padding-block: 6px 8px;
+  }
+}

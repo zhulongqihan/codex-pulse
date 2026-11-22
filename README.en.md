@@ -15,9 +15,9 @@ A quiet quota-pacing companion for Codex on Windows: view remaining quota and re
 - **Smooth client shortcut:** a shared icon and compact status without a brand word. The input-free card follows verified Microsoft Store Codex windows through Windows location events, hiding when another app is active, Codex is minimized or space is insufficient.
 - **Grounded extra indicators:** daily recorded changes and coverage in this cycle, a surplus-near-reset hint, and conditional remaining-at-reset ranges when sufficient observations exist. Missing history is not zero. Allocations are not new quota, and forecasts do not guarantee working time.
 - **Visible reset notices:** background notices show their source, expected window and unconfirmed state, with read state shared across windows. Expand explanations for expired, stale, unavailable or no-current-notice states and actual check times; a missing response is not inferred as withdrawal. Third-party global news stays separate from personal window expiry and is not presented as a personal reset confirmation.
-- **A focused daily dashboard:** current quota, personal reset time, pacing guidance and today's API reference cost stay together. Today's local activity remains independent of historical filters; pacing evidence and breakdowns open on demand.
+- **A focused daily dashboard:** account quota and reset time appear separately from today's local activity. Today's local tokens lead, with the API cost estimate alongside them. Open pacing details and token breakdowns as needed.
 - **Separate Usage analysis:** open selected-period totals, complete trends and project/model distributions, select a date for detail, and export the same range as XLSX or Markdown.
-- **Seven work views:** dashboard, usage analysis, sessions, models, daily, monthly and projects, plus settings and optional diagnostics. Clear and Meter have a collapsible, resizable sidebar; Paper uses horizontal page tabs. Return from settings to your previous view.
+- **Seven work views:** dashboard, usage analysis and sessions are the main destinations. Models, daily, monthly and projects provide detailed views. Settings and optional diagnostics are also available. Clear and Meter have a collapsible, resizable sidebar, while Paper uses horizontal page tabs. Return from settings to your previous view.
 - **Complete date ranges:** nine presets, all retained history and custom inclusive ranges. Daily averages use calendar days. The monthly view independently queries the current month to date and the previous 11 calendar months, distinguishing missing retention, partial retention and zero activity.
 - **Tokens and reference costs:** input, cached input, output, cache hit rate, model unit prices and a searchable price catalog. Charts provide date selection, legends, units, a data table and fullscreen viewing. Compare models, dates and projects identified by their complete paths.
 - **Main-list session search:** search loaded sessions by title, ID, model or project while retaining matching agent groups. Combine with project filters and clear the query to restore the original list, without rescanning logs. Project-detail and replay searches remain available.
@@ -31,7 +31,7 @@ A quiet quota-pacing companion for Codex on Windows: view remaining quota and re
 - **Exports and updates:** XLSX/Markdown contain range summary, daily, model and project statistics. Pulse updates verify the release signature, product, platform and package digest, preserving data and restoring the previous executable if startup fails.
 - **Help and feedback:** find usage guidance, experience discussions and bug reporting in settings. Preview a minimal summary of visible environment and selected options before copying it; account data, logs and conversations are not uploaded automatically.
 
-0.14.1 removes the bright Windows outline and extra Paper frame from the Codex title-bar pacing panel and matches its scrollbar to the panel. [Release notes](docs/releases/v0.14.1.md#english).
+0.14.2 simplifies the dashboard and first-run experience by bringing account quota and today's local tokens forward. [Release notes](docs/releases/v0.14.2.md#english).
 
 Paper companion views with synthetic data: [pacing details](docs/screenshots/paper-0.13.2-pace-panel.png) · [system tray](docs/screenshots/paper-0.13.2-tray.png) · [Codex panel styling](docs/screenshots/paper-0.13.2-mcp.png).
 
@@ -47,9 +47,9 @@ Try the [roomy quota](https://zhulongqihan.github.io/codex-pulse/?demo=1&coachSc
 
 | Clear | Meter | Paper |
 |---|---| --- |
-| ![Clear with synthetic data](docs/screenshots/clear-overview.png) | ![Meter with synthetic data](docs/screenshots/meter-overview.png) | ![Paper dashboard with synthetic data](docs/screenshots/paper-0.13.3-dashboard.png) |
+| ![Clear with synthetic data](docs/screenshots/clear-overview.png) | ![Meter with synthetic data](docs/screenshots/meter-overview.png) | ![Paper dashboard with synthetic data](docs/screenshots/paper-0.14.2-dashboard.png) |
 
-All three styles share the same capabilities. The dashboard prioritizes quota and today's reference cost; Usage analysis retains complete-range trends, distributions and exports. Clear uses lightweight comparisons and continuous tables; Meter emphasizes one dark trend field, and Paper uses a bound-journal layout with page tabs and textured paper. Daily detail, a data table, fullscreen viewing and keyboard controls remain available.
+All three styles share the same capabilities. The dashboard shows remaining account quota, reset time and today's local tokens. Usage analysis offers complete-range trends, distributions and exports. Clear uses lightweight comparisons and continuous tables. Meter emphasizes one dark trend field, and Paper uses a bound-journal layout with page tabs and textured paper. Daily detail, a data table, fullscreen viewing and keyboard controls remain available.
 
 ### Separate Usage analysis
 
@@ -82,7 +82,7 @@ Only verifiable older partial observations with matching identity, window and ti
 3. Requires Windows 10/11 x64 and [Microsoft Edge WebView2 Evergreen Runtime](https://developer.microsoft.com/microsoft-edge/webview2/). The portable archive does not bundle that system runtime. Node.js and Rust are not required.
 4. Confirm your Codex Home in settings, then choose appearance, local log scan interval and widget preferences. Account queries require an existing ChatGPT sign-in; API key mode does not expose subscription quotas.
 
-**First success:** once the account returns quota and reset information, you can start using Pulse. A weekly window alone is valid. Forecasts need sufficient continuous observations and may remain unavailable; their absence does not mean installation failed. If quota is missing, check sign-in and connection in the account panel. Local log analysis remains independently usable. Initial help can be dismissed and reopened from the toolbar.
+On first open, look for **Account quota** and **Today's local usage** on the dashboard. Each updates as its data arrives. A weekly quota window provides usable remaining quota and reset information. If quota is missing, check sign-in and connection in the account panel. Local log analysis also works on its own. Open **Getting started** from the toolbar for reading guidance, data source settings and shortcut creation.
 
 To add desktop and Start menu entries, use the app's shortcut action or run **Create-Codex-Pulse-Shortcuts.cmd** from the portable package. Recreate the shortcuts after moving the application directory.
 

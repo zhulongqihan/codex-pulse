@@ -37,6 +37,7 @@
   },
   "header": {
     "navigation": "Hauptnavigation",
+    "detail_views": "Detailansichten",
     "collapse_sidebar": "Seitenleiste einklappen",
     "expand_sidebar": "Seitenleiste ausklappen",
     "resize_sidebar": "Breite der Seitenleiste ändern",

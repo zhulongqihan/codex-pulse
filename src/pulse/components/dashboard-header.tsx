@@ -21,6 +21,7 @@ type DashboardHeaderProps = {
   scanMessage: string;
   lastRescanDurationMs: number | null;
   syncFailed?: boolean;
+  secondaryRefresh?: boolean;
 };
 
 export function DashboardHeader({
@@ -36,6 +37,7 @@ export function DashboardHeader({
   scanMessage,
   lastRescanDurationMs,
   syncFailed = false,
+  secondaryRefresh = false,
 }: DashboardHeaderProps) {
   const { t } = useTranslation();
 
@@ -101,7 +103,7 @@ export function DashboardHeader({
               </div>
             </div>
           )}
-          <Button variant="primary" size="sm" className="relative z-20" onClick={onRefresh} disabled={isBusy}>
+          <Button variant={secondaryRefresh ? "secondary" : "primary"} size="sm" className="relative z-20" onClick={onRefresh} disabled={isBusy}>
             <RefreshCcw className={`h-3.5 w-3.5 ${isRefreshing ? "animate-spin" : ""}`} />
             {t("hero.rescan", { defaultValue: "Rescan local logs" })}
           </Button>

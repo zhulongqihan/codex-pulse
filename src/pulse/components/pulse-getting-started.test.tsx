@@ -7,10 +7,10 @@ import { PulseGettingStarted } from "./pulse-getting-started";
 import { firstUseCopy } from "@/lib/first-use";
 
 describe("optional practical usage help", () => {
-  it("puts account recovery first until a quota window is returned, then offers the widget", async () => {
+  it("offers account recovery until a quota window is returned and keeps the widget optional", async () => {
     await i18n.changeLanguage("en");
-    const callbacks = { onExpand: vi.fn(), onSource: vi.fn(), onAccount: vi.fn(), onWidget: vi.fn(), onShortcuts: vi.fn(), onDismiss: vi.fn() };
-    const props = { ...callbacks, localReady: true, accountReady: false, busy: false, notice: null, error: null, expanded: false };
+    const callbacks = { onSource: vi.fn(), onAccount: vi.fn(), onWidget: vi.fn(), onShortcuts: vi.fn(), onDismiss: vi.fn() };
+    const props = { ...callbacks, accountReady: false, busy: false, notice: null, error: null };
     const { rerender } = render(<PulseGettingStarted {...props}/>);
     fireEvent.click(screen.getByTestId("first-use-next"));
     expect(callbacks.onAccount).toHaveBeenCalledOnce();
@@ -19,17 +19,16 @@ describe("optional practical usage help", () => {
     expect(screen.getByTestId("first-use-guidance")).toHaveTextContent(firstUseCopy("en", "missing"));
     rerender(<PulseGettingStarted {...props} accountReady quotaAvailable/>);
     expect(screen.getByTestId("first-use-guidance")).toHaveTextContent(firstUseCopy("en", "ready"));
-    fireEvent.click(screen.getByTestId("first-use-next"));
+    expect(screen.queryByTestId("first-use-next")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Show capacity on desktop" }));
     expect(callbacks.onWidget).toHaveBeenCalledOnce();
   });
-  it.each(["en", "zh", "zh-Hant", "ja", "ko", "de"])("keeps initial help small and makes task guidance available in %s", async language => {
+  it.each(["en", "zh", "zh-Hant", "ja", "ko", "de"])("keeps task guidance collapsed in %s", async language => {
     await i18n.changeLanguage(language);
-    const callbacks = { onExpand: vi.fn(), onSource: vi.fn(), onAccount: vi.fn(), onWidget: vi.fn(), onShortcuts: vi.fn(), onDismiss: vi.fn() };
-    const props = { ...callbacks, localReady: false, accountReady: false, busy: false, notice: null, error: null };
-    const { rerender } = render(<PulseGettingStarted {...props} expanded={false}/>);
-    expect(screen.queryByTestId("usage-guide")).not.toBeInTheDocument();
+    const callbacks = { onSource: vi.fn(), onAccount: vi.fn(), onWidget: vi.fn(), onShortcuts: vi.fn(), onDismiss: vi.fn() };
+    const props = { ...callbacks, accountReady: false, busy: false, notice: null, error: null };
+    render(<PulseGettingStarted {...props}/>);
     Object.values(callbacks).forEach(callback => expect(callback).not.toHaveBeenCalled());
-    rerender(<PulseGettingStarted {...props} expanded/>);
     const guide = screen.getByTestId("usage-guide");
     expect(guide.querySelectorAll("details")).toHaveLength(3);
     expect(guide.querySelectorAll("details[open]")).toHaveLength(0);

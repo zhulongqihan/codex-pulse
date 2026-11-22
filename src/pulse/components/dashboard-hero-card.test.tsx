@@ -4,7 +4,7 @@ import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import i18n from "../i18n";
-import type { CodexLimitsResponse, OverviewResponse } from "../lib/api";
+import type { OverviewResponse } from "../lib/api";
 import { dashboardCopy } from "../lib/dashboard-copy";
 import { quotaHistoryCopy } from "../lib/quota-history-copy";
 import { DashboardHeroCard, UsageAnalysisView } from "./dashboard-hero-card";
@@ -16,12 +16,7 @@ const overview: OverviewResponse = {
   totals: { inputTokens: 0, cachedInputTokens: 0, outputTokens: 0, totalTokens: 0, costUSD: 0, avgTokensPerDay: 0, avgCostPerDay: 0, cacheHitRate: 0, costPerMillionTokens: 0 },
 };
 
-const limits: CodexLimitsResponse = {
-  session: null, weekly: null, account: "user@example.com", membershipLevel: "plus", updatedAt: "2026-10-22T00:00:00Z", source: "test",
-  credits: { hasCredits: true, unlimited: false, balance: "1250.500001" }, creditsIsMock: true,
-};
-
-const props = () => ({ overview, range: "30d", isBusy: false, isExporting: null, onRangeChange: vi.fn(), onExport: vi.fn(), metrics: [], codexLimits: null });
+const props = () => ({ overview, range: "30d", isBusy: false, isExporting: null, onRangeChange: vi.fn(), onExport: vi.fn(), metrics: [] });
 const row = (date: string, totalTokens: number, costUSD: number | null) => ({ date, inputTokens: totalTokens, cachedInputTokens: 0, outputTokens: 0, totalTokens, costUSD });
 const today = () => currentDateInTimezone("UTC");
 
@@ -46,20 +41,20 @@ describe("focused dashboard", () => {
   it("puts account and today on separate Paper pages, with one details section below", async () => {
     const user = userEvent.setup();
     const onOpenAnalysis = vi.fn(), onOpenToday = vi.fn(), onOpenHistory = vi.fn();
-    render(<DashboardHeroCard {...props()} paperSpread coachFirst
+    render(<DashboardHeroCard timezone={overview.timezone} paperSpread
       todayOverview={{ ...overview, daily: [row(today(), 77, 1.2)] }}
       quotaLimits={<h2>Account quota</h2>} coach={<h2>Account pace</h2>}
       coachDetails={<h2>Full pace details</h2>}
       quotaHistory={<button onClick={onOpenHistory}>Open quota records</button>}
       onOpenAnalysis={onOpenAnalysis} onOpenToday={onOpenToday}/>);
-    const [quotaPage, todayPage, details] = screen.getByTestId("dashboard-hero").children;
+    const [quotaPage, todayPage, pacing, details] = screen.getByTestId("dashboard-hero").children;
     expect(quotaPage).toContainElement(screen.getByRole("heading", { name: "Account quota" }));
-    expect(quotaPage).toContainElement(screen.getByRole("heading", { name: "Account pace" }));
+    expect(pacing).toContainElement(screen.getByRole("heading", { name: "Account pace" }));
     const todaysSessions = within(todayPage as HTMLElement).getByRole("button", { name: "Today's sessions" });
     const quotaRecords = within(todayPage as HTMLElement).getByRole("button", { name: "Open quota records" });
     const usageAnalysis = within(todayPage as HTMLElement).getByRole("button", { name: "Open usage analysis" });
     expect(todayPage.querySelector(".pulse-dashboard-today-values > div:first-child")).toContainElement(screen.getByTestId("today-tokens"));
-    expect(todayPage.querySelector(".pulse-today-breakdown")).toHaveAttribute("open");
+    expect(todayPage.querySelector(".pulse-today-breakdown")).not.toHaveAttribute("open");
     expect(details).toContainElement(screen.getByRole("heading", { name: "Full pace details" }));
     await user.click(todaysSessions);
     await user.click(quotaRecords);
@@ -69,15 +64,15 @@ describe("focused dashboard", () => {
     expect(onOpenAnalysis).toHaveBeenCalledOnce();
   });
 
-  it("keeps quota first, puts today's estimate before tokens and opens separate analysis without repeating account facts", async () => {
+  it("keeps quota first, emphasizes local tokens over the cost estimate and opens separate analysis", async () => {
     const user = userEvent.setup();
     const onOpenAnalysis = vi.fn(), onOpenToday = vi.fn();
-    render(<DashboardHeroCard {...props()} codexLimits={limits} todayOverview={{ ...overview, daily: [row(today(), 77, 1.2)] }} coachFirst coach={<section data-testid="quota-summary">Account quota</section>} onOpenAnalysis={onOpenAnalysis} onOpenToday={onOpenToday}/>);
+    render(<DashboardHeroCard todayOverview={{ ...overview, daily: [row(today(), 77, 1.2)] }} coach={<section data-testid="quota-summary">Account quota</section>} onOpenAnalysis={onOpenAnalysis} onOpenToday={onOpenToday}/>);
     const hero = screen.getByTestId("dashboard-hero");
     expect(hero.firstElementChild).toBe(screen.getByTestId("quota-summary"));
     expect(screen.getByTestId("today-estimate")).toHaveTextContent("$1.20");
     expect(screen.getByTestId("today-tokens")).toHaveTextContent("77");
-    expect(hero.querySelector(".pulse-dashboard-today-values > div:first-child")).toContainElement(screen.getByTestId("today-estimate"));
+    expect(hero.querySelector(".pulse-dashboard-today-values > div:first-child")).toContainElement(screen.getByTestId("today-tokens"));
     expect(screen.getByText("Estimated from model prices; not an actual bill.")).toBeVisible();
     expect(screen.getByText("Counted separately from account quota")).toBeVisible();
     expect(screen.queryByTestId("range-summary")).not.toBeInTheDocument();
@@ -92,15 +87,10 @@ describe("focused dashboard", () => {
     expect(onOpenToday).toHaveBeenCalledOnce();
   });
 
-  it("keeps today's 77 independent of historical ranges and leaves an unknown estimate unknown", () => {
+  it("shows today's independent snapshot and leaves an unknown estimate unknown", () => {
     const date = today();
     const todayOverview = { ...overview, daily: [row(date, 77, null)] };
-    const historical = { ...overview, totals: { ...overview.totals, totalTokens: 9999, costUSD: 99 } };
-    const { rerender } = render(<DashboardHeroCard {...props()} overview={historical} todayOverview={todayOverview}/>);
-    expect(screen.getByTestId("today-tokens")).toHaveTextContent("77");
-    expect(screen.getByTestId("today-estimate")).toHaveTextContent("—");
-    expect(screen.getByTestId("today-summary")).not.toHaveTextContent("9,999");
-    rerender(<DashboardHeroCard {...props()} range="7d" overview={{ ...historical, totals: { ...historical.totals, totalTokens: 12345 } }} todayOverview={todayOverview}/>);
+    render(<DashboardHeroCard todayOverview={todayOverview}/>);
     expect(screen.getByTestId("today-tokens")).toHaveTextContent("77");
     expect(screen.getByTestId("today-estimate")).toHaveTextContent("—");
   });
@@ -141,7 +131,7 @@ describe("focused dashboard", () => {
 
   it.each(["en", "zh", "zh-Hant", "ja", "ko", "de"])("translates the separated cost and quota wording in %s", async language => {
     await i18n.changeLanguage(language);
-    render(<DashboardHeroCard {...props()} onOpenAnalysis={vi.fn()}/>);
+    render(<DashboardHeroCard timezone={overview.timezone} onOpenAnalysis={vi.fn()}/>);
     expect(screen.getByText(dashboardCopy(language, "todayCost"))).toBeVisible();
     expect(screen.getByText(dashboardCopy(language, "estimateNote"))).toBeVisible();
     expect(screen.getByRole("button", { name: dashboardCopy(language, "openAnalysis") })).toBeEnabled();

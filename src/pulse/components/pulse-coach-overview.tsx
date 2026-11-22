@@ -5,8 +5,9 @@ import { PulsePaceCard } from "./pulse-pace";
 import { PulsePaceSummary } from "./pulse-pace-summary";
 
 /** The workspace shares observations and presentation with both companions. */
-export function PulseCoachOverview({ onDetails, onRecover, observationsExpanded, summary = false, children }: {
+export function PulseCoachOverview({ onDetails, onRecover, observationsExpanded, summary = false, pacingOnly = false, children }: {
   onDetails: () => void; onRecover: () => void; observationsExpanded: boolean; summary?: boolean;
+  pacingOnly?: boolean;
   children?: (slots: { summary: ReactNode; details: ReactNode }) => ReactNode;
 }) {
   const { data, error, refreshing, refresh, markNoticeRead, noticePending, noticeError } = usePulsePace();
@@ -57,7 +58,7 @@ export function PulseCoachOverview({ onDetails, onRecover, observationsExpanded,
       }
     };
     return children({
-      summary: <PulsePaceSummary {...props} detailsPlacement="external" expanded={expanded}
+      summary: <PulsePaceSummary {...props} detailsPlacement="external" expanded={expanded} pacingOnly={pacingOnly}
         detailsId={detailsId} detailsTriggerRef={triggerRef} onExpandedChange={changeExpanded}/>,
       details: <section id={detailsId} ref={attachDetails} className="pulse-coach-overview pulse-coach-details"
         data-testid="pulse-coach-overview" tabIndex={-1} aria-label={copy("paceDetails")} hidden={!expanded}

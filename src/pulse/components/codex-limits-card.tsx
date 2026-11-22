@@ -109,6 +109,16 @@ export function CodexSidebarLimits({ compact = false, paper = false, limits, err
     const timer = window.setInterval(() => refreshCountdown((tick) => tick + 1), 30_000);
     return () => window.clearInterval(timer);
   }, []);
+  const actions = !compact && onRefreshLimits && onActivateWindow ? <LimitActions
+    window={limits?.session ?? null}
+    showActivation={limits?.session != null && quotaWindowKind(limits.session) === "5h"}
+    isRefreshing={isLimitsRefreshing}
+    isActivating={isWindowActivating}
+    activationStatus={windowActivationStatus}
+    activationError={windowActivationError}
+    onRefresh={onRefreshLimits}
+    onActivate={onActivateWindow}
+  /> : null;
 
   return (
     <section className="sidebar-limits space-y-3" aria-label={t("limits.sidebar_title")}>
@@ -119,19 +129,9 @@ export function CodexSidebarLimits({ compact = false, paper = false, limits, err
           {!paper || !updatedTime || error || hasExpiredReading ? <span className="truncate">{t(error ? "limits.unavailable" : hasExpiredReading ? "ux.window_elapsed" : limits ? "limits.sidebar_updated" : "limits.not_fetched")}</span> : null}
           {paper && limits && updatedTime ? <time dateTime={limits.updatedAt}>{updatedTime}</time> : null}
         </span>
+        {paper ? actions : null}
       </div> : null}
-      {!compact && onRefreshLimits && onActivateWindow ? (
-        <LimitActions
-          window={limits?.session ?? null}
-          showActivation={limits?.session != null && quotaWindowKind(limits.session) === "5h"}
-          isRefreshing={isLimitsRefreshing}
-          isActivating={isWindowActivating}
-          activationStatus={windowActivationStatus}
-          activationError={windowActivationError}
-          onRefresh={onRefreshLimits}
-          onActivate={onActivateWindow}
-        />
-      ) : null}
+      {!paper ? actions : null}
       {limits?.weekly && !limits.session ? <p className="text-[12px] text-muted-foreground">{t("ux.no_short_window")}</p> : null}
       {error ? (
         compact ? <p className="break-words text-center text-[12px] text-warning" title={error}>{t("limits.unavailable")}</p> : isOAuthLoginError(error) ? (

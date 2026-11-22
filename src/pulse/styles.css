@@ -542,7 +542,7 @@ a { text-underline-offset: 3px; }
 .pulse-style-switch button:hover, .pulse-segments button:hover { color: rgb(var(--foreground)); background: rgb(var(--muted)); }
 .pulse-icon-button { display: inline-flex; align-items: center; justify-content: center; min-height: 30px; min-width: 30px; border-radius: 5px; color: rgb(var(--muted-foreground)); }
 .pulse-icon-button:hover, .pulse-icon-button[aria-pressed="true"] { background: rgb(var(--primary) / .09); color: rgb(var(--primary)); }
-.pulse-workspace { display: flex; flex: 1; min-height: 0; overflow: hidden; }
+.pulse-workspace { display: flex; flex: 1; min-height: 0; overflow: hidden; transition-property: background-color; }
 .pulse-sidebar-caption { color: rgb(var(--muted-foreground)); font-size: 12px; padding-left: 6px; }
 [data-app-sidebar] { background: rgb(var(--sidebar)); }
 [data-app-sidebar] > div:nth-child(2) { height: 56px; }

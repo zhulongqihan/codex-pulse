@@ -7,24 +7,18 @@
 .pulse-app .pulse-shell-action small { color: rgb(var(--primary)); font-size: 12px; }
 .pulse-app .pulse-global-actions { gap: 8px; }
 .pulse-app .pulse-global-actions .pulse-widget-action { color: rgb(var(--primary)); }
-.pulse-getting-started { padding: 5px 0 9px; margin-bottom: 6px; border-bottom: 1px solid rgb(var(--border)); }
-.pulse-setup-line { display: flex; flex-wrap: wrap; align-items: center; gap: 7px 16px; }
-.pulse-setup-line > h2 { font-size: 12px; }
-.pulse-setup-line > .pulse-icon-button { margin-left: auto; }
-.pulse-getting-started > header { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
-.pulse-getting-started h2 { margin: 0; font-size: 14px; font-weight: 650; }
-.pulse-getting-started header p { margin: 3px 0 0; font-size: 12px; color: rgb(var(--muted-foreground)); }
-.pulse-setup-status, .pulse-setup-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; font-size: 12px; }
-.pulse-setup-status > button { display: inline-flex; align-items: center; gap: 5px; color: rgb(var(--muted-foreground)); }
-.pulse-setup-status svg { color: rgb(var(--primary)); }
-.pulse-setup-status strong { color: rgb(var(--foreground)); font-weight: 550; margin-right: 2px; }
-.pulse-setup-actions > button { display: inline-flex; align-items: center; gap: 6px; color: rgb(var(--primary)); padding: 3px 0; text-align: left; }
+.pulse-getting-started { padding: 5px 0 16px; border-bottom: 1px solid rgb(var(--border)); }
+.pulse-getting-started:focus-visible { outline: 2px solid rgb(var(--ring)); outline-offset: 5px; }
+.pulse-getting-started > header { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.pulse-getting-started > header h2 { margin: 0; font-size: 17px; font-weight: 650; }
+.pulse-setup-account { min-height: 36px; margin-top: 6px; }
+.pulse-setup-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 16px; margin-top: 14px; font-size: 13px; }
+.pulse-setup-actions > button { display: inline-flex; align-items: center; gap: 6px; min-height: 36px; color: rgb(var(--primary)); text-align: left; }
 .pulse-setup-actions > button:hover { text-decoration: underline; text-underline-offset: 3px; }
-.pulse-setup-actions > button[data-testid="first-use-next"] { min-height: 36px; font-weight: 600; }
 @media (max-width: 760px) {
-  .pulse-setup-status > button, .pulse-setup-actions > button { min-height: 44px; }
+  .pulse-setup-account, .pulse-setup-actions > button { min-height: 44px; }
 }
-.pulse-setup-hint, .pulse-action-notice { color: rgb(var(--muted-foreground)); font-size: 12px; margin-top: 9px; line-height: 1.6; }
+.pulse-setup-hint, .pulse-action-notice { max-width: 70ch; color: rgb(var(--muted-foreground)); font-size: 13px; margin-top: 6px; line-height: 1.6; }
 .pulse-app .pulse-settings-layout { display: grid; grid-template-columns: 168px minmax(0,1fr); gap: 20px; }
 .pulse-settings-layout > [role="tablist"] { display: flex; flex-direction: column; align-self: start; gap: 5px; position: sticky; top: 0; padding: 0; }
 .pulse-settings-layout > [role="tablist"] > button { text-align: left; }

@@ -37,6 +37,7 @@
   },
   "header": {
     "navigation": "주 탐색 메뉴",
+    "detail_views": "상세 보기",
     "collapse_sidebar": "사이드바 접기",
     "expand_sidebar": "사이드바 펼치기",
     "resize_sidebar": "사이드바 크기 조절",

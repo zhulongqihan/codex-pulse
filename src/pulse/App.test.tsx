@@ -228,7 +228,7 @@ describe("App", () => {
   it("keeps Home focused and remembers the account rail choice across restarts", async () => {
     mockLoadedDashboard();
     const first = render(<App/>);
-    await screen.findByTestId("dashboard-hero");
+    await screen.findByTestId("dashboard-sync-status");
     expect(screen.queryByTestId("range-summary")).not.toBeInTheDocument();
     expect(screen.queryByTestId("global-reset-forecast")).not.toBeInTheDocument();
     expect(document.getElementById("pulse-account-rail")).not.toBeInTheDocument();
@@ -249,7 +249,7 @@ describe("App", () => {
   it("retains analysis filters and each page's reading position across Home and settings", async () => {
     mockLoadedDashboard();
     render(<App/>);
-    await screen.findByTestId("dashboard-hero");
+    await screen.findByTestId("dashboard-sync-status");
     const main = document.querySelector<HTMLElement>(".pulse-main-scroll")!;
     main.scrollTop = 120;
     await userEvent.click(screen.getByTestId("analysis-nav-tab"));
@@ -274,7 +274,7 @@ describe("App", () => {
   });
 
   it("keeps each analysis source's controls when switching between local and official history", async () => {
-    mockLoadedDashboard(); render(<App/>); await screen.findByTestId("dashboard-hero");
+    mockLoadedDashboard(); render(<App/>); await screen.findByTestId("dashboard-sync-status");
     await userEvent.click(screen.getByTestId("analysis-nav-tab"));
     const distribution = within(screen.getByTestId("usage-analysis").querySelector<HTMLElement>(".pulse-distribution")!);
     await userEvent.click(distribution.getByRole("button", { name: "Model" }));
@@ -323,7 +323,7 @@ describe("App", () => {
       ? Promise.resolve(syntheticCoachSnapshot("roomy")) : invokeLoaded(command, ...args));
     setPageActive(true);
     render(<App />);
-    await screen.findByTestId("dashboard-hero");
+    await screen.findByTestId("dashboard-sync-status");
     await userEvent.click(screen.getByTestId(`${source}-nav-tab`));
     if (source === "settings") expect(screen.getByRole("tab", { name: "Appearance & language" })).toBeVisible();
     vi.spyOn(document, "hasFocus").mockReturnValue(false);
@@ -380,15 +380,17 @@ describe("App", () => {
         scan: scan(1), limits: null, limitsError: null, limitsSkipped: true, refreshedAt: new Date().toISOString(),
       } });
     });
-    // The dashboard can process a focus frame while the replacement overview is still pending.
+    // The official quota and its focus target are usable while local usage is still pending.
     await act(async () => { await new Promise<void>(resolve => window.requestAnimationFrame(() => resolve())); });
-    expect(screen.queryByTestId("dashboard-hero")).not.toBeInTheDocument();
-    await act(async () => { resolveOverview(overview()); });
-    const dashboard = await screen.findByTestId("dashboard-hero");
+    const dashboard = screen.getByTestId("dashboard-hero");
+    expect(within(dashboard).getByTestId("today-tokens")).toHaveTextContent("—");
     const details = within(dashboard).getByTestId("pulse-coach-overview");
     expect(details).toBeVisible();
     expect(within(details).getByTestId("coach-cycle-observations")).toHaveAttribute("open");
     await waitFor(() => expect(details).toHaveFocus());
+    await act(async () => { resolveOverview(overview()); });
+    expect(within(dashboard).getByTestId("pulse-coach-overview")).toBe(details);
+    expect(details).toHaveFocus();
   });
   it("publishes a resolved theme change to the local plugin snapshot without querying usage", async () => {
     mockLoadedDashboard();
@@ -398,7 +400,7 @@ describe("App", () => {
       else document.documentElement.dataset.theme = previous;
     });
     render(<App />);
-    await screen.findByTestId("dashboard-hero");
+    await waitFor(() => expect(screen.getByRole("button", { name: "Rescan local logs" })).toBeEnabled());
     const requests = () => invokeMock.mock.calls.filter(([command]) => ["scan_usage", "fetch_codex_limits", "activate_codex_window"].includes(command)).length;
     const before = requests();
     const next = document.documentElement.dataset.theme === "dark" ? "light" : "dark";
@@ -677,11 +679,15 @@ describe("App", () => {
     await waitFor(() => expect(screen.getByRole("button", { name: "Choose folder" })).toBeEnabled());
     await act(async () => { resolvePrevious(overview(9999)); });
     await user.click(screen.getByRole("button", { name: "Back" }));
-    expect(screen.queryByTestId("dashboard-hero")).not.toBeInTheDocument();
-    expect(screen.queryByText("9,999")).not.toBeInTheDocument();
+    expect(screen.getByTestId("dashboard-hero")).toBeVisible();
+    expect(screen.getByTestId("today-tokens")).toHaveTextContent(/^—$/);
+    expect(screen.getByRole("button", { name: "Today's sessions" })).toBeDisabled();
     expect(screen.getByTestId("diagnostic-directory")).toHaveTextContent("F:/NewCodexSource");
     await user.click(screen.getByText("Technical details"));
     expect(screen.getByText("New source scan failed")).toBeVisible();
+    await user.click(screen.getByTestId("analysis-nav-tab"));
+    expect(screen.queryByTestId("usage-analysis")).not.toBeInTheDocument();
+    expect(screen.queryByText("9,999")).not.toBeInTheDocument();
   });
 
   it.each([0, 920])("starts settings at its selected section and restores source scroll %i", async (initialScroll) => {
@@ -745,7 +751,10 @@ describe("App", () => {
     await screen.findByTestId("dashboard-hero");
     await userEvent.click(screen.getByTestId("open-widget"));
     expect(await screen.findByText("This action is available in the desktop app. The browser demo does not create windows or files.")).toBeVisible();
-    await userEvent.click(screen.getByTestId("create-shortcuts"));
+    await userEvent.click(screen.getByTestId("help"));
+    const guide = screen.getByTestId("getting-started");
+    await userEvent.click(within(guide).getByTestId("create-shortcuts"));
+    expect(within(guide).getByText("This action is available in the desktop app. The browser demo does not create windows or files.")).toBeVisible();
     expect(invokeMock).not.toHaveBeenCalledWith("create_pulse_shortcuts");
     expect(invokeMock).not.toHaveBeenCalledWith("widget_action", { action: "show" });
     expect(screen.queryByText("Desktop and Start menu shortcuts are ready.")).not.toBeInTheDocument();
@@ -760,7 +769,7 @@ describe("App", () => {
       return original(command, args);
     });
     render(<App />);
-    await screen.findByTestId("dashboard-hero");
+    await waitFor(() => expect(screen.getByRole("button", { name: "Rescan local logs" })).toBeEnabled());
     const scanCount = invokeMock.mock.calls.filter(([command]) => command === "scan_usage").length;
     const limitsCount = invokeMock.mock.calls.filter(([command]) => command === "fetch_codex_limits").length;
     await userEvent.click(screen.getByTestId("open-widget"));
@@ -773,7 +782,7 @@ describe("App", () => {
     expect(invokeMock.mock.calls.filter(([command]) => command === "fetch_codex_limits")).toHaveLength(limitsCount);
   });
 
-  it("creates shortcuts only on request and keeps dismissed setup help available with its source shortcut", async () => {
+  it("keeps first opening focused on data and exposes shortcuts and recovery from keyboard-accessible help", async () => {
     mockLoadedDashboard();
     const original = invokeMock.getMockImplementation()!;
     invokeMock.mockImplementation((command: string, args?: any) => {
@@ -784,14 +793,20 @@ describe("App", () => {
     const view = render(<App />);
     await screen.findByTestId("dashboard-hero");
     expect(invokeMock).not.toHaveBeenCalledWith("create_pulse_shortcuts");
+    expect(screen.queryByTestId("getting-started")).not.toBeInTheDocument();
+    await userEvent.click(screen.getByTestId("help"));
+    expect(screen.getByTestId("getting-started")).toHaveFocus();
+    await userEvent.click(screen.getByTestId("analysis-nav-tab"));
+    await userEvent.click(screen.getByTestId("dashboard-nav-tab"));
+    expect(screen.getByTestId("dashboard-nav-tab")).toHaveFocus();
     await userEvent.click(screen.getByTestId("create-shortcuts"));
     expect(await screen.findByText("Desktop and Start menu shortcuts are ready.")).toBeVisible();
     expect(invokeMock).toHaveBeenCalledWith("create_pulse_shortcuts");
-    await userEvent.click(screen.getByRole("button", { name: "Got it" }));
+    await userEvent.keyboard("{Escape}");
     expect(screen.queryByTestId("getting-started")).not.toBeInTheDocument();
-    expect(localStorage.getItem("codexpulse.quickstart.dismissed.v1")).toBe("true");
+    expect(screen.getByTestId("help")).toHaveFocus();
     view.unmount(); render(<App />);
-    await screen.findByTestId("dashboard-hero");
+    await waitFor(() => expect(screen.getByRole("button", { name: "Rescan local logs" })).toBeEnabled());
     expect(screen.queryByTestId("getting-started")).not.toBeInTheDocument();
     const scanCount = invokeMock.mock.calls.filter(([command]) => command === "scan_usage").length;
     const limitsCount = invokeMock.mock.calls.filter(([command]) => command === "fetch_codex_limits").length;
@@ -844,12 +859,13 @@ describe("App", () => {
 
     render(<App />);
 
-    expect(screen.getByRole("status", { name: "Preparing local cache" })).toBeInTheDocument();
-    expect(screen.getByText("Preparing local cache")).toBeInTheDocument();
-    expect(screen.getByText("Loading the cached dashboard snapshot.")).toBeInTheDocument();
-    expect(screen.getByText("Reading sessions")).toBeInTheDocument();
-    expect(screen.getByText("Aggregating tokens")).toBeInTheDocument();
-    expect(screen.getByText("Estimating cost")).toBeInTheDocument();
+    const today = screen.getByTestId("today-summary");
+    expect(today).toBeVisible();
+    expect(today).toHaveAttribute("aria-busy", "true");
+    expect(within(today).getByRole("status")).toHaveTextContent("Preparing local cache");
+    expect(within(today).getByTestId("today-tokens")).toHaveTextContent(/^—$/);
+    expect(within(today).getByTestId("today-estimate")).toHaveTextContent(/^—$/);
+    expect(within(today).getByRole("button", { name: "Today's sessions" })).toBeDisabled();
     expect(screen.getByRole("button", { name: "Settings" })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Reset cache" })).not.toBeInTheDocument();
   });
@@ -859,8 +875,13 @@ describe("App", () => {
     let selected = false;
     const firstScan = new Promise((_, reject) => { rejectScan = reject; });
     const empty = { ...overview(), updatedAt: null, models: [], projects: [], totals: { ...overview().totals, totalTokens: 0, costUSD: 0 } };
-    invokeMock.mockImplementation(async (command: string) => {
-      if (command === "fetch_overview") return selected ? overview() : empty;
+    const date = new Intl.DateTimeFormat("sv-SE", { timeZone: "UTC" }).format(new Date());
+    const daily = { date, inputTokens: 65, cachedInputTokens: 10, outputTokens: 8, totalTokens: 73, costUSD: null };
+    invokeMock.mockImplementation(async (command: string, args?: { range?: string }) => {
+      if (command === "fetch_overview") {
+        if (!selected) return empty;
+        return args?.range === "1d" ? { ...overview(73), range: "1d", startDate: date, endDate: date, daily: [daily] } : overview();
+      }
       if (command === "scan_usage") return selected ? scan(1) : firstScan;
       if (command === "fetch_codex_limits") throw new Error("Offline");
       if (command === "check_for_updates") return { hasUpdate: false };
@@ -869,8 +890,10 @@ describe("App", () => {
       throw new Error(`Unexpected invoke: ${command}`);
     });
     render(<StrictMode><App /></StrictMode>);
-    expect(await screen.findByText("Scanning local Codex logs")).toBeInTheDocument();
-    expect(screen.queryByTestId("dashboard-hero")).not.toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Scanning local Codex logs" })).toBeVisible();
+    expect(screen.getByTestId("today-summary")).toHaveAttribute("aria-busy", "true");
+    expect(screen.getByTestId("today-tokens")).toHaveTextContent(/^—$/);
+    expect(screen.getByTestId("today-estimate")).toHaveTextContent(/^—$/);
     expect(invokeMock.mock.calls.filter(([command]) => command === "scan_usage")).toHaveLength(1);
     await act(async () => { rejectScan(new Error("Directory not found")); });
     expect(await screen.findByText("Codex directory not found")).toBeInTheDocument();
@@ -881,7 +904,9 @@ describe("App", () => {
     await userEvent.click(screen.getByRole("button", { name: "Choose Codex directory" }));
     await waitFor(() => expect(screen.queryByTestId("usage-recovery")).not.toBeInTheDocument());
     expect(invokeMock).toHaveBeenCalledWith("configure_codex_home", { home: "/correct-codex" });
-    expect(screen.getByTestId("dashboard-hero")).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByTestId("today-tokens")).toHaveTextContent(/^73$/));
+    expect(screen.getByTestId("today-summary")).toHaveAttribute("aria-busy", "false");
+    expect(screen.getByRole("button", { name: "Today's sessions" })).toBeEnabled();
   });
 
   it("allows recovery after the first overview read fails", async () => {
@@ -905,7 +930,7 @@ describe("App", () => {
     recovered = true;
     await userEvent.click(screen.getByRole("button", { name: "Retry scan" }));
     await waitFor(() => expect(screen.queryByTestId("usage-recovery")).not.toBeInTheDocument());
-    expect(screen.getByTestId("dashboard-hero")).toBeInTheDocument();
+    expect(screen.getByTestId("dashboard-sync-status")).toBeInTheDocument();
     expect(eventListeners.get("background-refresh-failed")?.length).toBe(1);
   });
 
@@ -2751,9 +2776,11 @@ describe("App", () => {
     render(<App />);
     await userEvent.click(screen.getByTestId("analysis-nav-tab"));
 
-    await waitFor(() => expect(screen.getAllByText("3,400").length).toBeGreaterThan(0));
-    await waitFor(() => expect(screen.getByText("scan failed")).toBeInTheDocument());
-    expect(screen.getAllByText("3,400").length).toBeGreaterThan(0);
+    const recovery = await screen.findByTestId("usage-recovery");
+    expect(within(recovery).getByText("Showing the last successfully loaded data. This failed scan did not replace your cached usage.")).toBeVisible();
+    await userEvent.click(within(recovery).getByText("Technical details"));
+    expect(within(recovery).getByText("scan failed")).toBeVisible();
+    expect(within(screen.getByTestId("range-summary")).getByText("3,400")).toBeVisible();
   });
 
   it("keeps the dashboard visible when Codex limits are unavailable", async () => {
@@ -3409,7 +3436,9 @@ describe("App", () => {
 
     failScan = true;
     await userEvent.click(screen.getByRole("button", { name: "Rescan local logs" }));
-    await waitFor(() => expect(screen.getByTestId("usage-recovery")).toHaveTextContent("Independent scan failure"));
+    const recovery = await screen.findByTestId("usage-recovery");
+    await userEvent.click(within(recovery).getByText("Technical details"));
+    expect(within(recovery).getByText("Independent scan failure")).toBeVisible();
     expect(screen.getByTestId("export-error")).toHaveTextContent(message);
     await waitFor(() => expect(screen.getByRole("button", { name: "Export" })).toBeEnabled());
     await userEvent.click(screen.getByRole("button", { name: "Export" }));
@@ -3417,7 +3446,7 @@ describe("App", () => {
     await waitFor(() => expect(screen.queryByTestId("export-error")).not.toBeInTheDocument());
     await waitFor(() => expect(screen.getByRole("button", { name: "Export" })).toBeEnabled());
     expect(exportAttempts).toBe(failure === "save" ? 1 : 2);
-    expect(screen.getByTestId("usage-recovery")).toHaveTextContent("Independent scan failure");
+    expect(within(recovery).getByText("Independent scan failure")).toBeVisible();
   });
 
   it("does not export when the save dialog is canceled", async () => {

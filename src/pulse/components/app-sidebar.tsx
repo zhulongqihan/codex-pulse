@@ -1,8 +1,9 @@
 import { CalendarDays, ChartColumn, ChartNoAxesCombined, Folder, LayoutDashboard, Logs, PanelLeftClose, PanelLeftOpen, Settings, Terminal, Wallet } from "lucide-react";
 import { useTranslation } from "react-i18next";
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { Fragment, useEffect, useRef, useState, type ReactNode } from "react";
 import type { DashboardView } from "@/components/dashboard-header";
 import { useShellCopy } from "@/lib/shell-copy";
+import "./app-sidebar.css";
 
 type AppSidebarProps = {
   presentation?: "sidebar" | "paper-tabs";
@@ -16,10 +17,13 @@ type AppSidebarProps = {
   limits: ReactNode;
 };
 
-const pages = [
+const primaryPages = [
   { view: "dashboard", label: "dashboard", icon: LayoutDashboard },
   { view: "analysis", label: "analysis", icon: ChartNoAxesCombined },
   { view: "sessions", label: "sessions", icon: Terminal },
+] as const;
+
+const detailPages = [
   { view: "models", label: "model", icon: ChartColumn },
   { view: "daily", label: "daily", icon: CalendarDays },
   { view: "monthly", label: "monthly", icon: Wallet },
@@ -38,6 +42,7 @@ export function AppSidebar({ view, onViewChange, collapsed, onToggleCollapsed, w
   const copy = useShellCopy();
   const pageLabel = (label: string) => label === "analysis" ? copy("analysis") : t(`common.${label}`);
   const toggleLabel = t(collapsed ? "header.expand_sidebar" : "header.collapse_sidebar");
+  const pages = [...primaryPages, ...detailPages.filter(page => page.view !== "logs" || showLogsTab)];
   const [resizingWidth, setResizingWidth] = useState<number | null>(null);
   const drag = useRef<{ startX: number; startWidth: number; width: number } | null>(null);
   const isResizing = resizingWidth !== null;
@@ -66,10 +71,10 @@ export function AppSidebar({ view, onViewChange, collapsed, onToggleCollapsed, w
   }, [isResizing, onWidthChange]);
 
   if (presentation === "paper-tabs") {
-    const tabs = [...pages.filter(page => page.view !== "logs" || showLogsTab), {view: "settings", label: "settings", icon: Settings}] as const;
+    const tabs = [...pages, {view: "settings", label: "settings", icon: Settings}] as const;
     return <nav className="pulse-paper-navigation" aria-label={t("header.navigation")}>
       <div role="tablist" aria-orientation="horizontal" aria-label={t("header.navigation")}>
-        {tabs.map(({view: page, label, icon: Icon}, index) => <button key={page} type="button" role="tab" aria-selected={view === page} tabIndex={view === page ? 0 : -1} data-testid={`${page}-nav-tab`} onClick={() => onViewChange(page)} onKeyDown={event => {
+        {tabs.map(({view: page, label, icon: Icon}, index) => <button key={page} type="button" role="tab" aria-selected={view === page} tabIndex={view === page ? 0 : -1} data-nav-group={index < primaryPages.length ? "primary" : "detail"} data-testid={`${page}-nav-tab`} onClick={() => onViewChange(page)} onKeyDown={event => {
           const next = event.key === "Home" ? 0 : event.key === "End" ? tabs.length - 1
             : event.key === "ArrowRight" ? (index + 1) % tabs.length
             : event.key === "ArrowLeft" ? (index + tabs.length - 1) % tabs.length : null;
@@ -93,17 +98,24 @@ export function AppSidebar({ view, onViewChange, collapsed, onToggleCollapsed, w
       </div>
       <nav id="app-navigation" aria-label={t("header.navigation")} className="min-h-0 flex-1 overflow-y-auto px-2 py-2">
         <div role="tablist" aria-orientation="vertical" aria-label={t("header.navigation")} className="space-y-1">
-          {pages.filter((page) => page.view !== "logs" || showLogsTab).map(({ view: page, label, icon: Icon }) => (
-            <button key={page} type="button" role="tab" aria-selected={view === page} aria-label={pageLabel(label)} title={collapsed ? pageLabel(label) : undefined} data-testid={`${page}-nav-tab`} onClick={() => onViewChange(page)} className={`flex min-h-10 w-full items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors focus-visible:ring-2 focus-visible:ring-ring ${collapsed ? "justify-center" : "text-left"} ${view === page ? "bg-primary/10 text-primary" : "text-muted-foreground hover:bg-muted hover:text-foreground"}`}>
-              <Icon className="h-4 w-4 shrink-0" aria-hidden="true" />
-              {!collapsed ? <span className="truncate">{pageLabel(label)}</span> : null}
-            </button>
-          ))}
+          {pages.map(({ view: page, label, icon: Icon }, index) => {
+            const primary = index < primaryPages.length;
+            const name = pageLabel(label);
+            return <Fragment key={page}>
+              {index === primaryPages.length ? <div className="pulse-sidebar-detail-divider" aria-hidden="true">
+                {!collapsed ? <span>{t("header.detail_views")}</span> : null}
+              </div> : null}
+              <button type="button" role="tab" aria-selected={view === page} aria-label={name} title={name} data-testid={`${page}-nav-tab`} onClick={() => onViewChange(page)} className={`flex min-h-10 w-full items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors focus-visible:ring-2 focus-visible:ring-ring ${collapsed ? "justify-center" : "text-left"} ${view === page ? "bg-primary/10 font-semibold text-primary" : primary ? "font-medium text-foreground hover:bg-muted" : "text-muted-foreground hover:bg-muted hover:text-foreground"}`}>
+                <Icon className="h-4 w-4 shrink-0" aria-hidden="true" />
+                {!collapsed ? <span className="truncate">{name}</span> : null}
+              </button>
+            </Fragment>;
+          })}
         </div>
       </nav>
       {limits ? <div className={`mx-2 max-h-[55%] shrink-0 overflow-y-auto border-t border-border/80 pb-4 pt-3 ${collapsed ? "" : "px-1"}`}>{limits}</div> : null}
       <div className="shrink-0 border-t border-border/80 p-2">
-        <button type="button" data-testid="settings-nav-tab" onClick={() => onViewChange("settings")} aria-label={t("common.settings")} title={collapsed ? t("common.settings") : undefined} className={`flex min-h-10 w-full items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring ${collapsed ? "justify-center" : "text-left"}`}>
+        <button type="button" data-testid="settings-nav-tab" onClick={() => onViewChange("settings")} aria-label={t("common.settings")} title={t("common.settings")} className={`pulse-sidebar-settings flex min-h-10 w-full items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring ${collapsed ? "justify-center" : "text-left"}`}>
           <Settings className="h-4 w-4 shrink-0" aria-hidden="true" />
           {!collapsed ? <span>{t("common.settings")}</span> : null}
         </button>

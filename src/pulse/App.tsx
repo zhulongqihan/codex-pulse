@@ -44,8 +44,8 @@ import "./shell-ux.css";
 import "./shell-analysis.css";
 import { usePaceDetailsRequest } from "@/hooks/use-pace-details-request";
 import { PaperClock } from "@/components/paper-clock";
+import { currentDateInTimezone } from "@/lib/trend-buckets";
 
-const QUICK_START_DISMISSED = "codexpulse.quickstart.dismissed.v1";
 const ACCOUNT_EXPANDED = "codexpulse.account.expanded.v1";
 function useCompactWindow() {
   const read = () => window.matchMedia?.("(max-width: 1100px)").matches ?? window.innerWidth <= 1100;
@@ -76,8 +76,7 @@ export default function App() {
   const [accountDetailsRequested, setAccountDetailsRequested] = useState(false);
   const [settingsInitialSection, setSettingsInitialSection] = useState<SettingsSection>("appearance");
   const [settingsEntry, setSettingsEntry] = useState(0);
-  const [showQuickStart, setShowQuickStart] = useState(() => { try { return localStorage.getItem(QUICK_START_DISMISSED) !== "true"; } catch { return true; } });
-  const [helpExpanded, setHelpExpanded] = useState(false);
+  const [helpOpen, setHelpOpen] = useState(false);
   const [desktopAction, setDesktopAction] = useState<"widget" | "shortcuts" | null>(null);
   const [desktopNotice, setDesktopNotice] = useState<string | null>(null);
   const [desktopError, setDesktopError] = useState<string | null>(null);
@@ -278,7 +277,6 @@ export default function App() {
     : t("loading.cached_snapshot_desc");
   const awaitingFirstScan = !hasScanned && !overview?.updatedAt;
   const showRecovery = !isLoading && (awaitingFirstScan || !!scanError || !!error || (view === "dashboard" && (!overview || overview.totals.totalTokens === 0)));
-  const showDashboard = !awaitingFirstScan && overview;
   const isInstallingUpdate = updateInstallStatus === "downloading";
   const isUpdateInstalled = updateInstallStatus === "installed";
   const updateButtonLabel = isUpdateInstalled
@@ -389,8 +387,29 @@ export default function App() {
     }).catch(() => { /* Browser previews do not have native companion events. */ });
     return () => { disposed = true; stop?.(); };
   }, []);
-  const openHelp = () => { setShowQuickStart(true); setHelpExpanded(true); savedScroll.current.dashboard = 0; navigate("dashboard"); if (contentScroll.current && view === "dashboard") contentScroll.current.scrollTop = 0; };
-  const dismissQuickStart = () => { setShowQuickStart(false); setHelpExpanded(false); try { localStorage.setItem(QUICK_START_DISMISSED, "true"); } catch { /* The help remains available without storage. */ } };
+  const helpButton = useRef<HTMLButtonElement>(null);
+  const helpPanel = useRef<HTMLElement>(null);
+  const helpFocusRequested = useRef(false);
+  const openHelp = () => {
+    if (view === "dashboard" && helpOpen && helpPanel.current) {
+      helpPanel.current.focus();
+      return;
+    }
+    helpFocusRequested.current = true;
+    setHelpOpen(true);
+    savedScroll.current.dashboard = 0;
+    navigate("dashboard");
+  };
+  const closeHelp = () => {
+    setHelpOpen(false);
+    helpButton.current?.focus();
+  };
+  useEffect(() => {
+    if (view === "dashboard" && helpOpen && helpFocusRequested.current) {
+      helpFocusRequested.current = false;
+      helpPanel.current?.focus();
+    }
+  }, [view, helpOpen]);
   async function runDesktopAction(action: "widget" | "shortcuts") {
     if (desktopAction) return;
     setDesktopError(null); setDesktopNotice(null);
@@ -417,36 +436,58 @@ export default function App() {
   </>;
 
   const paperDashboard = preferences.skinId === "paper";
+  const quotaAvailable = hasReturnedQuota(codexLimits);
   const openQuotaHistory = () => { setAnalysisSource("official"); navigate("analysis"); };
   const coachProps = { onDetails: () => paceDetails.current(), onRecover: showAccount };
   const dashboardCoach = <PulseCoachOverview {...coachProps} summary={!paceObservationsExpanded} observationsExpanded={paceObservationsExpanded}/>;
-  const renderDashboard = (coach: ReactNode, coachDetails?: ReactNode) => showDashboard ? <DashboardHeroCard
-    overview={showDashboard}
-    todayOverview={todayOverview}
-    todayUnavailable={!isLoading && !todayOverview}
+  const dashboardToday = awaitingFirstScan && !todayOverview?.updatedAt ? null : todayOverview;
+  const scanWait = <ScanWaitNotice active={isLoading || isScanning} diagnostics={diagnostics}/>;
+  const recovery = showRecovery && view !== "settings" ? <UsageRecoveryCard
+    scanning={isScanning}
+    pending={awaitingFirstScan && isScanning}
+    error={scanError || error}
+    diagnostics={diagnostics}
+    diagnosticsError={diagnosticsError}
+    hasCachedData={!!overview?.updatedAt}
+    busy={isRefreshing || isResetting}
+    onRetry={() => void handleRefresh()}
+    onDetect={() => void handleCodexHomeChange(false)}
+    onChoose={() => void handleCodexHomeChange(true)}
+    onExpandRange={() => void handleRangeChange("365d")}
+  /> : null;
+  const renderDashboard = (coach: ReactNode, coachDetails?: ReactNode) => <DashboardHeroCard
+    timezone={overview?.timezone}
+    todayOverview={dashboardToday}
+    todayLoading={(isLoading || (awaitingFirstScan && isScanning)) && !dashboardToday}
     todayStale={isTodayStale}
     onOpenToday={() => {
-      const today = new Intl.DateTimeFormat("sv-SE", { timeZone: todayOverview?.timezone || showDashboard.timezone }).format(new Date());
       setSelectedProjectFilter(null);
-      setSelectedSessionDate(today);
+      setSelectedSessionDate(currentDateInTimezone(dashboardToday?.timezone ?? overview?.timezone));
       navigate("sessions");
     }}
-    range={range}
-    isBusy={isLoading || isRefreshing || isResetting || isExporting !== null}
-    isExporting={isExporting}
-    exportError={exportError}
-    onRangeChange={handleRangeChange}
-    onExport={(format) => void handleExport(format)}
-    metrics={metrics}
-    codexLimits={codexLimits}
     coach={coach}
-    coachFirst
     paperSpread={paperDashboard}
     coachDetails={coachDetails}
+    localRecovery={view === "dashboard" ? <>{scanWait}{recovery}</> : null}
     quotaHistory={<QuotaHistorySummary onOpenHistory={openQuotaHistory}/>}
     quotaLimits={paperDashboard ? <CodexSidebarLimits paper limits={codexLimits} error={codexLimitsError} isLimitsRefreshing={isLimitsRefreshing} onRefreshLimits={() => void handleLimitsRefresh()} isWindowActivating={isWindowActivating} windowActivationStatus={windowActivationStatus} windowActivationError={windowActivationError} onActivateWindow={() => void handleActivateCodexWindow()}/> : undefined}
     onOpenAnalysis={() => navigate("analysis")}
-  /> : null;
+  />;
+  const scanHeader = <DashboardHeader
+    updateInfo={updateInfo}
+    isUpdateDismissed={isUpdateDismissed}
+    updateInstallStatus={updateInstallStatus}
+    updateProgress={updateProgress}
+    onUpgrade={() => void handleUpgrade()}
+    onRefresh={() => void handleRefresh()}
+    isRefreshing={isRefreshing || isScanning}
+    isBusy={isLoading || isScanning || isRefreshing || isResetting || isExporting !== null}
+    overview={overview}
+    scanMessage={scanError ? t("recovery.last_scan_failed") : scanMessage}
+    syncFailed={!!scanError}
+    secondaryRefresh={view === "dashboard"}
+    lastRescanDurationMs={lastRescanDurationMs}
+  />;
 
   return (
     <div className="pulse-app relative flex h-screen flex-col overflow-hidden bg-background text-foreground" data-view={view}>
@@ -456,12 +497,12 @@ export default function App() {
         <div className="pulse-global-actions"><PulseStyleSwitcher/>
           <button type="button" data-testid="open-widget" className="pulse-shell-action pulse-widget-action" disabled={desktopAction !== null} aria-busy={desktopAction === "widget"} onClick={() => void runDesktopAction("widget")}><MonitorUp size={16}/><span>{shellCopy(desktopAction === "widget" ? "widgetBusy" : preferences.widgetVisible ? "widgetVisible" : "widget")}</span></button>
           <button type="button" data-testid="account-toggle" className="pulse-shell-action" aria-label={shellCopy("account")} aria-expanded={compactWindow ? accountDrawerOpen : accountExpanded && view !== "settings" && view !== "logs"} aria-controls={compactWindow ? "pulse-account-drawer" : "pulse-account-rail"} onClick={() => compactWindow || view === "settings" || view === "logs" ? showAccount() : setAccountExpanded(value => !value)}><UserRound size={17}/><span>{shellCopy("account")}</span>{compactWindow && quotaSummary ? <small className="pulse-account-summary">{quotaSummary} {shellCopy("remaining")}</small> : null}</button>
-          <button type="button" data-testid="help" className="pulse-shell-action pulse-help-action" onClick={openHelp} aria-label={shellCopy("help")} title={shellCopy("help")}><CircleHelp size={17}/><span>{shellCopy("help")}</span></button>
+          <button ref={helpButton} type="button" data-testid="help" className="pulse-shell-action pulse-help-action" onClick={openHelp} aria-label={shellCopy("help")} aria-expanded={view === "dashboard" && helpOpen} aria-controls={helpOpen ? "pulse-workspace-help" : undefined} title={shellCopy("help")}><CircleHelp size={17} aria-hidden="true"/><span>{shellCopy("help")}</span></button>
           <button type="button" className="pulse-icon-button" aria-label={copy("appearance")} title={t("common.settings")} onClick={() => openSettings()}><Settings2 size={18}/></button>
         </div>
       </header>
       <UpdateRecoveryNotice result={updateRecoveryResult} error={updateRecoveryError} onDismiss={handleDismissUpdateRecovery} onOpenRecords={handleOpenUpdateRecords}/>
-      {(!showQuickStart || view !== "dashboard") && (desktopError || desktopNotice) ? <p className={`pulse-shell-notice ${desktopError ? "pulse-error" : ""}`} role={desktopError ? "alert" : "status"}>{desktopError ?? desktopNotice}</p> : null}
+      {(!helpOpen || view !== "dashboard") && (desktopError || desktopNotice) ? <p className={`pulse-shell-notice ${desktopError ? "pulse-error" : ""}`} role={desktopError ? "alert" : "status"}>{desktopError ?? desktopNotice}</p> : null}
       <div className="pulse-workspace">
       <div data-tauri-drag-region aria-hidden="true" className="absolute inset-x-0 top-0 z-10 h-[var(--window-controls-height)] select-none" />
       {true ? (
@@ -499,20 +540,7 @@ export default function App() {
       >
       <div className={`relative mx-auto flex min-h-full w-full max-w-layout flex-col px-6 pb-8 content-sm:px-8 content-lg:px-10 ${view === "settings" ? "pt-0" : "pt-4"}`}>
 
-        {view !== "settings" ? <DashboardHeader
-          updateInfo={updateInfo}
-          isUpdateDismissed={isUpdateDismissed}
-          updateInstallStatus={updateInstallStatus}
-          updateProgress={updateProgress}
-          onUpgrade={() => void handleUpgrade()}
-          onRefresh={() => void handleRefresh()}
-          isRefreshing={isRefreshing || isScanning}
-          isBusy={isLoading || isScanning || isRefreshing || isResetting || isExporting !== null}
-          overview={overview}
-          scanMessage={scanError ? t("recovery.last_scan_failed") : scanMessage}
-          syncFailed={!!scanError}
-          lastRescanDurationMs={lastRescanDurationMs}
-        /> : null}
+        {view !== "settings" && view !== "dashboard" ? scanHeader : null}
 
         <main className={view === "dashboard" ? "flex-1 py-3" : "flex-1 py-6"}>
           {updateInfo?.hasUpdate && !isUpdateDismissed ? (
@@ -626,24 +654,7 @@ export default function App() {
             </div>
           ) : null}
 
-          <ScanWaitNotice active={isLoading || isScanning} diagnostics={diagnostics} />
-          {showRecovery && view !== "settings" ? (
-            <UsageRecoveryCard
-              scanning={isScanning}
-              pending={awaitingFirstScan && isScanning}
-              error={scanError || error}
-              diagnostics={diagnostics}
-              diagnosticsError={diagnosticsError}
-              hasCachedData={!!overview?.updatedAt}
-              busy={isRefreshing || isResetting}
-              onRetry={() => void handleRefresh()}
-              onDetect={() => void handleCodexHomeChange(false)}
-              onChoose={() => void handleCodexHomeChange(true)}
-              onExpandRange={() => void handleRangeChange("365d")}
-            />
-          ) : null}
-
-          {isLoading ? <LoadingState title={loadingTitle} description={loadingDescription} /> : null}
+          {view !== "dashboard" ? <>{scanWait}{recovery}{isLoading ? <LoadingState title={loadingTitle} description={loadingDescription}/> : null}</> : null}
 
           {view === "monthly" && isMonthlyLoading ? (
             <LoadingState title={t("loading.loading_monthly")} description={t("loading.natural_month_desc")} />
@@ -656,14 +667,11 @@ export default function App() {
           {visitedViews.current.has("dashboard") ? (
             <Activity mode={view === "dashboard" ? "visible" : "hidden"}>
             <div className="space-y-5">
-              {showQuickStart && !compactWindow ? <PulseGettingStarted expanded={helpExpanded} onExpand={() => setHelpExpanded(value => !value)} localReady={!!overview?.updatedAt || diagnostics?.status === "ready"} accountReady={!!codexLimits} quotaAvailable={hasReturnedQuota(codexLimits)} source={diagnostics?.codexHome} busy={desktopAction !== null} notice={desktopNotice} error={desktopError} onSource={() => openSettings("source")} onAccount={showAccount} onWidget={() => void runDesktopAction("widget")} onShortcuts={() => void runDesktopAction("shortcuts")} onDismiss={dismissQuickStart}/> : null}
-              {paperDashboard ? <PulseCoachOverview {...coachProps} observationsExpanded={paceDetailsRequested}>
-                {({ summary, details }) => showDashboard ? renderDashboard(summary, details)
-                  : <>{summary}<QuotaHistorySummary onOpenHistory={openQuotaHistory}/>{details}</>}
-              </PulseCoachOverview> : showDashboard ? renderDashboard(dashboardCoach)
-                : <>{dashboardCoach}<QuotaHistorySummary onOpenHistory={openQuotaHistory}/></>}
-
-              {showQuickStart && compactWindow ? <PulseGettingStarted expanded={helpExpanded} onExpand={() => setHelpExpanded(value => !value)} localReady={!!overview?.updatedAt || diagnostics?.status === "ready"} accountReady={!!codexLimits} quotaAvailable={hasReturnedQuota(codexLimits)} source={diagnostics?.codexHome} busy={desktopAction !== null} notice={desktopNotice} error={desktopError} onSource={() => openSettings("source")} onAccount={showAccount} onWidget={() => void runDesktopAction("widget")} onShortcuts={() => void runDesktopAction("shortcuts")} onDismiss={dismissQuickStart}/> : null}
+              {helpOpen ? <PulseGettingStarted panelRef={helpPanel} accountReady={!!codexLimits} quotaAvailable={quotaAvailable} busy={desktopAction !== null} notice={desktopNotice} error={desktopError} onSource={() => openSettings("source")} onAccount={showAccount} onWidget={() => void runDesktopAction("widget")} onShortcuts={() => void runDesktopAction("shortcuts")} onDismiss={closeHelp}/> : null}
+              {paperDashboard ? <PulseCoachOverview {...coachProps} observationsExpanded={paceDetailsRequested} pacingOnly={quotaAvailable}>
+                {({ summary, details }) => renderDashboard(summary, details)}
+              </PulseCoachOverview> : renderDashboard(dashboardCoach)}
+              {view === "dashboard" ? scanHeader : null}
 
             </div>
             </Activity>

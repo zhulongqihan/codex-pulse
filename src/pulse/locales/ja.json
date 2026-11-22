@@ -37,6 +37,7 @@
   },
   "header": {
     "navigation": "メインナビゲーション",
+    "detail_views": "詳細表示",
     "collapse_sidebar": "サイドバーを折りたたむ",
     "expand_sidebar": "サイドバーを展開",
     "resize_sidebar": "サイドバーの幅を変更",

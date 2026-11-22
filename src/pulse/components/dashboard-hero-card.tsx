@@ -1,10 +1,10 @@
-import { Fragment, useEffect, useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { Download, FileSpreadsheet, FileText, ArrowUpRight, ArrowRight } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { RangeSwitcher } from "@/components/range-switcher";
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import type { CodexLimitsResponse, ExportFormat, OverviewResponse, RangeKey } from "@/lib/api";
+import type { ExportFormat, OverviewResponse, RangeKey } from "@/lib/api";
 import { formatCompactNumber, formatCurrencyShort, formatNumber, formatPercent } from "@/lib/formatters";
 import type { MetricCardData } from "@/lib/usage-dashboard";
 import { UsageTrendsCard } from "@/components/usage-trends-card";
@@ -18,31 +18,32 @@ import { timeZoneLabel } from "@/lib/time-context";
 import "./dashboard-hero-card.css";
 
 type DashboardHeroCardProps = {
-  overview: OverviewResponse; range: RangeKey; isBusy: boolean; isExporting: ExportFormat | null;
-  exportError?: string | null;
-  todayOverview?: OverviewResponse | null; todayUnavailable?: boolean; todayStale?: boolean;
-  onRangeChange: (value: RangeKey) => void; onExport: (format: ExportFormat) => void;
-  metrics: MetricCardData[]; codexLimits: CodexLimitsResponse | null;
-  onOpenDay?: (date: string) => void; onOpenToday?: () => void; onOpenAnalysis?: () => void;
+  timezone?: string;
+  todayOverview?: OverviewResponse | null; todayLoading?: boolean; todayUnavailable?: boolean; todayStale?: boolean;
+  onOpenToday?: () => void; onOpenAnalysis?: () => void;
   coach?: ReactNode;
   quotaHistory?: ReactNode;
   quotaLimits?: ReactNode;
-  coachFirst?: boolean;
   paperSpread?: boolean;
   coachDetails?: ReactNode;
+  localRecovery?: ReactNode;
 };
 
-export type UsageAnalysisViewProps = Pick<DashboardHeroCardProps,
-  "overview" | "range" | "isBusy" | "isExporting" | "exportError" | "onRangeChange" | "onExport" | "metrics" | "onOpenDay"
->;
+export type UsageAnalysisViewProps = {
+  overview: OverviewResponse; range: RangeKey; isBusy: boolean; isExporting: ExportFormat | null;
+  exportError?: string | null;
+  onRangeChange: (value: RangeKey) => void; onExport: (format: ExportFormat) => void;
+  metrics: MetricCardData[];
+  onOpenDay?: (date: string) => void;
+};
 
 /** Today is independent of the analysis range and any selected historical day. */
-export function DashboardHeroCard({ overview, isBusy, todayOverview = null, todayUnavailable = false, todayStale = false, onOpenToday, onOpenAnalysis, coach, quotaHistory, quotaLimits, coachFirst = false, paperSpread = false, coachDetails }: DashboardHeroCardProps) {
+export function DashboardHeroCard({ timezone, todayOverview = null, todayLoading = false, todayUnavailable = false, todayStale = false, onOpenToday, onOpenAnalysis, coach, quotaHistory, quotaLimits, paperSpread = false, coachDetails, localRecovery }: DashboardHeroCardProps) {
   const { t, i18n } = useTranslation();
   const copy = usePulseCopy();
   const home = useHomeCopy();
   const dashboard = useDashboardCopy();
-  const todayTimezone = todayOverview?.timezone ?? overview.timezone;
+  const todayTimezone = todayOverview?.timezone ?? timezone;
   const [todayDate, setTodayDate] = useState(() => currentDateInTimezone(todayTimezone));
   useEffect(() => {
     const update = () => setTodayDate(currentDateInTimezone(todayTimezone));
@@ -53,7 +54,7 @@ export function DashboardHeroCard({ overview, isBusy, todayOverview = null, toda
   }, [todayTimezone]);
   // A retained snapshot from yesterday must not become today's zero or usage.
   const todayRow = todayOverview?.daily.find(day => day.date === todayDate);
-  const todayKnown = Boolean(todayRow) && !todayUnavailable;
+  const todayKnown = !!todayRow && !todayUnavailable;
   const todayUpdated = todayOverview?.updatedAt ? new Date(todayOverview.updatedAt) : null;
   let updatedTime: string | null = null;
   if (todayUpdated && Number.isFinite(todayUpdated.getTime())) {
@@ -62,27 +63,26 @@ export function DashboardHeroCard({ overview, isBusy, todayOverview = null, toda
     catch { updatedTime = todayUpdated.toLocaleTimeString(locale, { hour: "2-digit", minute: "2-digit" }); }
   }
 
-  const readings = {
-    cost: <div className="pulse-dashboard-today-cost"><dt>{dashboard("todayCost")}</dt><dd data-testid="today-estimate">{todayKnown ? formatCurrencyShort(todayRow!.costUSD) : "—"}</dd><small>{dashboard("estimateNote")}</small></div>,
-    tokens: <div><dt>{dashboard("todayTokens")}</dt><dd data-testid="today-tokens" title={todayKnown ? formatNumber(todayRow!.totalTokens) : undefined}>{todayKnown ? formatCompactNumber(todayRow!.totalTokens) : "—"}</dd><small>{dashboard("separateQuota")}</small></div>,
-  };
-  const readingOrder = paperSpread ? ["tokens", "cost"] as const : ["cost", "tokens"] as const;
-  const today = <section data-testid="today-summary" className="pulse-today-summary pulse-dashboard-today" aria-labelledby="pulse-today-title" aria-busy={!todayOverview && isBusy}>
+  const todayStatus = todayKnown
+    ? todayStale ? home("stale") : updatedTime ? `${dashboard("localLogs")} · ${home("updated")} ${updatedTime}` : home("noUpdated")
+    : todayLoading ? t("loading.preparing_cache") : home("todayUnavailable");
+  const today = <section data-testid="today-summary" className="pulse-today-summary pulse-dashboard-today" aria-labelledby="pulse-today-title" aria-busy={todayLoading}>
       <div className="pulse-dashboard-today-heading">
-        <h2 id="pulse-today-title">{home("today")}</h2>
+        <h2 id="pulse-today-title">{dashboard("todayLocalUsage")}</h2>
         <time dateTime={todayDate}>{todayDate}</time>
-        <span className="pulse-time-context" data-testid="today-timezone">{t("reading_context.statistics_short", { zone: timeZoneLabel(todayTimezone, i18n.resolvedLanguage ?? i18n.language) })}</span>
+        {todayTimezone ? <span className="pulse-time-context" data-testid="today-timezone">{t("reading_context.statistics_short", { zone: timeZoneLabel(todayTimezone, i18n.resolvedLanguage ?? i18n.language) })}</span> : null}
       </div>
       <div className="pulse-dashboard-today-readings">
         <dl className="pulse-dashboard-today-values">
-          {readingOrder.map(key => <Fragment key={key}>{readings[key]}</Fragment>)}
+          <div><dt>{dashboard("todayTokens")}</dt><dd data-testid="today-tokens" title={todayKnown ? formatNumber(todayRow.totalTokens) : undefined}>{todayKnown ? formatCompactNumber(todayRow.totalTokens) : "—"}</dd><small>{dashboard("separateQuota")}</small></div>
+          <div className="pulse-dashboard-today-cost"><dt>{dashboard("todayCost")}</dt><dd data-testid="today-estimate">{todayKnown ? formatCurrencyShort(todayRow.costUSD) : "—"}</dd><small>{dashboard("estimateNote")}</small></div>
         </dl>
         <div className="pulse-today-actions pulse-dashboard-today-actions">
           {onOpenToday ? <Button type="button" variant="secondary" size="sm" onClick={onOpenToday} disabled={!todayKnown}>{home("todaySessions")}<ArrowRight size={14} aria-hidden="true"/></Button> : null}
-          <p role="status" className={todayStale ? "pulse-today-stale" : undefined}>{!todayKnown ? home("todayUnavailable") : todayStale ? home("stale") : updatedTime ? `${dashboard("localLogs")} · ${home("updated")} ${updatedTime}` : home("noUpdated")}</p>
+          <p role="status" className={todayStale ? "pulse-today-stale" : undefined}>{todayStatus}</p>
         </div>
       </div>
-      {todayKnown ? <details className="pulse-today-breakdown" open={paperSpread || undefined}><summary>{home("todayBreakdown")}</summary><dl>
+      {todayKnown ? <details className="pulse-today-breakdown"><summary>{home("todayBreakdown")}</summary><dl>
         <div><dt>{copy("input")}</dt><dd>{formatNumber(todayRow!.inputTokens)}</dd></div>
         <div><dt>{copy("cached")}</dt><dd>{formatNumber(todayRow!.cachedInputTokens)}</dd></div>
         <div><dt>{copy("output")}</dt><dd>{formatNumber(todayRow!.outputTokens)}</dd></div>
@@ -98,18 +98,19 @@ export function DashboardHeroCard({ overview, isBusy, todayOverview = null, toda
     {paperSpread ? <>
       <div className="pulse-paper-dashboard-page pulse-paper-dashboard-page--quota">
         <div className="pulse-paper-quotas">{quotaLimits}</div>
-        {coach}
       </div>
       <div className="pulse-paper-dashboard-page pulse-paper-dashboard-page--today">
         {today}
+        {localRecovery}
         {quotaHistory}
         {analysis}
       </div>
+      <div className="pulse-paper-dashboard-page pulse-paper-dashboard-page--pacing">{coach}</div>
       {coachDetails ? <div className="pulse-paper-dashboard-details">{coachDetails}</div> : null}
     </> : <>
-      {coachFirst ? coach : null}
+      {coach}
       {today}
-      {!coachFirst ? coach : null}
+      {localRecovery}
       {quotaHistory}
       {analysis}
     </>}

@@ -37,6 +37,7 @@
   },
   "header": {
     "navigation": "主导航",
+    "detail_views": "明细视图",
     "collapse_sidebar": "收起侧栏",
     "expand_sidebar": "展开侧栏",
     "resize_sidebar": "调整侧栏宽度",
