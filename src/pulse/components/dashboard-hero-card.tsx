@@ -85,7 +85,7 @@ export function DashboardHeroCard({ timezone, todayOverview = null, todayLoading
           <div className="pulse-dashboard-today-cost"><dt>{dashboard("todayCost")}</dt><dd data-testid="today-estimate">{todayKnown ? formatCurrencyShort(todayRow.costUSD) : "—"}</dd></div>
         </dl>
         <div className="pulse-today-actions pulse-dashboard-today-actions">
-          {onOpenToday ? <Button type="button" variant="secondary" size="sm" onClick={onOpenToday} disabled={!todayKnown}>{home("todaySessions")}<ArrowRight size={14} aria-hidden="true"/></Button> : null}
+          {onOpenToday ? <Button type="button" variant="secondary" size="sm" data-testid="open-today-sessions" onClick={onOpenToday} disabled={!todayKnown}>{home("todaySessions")}<ArrowRight size={14} aria-hidden="true"/></Button> : null}
           <p role="status" className={todayStale ? "pulse-today-stale" : undefined}>{todayStatus}</p>
         </div>
       </div>

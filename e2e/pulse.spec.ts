@@ -144,7 +144,7 @@ async function verifyTodayAndRange(skin: string) {
   await $('[data-testid="dashboard-nav-tab"]').click();
   await $('[data-testid="today-summary"]').waitForDisplayed();
   await expect($('[data-testid="usage-trends-card"]')).not.toBeDisplayed();
-  await $('[data-testid="today-summary"] button').click();
+  await $('[data-testid="open-today-sessions"]').click();
   await expect($('[data-testid="sessions-nav-tab"]')).toHaveAttribute('aria-selected', 'true');
   await $(`[id="date-group-${baseline.date}"]`).waitForDisplayed();
   await browser.waitUntil(async () => await browser.execute(() => (window as any).pulseDateScrolls.length) > 0);
