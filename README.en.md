@@ -31,7 +31,7 @@ A quiet quota-pacing companion for Codex on Windows: view remaining quota and re
 - **Exports and updates:** XLSX/Markdown contain range summary, daily, model and project statistics. Pulse updates verify the release signature, product, platform and package digest, preserving data and restoring the previous executable if startup fails.
 - **Help and feedback:** find usage guidance, experience discussions and bug reporting in settings. Preview a minimal summary of visible environment and selected options before copying it; account data, logs and conversations are not uploaded automatically.
 
-0.14.4 limits the first information hint in the title-bar pacing panel to the reset time, quota used alongside cycle progress, and the last notice check. [Release notes](docs/releases/v0.14.4.md#english).
+0.14.5 keeps the last quota-used percentage and current cycle progress available after a failed refresh while the quota window remains active. [Release notes](docs/releases/v0.14.5.md#english).
 
 Paper companion views with synthetic data: [pacing details](docs/screenshots/paper-0.14.3-pace-panel.png) · [system tray](docs/screenshots/paper-0.13.2-tray.png) · [Codex panel styling](docs/screenshots/paper-0.14.3-mcp.png).
 

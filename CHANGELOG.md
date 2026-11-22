@@ -4,6 +4,15 @@ User-facing changes are grouped by release, following [Keep a Changelog](https:/
 
 ## [Unreleased]
 
+## [0.14.5] - 2026-11-23
+
+### Fixed / 修复
+
+- Keep the last quota-used percentage and the current cycle progress visible in the pacing hint when a refresh fails or the reading is stale and the same quota window is still active.
+- 额度刷新失败或读数过期时，只要原额度窗口仍在进行，配速提示就会显示上次额度已用百分比和当前周期进度。
+
+[完整中英说明 / Full release notes](docs/releases/v0.14.5.md)
+
 ## [0.14.4] - 2026-11-23
 
 ### Changed / 调整
@@ -397,7 +406,8 @@ User-facing changes are grouped by release, following [Keep a Changelog](https:/
 
 Earlier releases remain available in [GitHub Releases](https://github.com/zhulongqihan/codex-pulse/releases). / 更早版本保留在 GitHub Releases。
 
-[Unreleased]: https://github.com/zhulongqihan/codex-pulse/compare/v0.14.4...HEAD
+[Unreleased]: https://github.com/zhulongqihan/codex-pulse/compare/v0.14.5...HEAD
+[0.14.5]: https://github.com/zhulongqihan/codex-pulse/compare/v0.14.4...v0.14.5
 [0.14.4]: https://github.com/zhulongqihan/codex-pulse/compare/v0.14.3...v0.14.4
 [0.14.1]: https://github.com/zhulongqihan/codex-pulse/compare/v0.14.0...v0.14.1
 [0.14.0]: https://github.com/zhulongqihan/codex-pulse/compare/v0.13.4...v0.14.0

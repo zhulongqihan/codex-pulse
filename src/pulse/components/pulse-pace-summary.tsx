@@ -3,7 +3,7 @@ import { useTranslation } from "react-i18next";
 import { Bell, ChevronDown, RefreshCw } from "lucide-react";
 import { CoachReference, PulsePaceCard } from "./pulse-pace";
 import { quotaCoachFromSnapshot } from "@/lib/quota-pace-coach";
-import { formatCoachCountdown, formatCoachNumber, formatCoachReset, formatCoachWindow, quotaCoachClarity, quotaCoachCopy, quotaCoachFeedback, quotaCoachReason } from "@/lib/quota-pace-coach-copy";
+import { formatCoachComparison, formatCoachCountdown, formatCoachNumber, formatCoachReset, formatCoachWindow, quotaCoachClarity, quotaCoachCopy, quotaCoachFeedback, quotaCoachReason } from "@/lib/quota-pace-coach-copy";
 import { paceCopy } from "@/lib/pulse-pace-copy";
 import { paceSummaryCopy } from "@/lib/pace-summary-copy";
 import { localTimeZone, timeZoneLabel } from "@/lib/time-context";
@@ -46,8 +46,10 @@ export function PulsePaceSummary({
   const reason = !ready ? quotaCoachReason(language, data?.reason) : null;
   const readingLabel = ["stale", "failed", "expired", "unavailable"].includes(coach.status) && coach.remainingPercent != null ? quotaCoachFeedback(language, "last") : copy("remaining");
   const updatedDate = data?.updatedAt && Number.isFinite(Date.parse(data.updatedAt)) ? new Date(data.updatedAt) : null;
-  const updated = updatedDate ? paceCopy(language, "updated", { time: updatedDate.toLocaleTimeString(language, { hour: "2-digit", minute: "2-digit" }) }) : paceCopy(language, "never");
+  const updated = updatedDate ? paceCopy(language, "updated", { time: updatedDate.toLocaleTimeString(language, { hour: "2-digit", minute: "2-digit" }) })
+    : coach.remainingPercent == null ? paceCopy(language, "never") : null;
   const formatted = (value: number) => formatCoachNumber(value, language, 1);
+  const comparison = formatCoachComparison(coach, language, 1);
   const errorStatus = coach.status === "ready" ? "unavailable" : coach.status;
   const resetTimezone = localTimeZone();
   const advice = ready ? recentRisk ? copy("recentRiskAdvice") : coach.tone === "roomy" ? summary("roomy") : copy(`${coach.tone!}Advice`) : null;
@@ -56,12 +58,12 @@ export function PulsePaceSummary({
       <div><h2 id={`${generatedId}-title`}>{summary(pacingOnly ? "pacing" : "title")}</h2><span>{formatCoachWindow(coach.window, language)}</span>
         <ReadingInfo label={quotaCoachClarity(language, "explain")}>
           {!ready ? <p>{reason ?? copy(`${errorStatus}Detail`)}</p> : null}
-          {ready ? <p>{quotaCoachCopy(language, "comparison", { used: formatted(coach.usedPercent!), elapsed: formatted(coach.elapsedPercent!) })}</p> : null}
+          {comparison ? <p>{comparison}</p> : null}
           <p>{copy("scope")}</p>
           {coach.hasUnknownWindows ? <p>{quotaCoachFeedback(language, "unknownWindows")}</p> : null}
           {coach.resetAt != null ? <p>{quotaCoachCopy(language, "resetAt", { time: formatCoachReset(coach.resetAt, language) })}
             {resetTimezone ? ` · ${timeZoneLabel(resetTimezone, language, coach.resetAt)}` : null}</p> : null}
-          <p><time dateTime={updatedDate?.toISOString()}>{updated}</time></p>
+          {updated ? <p><time dateTime={updatedDate?.toISOString()}>{updated}</time></p> : null}
         </ReadingInfo>
       </div>
       <div className="pulse-summary-updated">{wait > 0 ? <span role="timer">{quotaCoachFeedback(language, "cooldownShort", { seconds: wait })}</span> : null}<button type="button" onClick={onRefresh} disabled={refreshing || wait > 0} aria-busy={refreshing} aria-label={paceCopy(language, "refresh")} title={paceCopy(language, "refresh")}><RefreshCw size={16}/></button></div>

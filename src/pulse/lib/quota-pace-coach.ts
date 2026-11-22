@@ -23,9 +23,10 @@ function candidate(window: PaceWindow, now: number) {
   const reset = at(window.resetsAt), duration = window.windowMinutes;
   if (!finite(window.remainingPercent) || window.remainingPercent < 0 || window.remainingPercent > 100 || !finite(duration) || duration <= 0 || duration > 5_256_000 || reset == null) return null;
   const minutes = (reset - now) / 60_000;
-  if (minutes <= 0 || minutes > duration + 2 || ["unavailable", "stale", "expired"].includes(window.state)) return null;
+  if (minutes <= 0 || minutes > duration + 2 || window.state === "unavailable" || window.state === "expired") return null;
   const remainingTime = clamp(minutes / duration * 100);
-  return { window, reset, minutes, remainingTime, remaining: window.remainingPercent, used: 100 - window.remainingPercent, elapsed: 100 - remainingTime };
+  const start = reset - duration * 60_000;
+  return { window, reset, start, minutes, remainingTime, remaining: window.remainingPercent, used: 100 - window.remainingPercent, elapsed: 100 - remainingTime };
 }
 /** Reading state for the window list; inspecting a window never makes it current. */
 export function quotaWindowReadState(window: PaceWindow, now: number, fresh: boolean): "ready" | "unavailable" | "stale" | "expired" | "exhausted" {
@@ -77,22 +78,30 @@ export function buildQuotaPaceCoach(input: QuotaPaceCoachInput): QuotaPaceCoach 
   result.resetNotice = noticeAllowsActive(input.coachExtras?.noticeState) ? validNotice(input.coachExtras?.resetNotice, now) : null;
   result.noticeState = resolveNoticeState(input.coachExtras?.noticeState, input.coachExtras?.resetNotice, result.resetNotice != null, now);
   const candidates = windows.map(window => candidate(window, now)).filter((value): value is NonNullable<typeof value> => value != null);
+  candidates.sort((left, right) => left.remaining / left.remainingTime - right.remaining / right.remainingTime || left.minutes - right.minutes);
+  const currentCandidates = candidates.filter(({ window }) => window.state !== "stale");
+  const selected = currentCandidates[0];
+  const reading = selected ?? candidates.find(({ start }) => start <= now);
   const known = windows.find(window => finite(window.remainingPercent) && window.remainingPercent >= 0 && window.remainingPercent <= 100);
-  const selected = candidates.sort((left, right) => left.remaining / left.remainingTime - right.remaining / right.remainingTime || left.minutes - right.minutes)[0];
-  result.window = selected?.window ?? known ?? windows[0] ?? null;
+  const staleAlternative = windows.some(window => window.state === "stale" && finite(window.remainingPercent));
+  result.window = reading?.window ?? known ?? windows[0] ?? null;
   if (result.window) {
     result.remainingPercent = finite(result.window.remainingPercent) && result.window.remainingPercent >= 0 && result.window.remainingPercent <= 100 ? result.window.remainingPercent : null;
     result.usedPercent = result.remainingPercent == null ? null : 100 - result.remainingPercent;
     result.resetAt = at(result.window.resetsAt);
     result.remainingMinutes = result.resetAt == null ? null : Math.max(0, (result.resetAt - now) / 60_000);
   }
-  result.hasUnknownWindows = candidates.length < windows.length || !windows.some(window => window.kind === "session") || !windows.some(window => window.kind === "weekly");
+  // Cached usage can be paired with the clock for this same cycle once it has started.
+  const currentReading = input.fresh && !input.failed && selected && (selected.remaining === 0 || !staleAlternative);
+  if (reading && (reading.start <= now || currentReading)) {
+    result.startAt = reading.start;
+    result.elapsedPercent = reading.elapsed;
+    result.remainingTimePercent = reading.remainingTime;
+  }
+  result.hasUnknownWindows = currentCandidates.length < windows.length || !windows.some(window => window.kind === "session") || !windows.some(window => window.kind === "weekly");
   if (input.failed) { result.status = "failed"; return result; }
   if (!input.fresh) { result.status = known ? "stale" : "unavailable"; return result; }
   if (!selected) { result.status = windows.some(window => window.state === "stale") ? "stale" : windows.some(window => window.state === "expired" || (at(window.resetsAt) ?? Infinity) <= now) ? "expired" : "unavailable"; return result; }
-  result.resetAt = selected.reset; result.remainingMinutes = selected.minutes;
-  result.startAt = selected.reset - selected.window.windowMinutes! * 60_000;
-  result.remainingTimePercent = selected.remainingTime; result.elapsedPercent = selected.elapsed;
   if (selected.remaining === 0) {
     result.status = "exhausted";
     result.dailyObservations = dailyForWindow(input.coachExtras, selected.window, selected.reset);
@@ -100,7 +109,7 @@ export function buildQuotaPaceCoach(input: QuotaPaceCoachInput): QuotaPaceCoach 
     return result;
   }
   // A genuinely stale known alternative may be tighter; never let a fresh roomy window hide it.
-  if (windows.some(window => window.state === "stale" && finite(window.remainingPercent))) { result.status = "stale"; return result; }
+  if (staleAlternative) { result.status = "stale"; return result; }
   result.status = "ready";
   const difference = selected.used - selected.elapsed;
   result.tone = difference > 5 ? "fast" : difference < -5 ? "roomy" : "balanced";

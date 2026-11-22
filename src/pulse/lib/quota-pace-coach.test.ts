@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { buildQuotaPaceCoach, quotaCoachFromSnapshot, quotaWindowReadState } from "./quota-pace-coach";
 import { formatCoachCountdown, formatCoachNumber, quotaCoachClarity, quotaCoachCopy, quotaCoachFeedback } from "./quota-pace-coach-copy";
-import type { PaceCoachExtras, PaceResetNotice, PaceWindow } from "./pulse-pace";
+import type { PaceCoachExtras, PaceResetNotice, PaceSnapshot, PaceWindow } from "./pulse-pace";
 
 const now = Date.parse("2026-11-09T08:00:00Z");
 const iso = (minutes: number) => new Date(now + minutes * 60_000).toISOString();
@@ -52,6 +52,63 @@ describe("quota pace coach", () => {
     expect(build([window(80, -1)]).status).toBe("expired");
     expect(build([{ ...window(), state: "stale" }, window(80, 120, 300, "session")]).status).toBe("stale");
     for (const result of [build([window()], { failed: true }), build([window()], { fresh: false }), build([window(80, -1)])]) expect(result.tone).toBeNull();
+  });
+  it.each([["failed", true], ["stale", false]] as const)("retains the cached comparison and advances the window clock when %s", (status, refreshFailed) => {
+    const weekly: PaceWindow = { ...window(58, 88 * 60), state: "stale" };
+    const source: PaceSnapshot = {
+      schemaVersion: 1, generatedAt: iso(0), updatedAt: iso(-30), status: "stale", primaryKind: "weekly",
+      reason: refreshFailed ? "refresh_failed" : null, refreshFailed, windows: [weekly],
+    };
+    const result = quotaCoachFromSnapshot(source, now);
+    expect(result).toMatchObject({
+      status, window: weekly, usedPercent: 42, remainingPercent: 58,
+      startAt: Date.parse(iso(-80 * 60)), resetAt: Date.parse(iso(88 * 60)), remainingMinutes: 88 * 60,
+      tone: null, reference: null, remainingAtReset: null, nearResetWithSurplus: false,
+    });
+    expect(result.elapsedPercent).toBeCloseTo(80 / 168 * 100);
+    expect(result.remainingTimePercent).toBeCloseTo(88 / 168 * 100);
+    const later = quotaCoachFromSnapshot(source, Date.parse(iso(60)));
+    expect(later.usedPercent).toBe(42);
+    expect(later.elapsedPercent).toBeCloseTo(81 / 168 * 100);
+    expect(later.startAt).toBe(result.startAt);
+  });
+  it("selects a valid cached window using the pace ordering and derives both readings from it", () => {
+    const short: PaceWindow = { ...window(70, 50, 300, "session"), state: "stale" };
+    const weekly: PaceWindow = { ...window(58, 88 * 60), state: "stale" };
+    for (const order of [[short, weekly], [weekly, short]]) {
+      const result = build(order, { failed: true });
+      expect(result.window).toBe(weekly);
+      expect(result.usedPercent).toBe(42);
+      expect(result.elapsedPercent).toBeCloseTo(80 / 168 * 100);
+      expect(result.hasUnknownWindows).toBe(true);
+    }
+    const currentShort: PaceWindow = { ...short, state: "idle" };
+    const mixed = build([weekly, currentShort]);
+    expect(mixed).toMatchObject({ status: "stale", window: currentShort, usedPercent: 30, tone: null, reference: null, remainingAtReset: null });
+    expect(mixed.elapsedPercent).toBeCloseTo(250 / 300 * 100);
+  });
+  it("retains a comparison without reviving a previous forecast when refresh fails", () => {
+    const previous: PaceWindow = { ...window(80, 120, 300, "session"), state: "forecast", sampleCount: 7, sampleSpanMinutes: 30, rateLowerPerHour: 10, rateUpperPerHour: 20, trend: [{ at: iso(0), remainingPercent: 80 }] };
+    expect(build([previous]).remainingAtReset).not.toBeNull();
+    const result = build([previous], { failed: true });
+    expect(result).toMatchObject({ status: "failed", usedPercent: 20, elapsedPercent: 60, tone: null, reference: null, remainingAtReset: null, nearResetWithSurplus: false });
+  });
+  it("suppresses cached progress for missing or invalid data and at the reset boundary", () => {
+    const item: PaceWindow = { ...window(58, 88 * 60), state: "stale" };
+    const invalid: PaceWindow[] = [
+      { ...item, resetsAt: null }, { ...item, resetsAt: "invalid" }, { ...item, windowMinutes: null },
+      { ...item, windowMinutes: 0 }, { ...item, windowMinutes: Infinity }, { ...item, windowMinutes: 5_256_001 },
+      { ...item, resetsAt: iso(0) }, { ...item, resetsAt: iso(-1) }, { ...item, resetsAt: iso(10081) },
+      { ...item, state: "expired" }, { ...item, state: "unavailable" },
+      { ...item, remainingPercent: NaN }, { ...item, remainingPercent: -1 }, { ...item, remainingPercent: 101 },
+    ];
+    for (const cachedWindow of invalid) {
+      for (const options of [{ failed: true }, { fresh: false }]) {
+        expect(build([cachedWindow], options)).toMatchObject({ startAt: null, elapsedPercent: null, remainingTimePercent: null, tone: null, reference: null, remainingAtReset: null });
+      }
+    }
+    const expired = build([item], { failed: true, now: Date.parse(item.resetsAt!) });
+    expect(expired).toMatchObject({ usedPercent: 42, elapsedPercent: null, startAt: null });
   });
   it("does not derive time progress from unknown or inconsistent duration/reset data", () => {
     for (const item of [{ ...window(), windowMinutes: null }, { ...window(), resetsAt: null }, { ...window(), resetsAt: "tomorrow" }, window(80, 1000, 300), window(Number.NaN)]) {

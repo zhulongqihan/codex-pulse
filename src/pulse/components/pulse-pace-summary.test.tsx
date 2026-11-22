@@ -12,7 +12,7 @@ const now = Date.parse("2026-11-14T08:00:00Z");
 const actions = () => ({ onRefresh: vi.fn(), onDetails: vi.fn(), onRecover: vi.fn() });
 beforeEach(async () => { vi.restoreAllMocks(); vi.spyOn(Date, "now").mockReturnValue(now); await i18n.changeLanguage("en"); });
 describe("dashboard quota summary", () => {
-  it("labels a fresh exhausted reading as current and never formats an invalid timestamp", () => {
+  it("labels a fresh exhausted reading as current and omits an unknown update time for retained quota", () => {
     const data = syntheticCoachSnapshot("roomy", new Date(now));
     data.windows[1].remainingPercent = 0;
     const { rerender } = render(<PulsePaceSummary data={data} {...actions()}/>);
@@ -21,7 +21,7 @@ describe("dashboard quota summary", () => {
     rerender(<PulsePaceSummary data={{...data,updatedAt:"invalid-timestamp"}} {...actions()}/>);
     expect(screen.queryByText(paceCopy("en", "never"))).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: quotaCoachClarity("en", "explain") }));
-    expect(screen.getByText(paceCopy("en", "never"))).toBeInTheDocument();
+    expect(screen.queryByText(paceCopy("en", "never"))).not.toBeInTheDocument();
     expect(screen.queryByText(/Invalid Date/)).not.toBeInTheDocument();
   });
   it.each(["zh", "zh-Hant", "en", "ja", "ko", "de"])("shows the existing window and defers full explanations in %s", async language => {
@@ -49,7 +49,9 @@ describe("dashboard quota summary", () => {
     expect(screen.getByRole("status")).toHaveTextContent(quotaCoachCopy("en", "failed"));
     expect(screen.queryByText(quotaCoachCopy("en", "failedDetail"))).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: quotaCoachClarity("en", "explain") }));
-    expect(await screen.findByRole("tooltip")).toHaveTextContent(quotaCoachCopy("en", "failedDetail"));
+    const tooltip = await screen.findByRole("tooltip");
+    expect(tooltip).toHaveTextContent(quotaCoachCopy("en", "failedDetail"));
+    expect(tooltip).toHaveTextContent("20% of quota used at the last reading. 28.6% of the window time elapsed");
     fireEvent.click(screen.getByRole("button", { name: quotaCoachClarity("en", "explain") }));
     fireEvent.click(screen.getByRole("button", { name: quotaCoachFeedback("en", "recover") }));
     expect(handlers.onRecover).toHaveBeenCalledOnce();

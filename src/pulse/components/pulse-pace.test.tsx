@@ -31,6 +31,33 @@ function recentDepletion(remaining = 77): PaceSnapshot {
 }
 
 describe("shared cycle pace card", () => {
+  it.each(["failed", "stale"] as const)("shows the cached quota comparison in the title-bar hint when %s", async state => {
+    await i18n.changeLanguage("zh");
+    const data = cycle(58), resetsAt = iso(88 * 60), checkedAt = iso(-2);
+    Object.assign(data.windows[1], { state: "stale", resetsAt });
+    data.refreshFailed = state === "failed";
+    data.updatedAt = state === "failed" ? checkedAt : iso(-8);
+    data.coachExtras = { dailyObservations: [], resetNotice: null, noticeState: { status: "none", checkedAt, validUntil: null } };
+    render(<PulsePaceCard data={data} {...actions()}/>);
+    expect(screen.getByText("上次读数")).toBeVisible();
+    expect(screen.getByTestId("coach-remaining")).toHaveTextContent("58%");
+    expect(screen.getByRole("status")).toHaveTextContent(quotaCoachCopy("zh", state));
+    expect(screen.queryByTestId("coach-reference")).not.toBeInTheDocument();
+    fireEvent.click(timeInfo("zh"));
+    const tooltip = await screen.findByRole("tooltip");
+    expect(Array.from(tooltip.children, row => row.textContent)).toEqual([
+      quotaCoachCopy("zh", "resetAt", { time: formatCoachReset(Date.parse(resetsAt), "zh") }),
+      "上次额度已用42%，周期时间已过48%",
+      noticeStateCopy("zh", "checked", { time: formatCoachReset(Date.parse(checkedAt), "zh") }),
+    ]);
+  });
+  it("does not call a cached quota missing when its update timestamp is unknown", () => {
+    const data = cycle(58);
+    data.updatedAt = null;
+    render(<PulsePaceCard data={data} {...actions()}/>);
+    expect(screen.getByTestId("coach-remaining")).toHaveTextContent("58%");
+    expect(screen.queryByText(paceCopy("en", "never"))).not.toBeInTheDocument();
+  });
   it("shows only the marked reset, usage comparison and last check in the title-bar hint", async () => {
     await i18n.changeLanguage("zh");
     const data = cycle(56), checkedAt = iso(-10), resetsAt = iso(5342);

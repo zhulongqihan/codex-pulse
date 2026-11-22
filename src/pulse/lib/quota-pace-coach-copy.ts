@@ -1,5 +1,6 @@
 import { getLanguage, type Language } from "./languages";
 import type { PaceWindow } from "./pulse-pace";
+import type { QuotaPaceCoach } from "./quota-pace-coach";
 
 const en = {
   title: "Cycle pace", remaining: "Quota remaining", resetIn: "Until reset", roomy: "Roomy pace", balanced: "On pace", fast: "Pace is high",
@@ -7,6 +8,7 @@ const en = {
   roomyAdvice: "Consider longer tasks already in your plan.", balancedAdvice: "Follow your plan and keep an eye on the remaining quota.", fastAdvice: "Watch upcoming usage and keep some quota for later.",
   recentRisk: "Recent surge", recentRiskLabel: "Recent consumption has increased", recentRiskAdvice: "If this recent pace continues, quota may run out before your reset.", projectedDepletion: "Recent observations point to possible depletion before reset.",
   comparison: "{used}% of quota used; {elapsed}% of the window time elapsed", dayReference: "Daily reference allocation", hourReference: "Hourly reference allocation",
+  lastComparison: "{used}% of quota used at the last reading. {elapsed}% of the window time elapsed",
   perDay: "About {points} percentage points / day", perHour: "About {points} percentage points / hour", referenceNote: "Spread the current remainder until reset; this is not a daily refill.",
   scope: "Applies only to this quota window.", resetAt: "Resets {time}", timeBasis: "Time progress uses the official window duration and personal reset time.",
   unavailable: "Quota data unavailable", stale: "Reading needs a refresh", failed: "Could not refresh", exhausted: "Window quota exhausted", expired: "Reset time reached",
@@ -25,6 +27,7 @@ const messages: Record<Language, Record<QuotaCoachCopyKey, string>> = {
     roomyAdvice: "可优先安排计划中的长任务", balancedAdvice: "按计划推进，继续留意余量变化", fastAdvice: "注意后续用量，给后半程留些余量",
     recentRisk: "近期偏快", recentRiskLabel: "近期消耗加快", recentRiskAdvice: "若持续近期节奏，可能在个人重置前用尽。", projectedDepletion: "近期观测提示，重置前可能用尽额度。",
     comparison: "额度已用{used}%，周期时间已过{elapsed}%", dayReference: "日均参考分配", hourReference: "每小时参考分配",
+    lastComparison: "上次额度已用{used}%，周期时间已过{elapsed}%",
     perDay: "约{points}个百分点／天", perHour: "约{points}个百分点／小时", referenceNote: "把当前余量均摊到重置前，并非每日新增额度。",
     scope: "仅对应当前额度窗口。", resetAt: "{time} 重置", timeBasis: "时间进度按官方窗口时长与个人重置时刻计算。",
     unavailable: "额度信息不足", stale: "读数待刷新", failed: "刷新失败", exhausted: "当前窗口额度已用尽", expired: "已到给定重置时间",
@@ -40,6 +43,7 @@ const messages: Record<Language, Record<QuotaCoachCopyKey, string>> = {
     roomyAdvice: "可優先安排計畫中的長任務", balancedAdvice: "按計畫推進，繼續留意餘量變化", fastAdvice: "注意後續用量，為後半程留些餘量",
     recentRisk: "近期偏快", recentRiskLabel: "近期消耗加快", recentRiskAdvice: "若持續近期節奏，可能在個人重置前用盡。", projectedDepletion: "近期觀測顯示，重置前可能用盡額度。",
     comparison: "額度已用{used}%，週期時間已過{elapsed}%", dayReference: "日均參考分配", hourReference: "每小時參考分配",
+    lastComparison: "上次額度已用{used}%，週期時間已過{elapsed}%",
     perDay: "約{points}個百分點／天", perHour: "約{points}個百分點／小時", referenceNote: "將目前餘量均攤至重置前，並非每日新增額度。",
     scope: "僅對應目前額度視窗。", resetAt: "{time} 重置", timeBasis: "時間進度依官方視窗長度與個人重置時刻計算。",
     unavailable: "額度資訊不足", stale: "讀數待更新", failed: "更新失敗", exhausted: "目前視窗額度已用盡", expired: "已到指定重置時間",
@@ -55,6 +59,7 @@ const messages: Record<Language, Record<QuotaCoachCopyKey, string>> = {
     roomyAdvice: "予定していた長めの作業を検討できます。", balancedAdvice: "予定を進めつつ残量を確認しましょう。", fastAdvice: "後半にも残量を残せるよう、今後の消費に注意。",
     recentRisk: "直近は速め", recentRiskLabel: "直近の消費が増加", recentRiskAdvice: "直近のペースが続くと、個人のリセット前に残量を使い切る可能性があります。", projectedDepletion: "直近の観測では、リセット前に残量が尽きる可能性があります。",
     comparison: "上限を{used}%使用、期間の時間は{elapsed}%経過", dayReference: "1日あたりの参考配分", hourReference: "1時間あたりの参考配分",
+    lastComparison: "前回の読み取りで上限を{used}%使用、期間の時間は{elapsed}%経過",
     perDay: "約{points}ポイント／日", perHour: "約{points}ポイント／時間", referenceNote: "現在の残量をリセットまで均等に割る目安で、毎日の補充量ではありません。",
     scope: "この上限期間のみが対象です。", resetAt: "{time} リセット", timeBasis: "公式の期間長と個人のリセット時刻から時間進行を計算します。",
     unavailable: "上限情報が不足", stale: "観測を更新してください", failed: "更新できません", exhausted: "この期間の残量なし", expired: "指定のリセット時刻に到達",
@@ -70,6 +75,7 @@ const messages: Record<Language, Record<QuotaCoachCopyKey, string>> = {
     roomyAdvice: "계획한 긴 작업을 우선 고려할 수 있습니다.", balancedAdvice: "계획대로 진행하며 남은 한도를 확인하세요.", fastAdvice: "후반에도 여유를 남기도록 이후 사용량에 주의하세요.",
     recentRisk: "최근 빠름", recentRiskLabel: "최근 소비가 증가함", recentRiskAdvice: "최근 페이스가 계속되면 개인 초기화 전에 한도가 소진될 수 있습니다.", projectedDepletion: "최근 관측상 초기화 전에 한도가 소진될 가능성이 있습니다.",
     comparison: "한도 {used}% 사용, 기간 시간 {elapsed}% 경과", dayReference: "하루 참고 배분", hourReference: "시간당 참고 배분",
+    lastComparison: "지난 측정 기준 한도 {used}% 사용, 기간 시간 {elapsed}% 경과",
     perDay: "약 {points}퍼센트포인트 / 일", perHour: "약 {points}퍼센트포인트 / 시간", referenceNote: "현재 잔여량을 초기화 전까지 나눈 참고값이며 매일 추가되는 한도가 아닙니다.",
     scope: "현재 한도 기간에만 해당합니다.", resetAt: "{time} 초기화", timeBasis: "공식 기간 길이와 개인 초기화 시각으로 시간 진행을 계산합니다.",
     unavailable: "한도 정보 부족", stale: "관측 갱신 필요", failed: "갱신 실패", exhausted: "현재 기간 한도 소진", expired: "지정 초기화 시각 도달",
@@ -85,6 +91,7 @@ const messages: Record<Language, Record<QuotaCoachCopyKey, string>> = {
     roomyAdvice: "Geplante längere Aufgaben können Vorrang haben.", balancedAdvice: "Dem Plan folgen und das Restkontingent im Blick behalten.", fastAdvice: "Weiteren Verbrauch beachten und etwas für später übrig lassen.",
     recentRisk: "Zuletzt hoch", recentRiskLabel: "Verbrauch zuletzt gestiegen", recentRiskAdvice: "Bei diesem jüngsten Tempo könnte das Kontingent vor Ihrem Reset aufgebraucht sein.", projectedDepletion: "Aktuelle Beobachtungen deuten auf möglichen Verbrauch vor dem Reset hin.",
     comparison: "{used}% des Kontingents verbraucht; {elapsed}% der Fensterzeit vergangen", dayReference: "Täglicher Richtwert", hourReference: "Stündlicher Richtwert",
+    lastComparison: "Beim letzten Messwert {used}% verbraucht. {elapsed}% der Fensterzeit vergangen",
     perDay: "Etwa {points} Prozentpunkte / Tag", perHour: "Etwa {points} Prozentpunkte / Stunde", referenceNote: "Verteilt den aktuellen Rest bis zum Reset; keine tägliche Auffüllung.",
     scope: "Gilt nur für dieses Kontingentfenster.", resetAt: "Reset {time}", timeBasis: "Zeitfortschritt aus offizieller Fensterdauer und persönlicher Reset-Zeit berechnet.",
     unavailable: "Kontingentdaten fehlen", stale: "Messung aktualisieren", failed: "Aktualisierung fehlgeschlagen", exhausted: "Fensterkontingent aufgebraucht", expired: "Reset-Zeit erreicht",
@@ -116,6 +123,13 @@ export function formatCoachNumber(value: number, language: string, digits = 0): 
   const formatter = new Intl.NumberFormat(language, { maximumFractionDigits: digits });
   // A recorded positive amount must never be presented as an observed zero.
   return value > 0 && value < .5 * 10 ** -digits ? `<${formatter.format(10 ** -digits)}` : formatter.format(value);
+}
+export function formatCoachComparison({ status, usedPercent, elapsedPercent }: Pick<QuotaPaceCoach, "status" | "usedPercent" | "elapsedPercent">, language: string, digits = 0): string | null {
+  if (usedPercent == null || elapsedPercent == null || status === "unavailable" || status === "expired" || status === "exhausted") return null;
+  return quotaCoachCopy(language, status === "ready" ? "comparison" : "lastComparison", {
+    used: formatCoachNumber(usedPercent, language, digits),
+    elapsed: formatCoachNumber(elapsedPercent, language, digits),
+  });
 }
 export function formatCoachCountdown(minutes: number | null, language: string): string {
   if (minutes == null || !Number.isFinite(minutes)) return quotaCoachCopy(language, "unknown");
