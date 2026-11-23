@@ -588,7 +588,7 @@ export function SettingsPage({
   );
 
   return (
-    <div ref={container} className="max-w-5xl space-y-4">
+    <div ref={container} className="pulse-book-settings max-w-5xl space-y-4">
       <div className="space-y-1">
         <h1 className="text-2xl font-semibold tracking-tight text-foreground">{t("settings.title")}</h1>
         <p className="text-sm text-muted-foreground">{t("settings.subtitle")}</p>

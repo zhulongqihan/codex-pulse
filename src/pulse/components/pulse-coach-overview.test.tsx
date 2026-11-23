@@ -1,6 +1,5 @@
 // @vitest-environment jsdom
 import { fireEvent, render, screen, within } from "@testing-library/react";
-import type { ComponentProps } from "react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { invoke } from "@tauri-apps/api/core";
@@ -15,8 +14,6 @@ vi.mock("@tauri-apps/api/event", () => ({ listen: vi.fn().mockResolvedValue(() =
 
 const now = Date.parse("2026-11-14T08:00:00Z");
 const actions = { onDetails: vi.fn(), onRecover: vi.fn() };
-const split = ({ summary, details }: Parameters<NonNullable<ComponentProps<typeof PulseCoachOverview>["children"]>>[0]) =>
-  <><div data-testid="summary-slot">{summary}</div><div data-testid="details-slot">{details}</div></>;
 
 beforeEach(async () => {
   vi.restoreAllMocks();
@@ -25,61 +22,53 @@ beforeEach(async () => {
   await i18n.changeLanguage("en");
 });
 
-describe("workspace pace slots", () => {
-  it("opens one separate details region and returns focus to its summary trigger on close", async () => {
-    const user = userEvent.setup();
-    render(<PulseCoachOverview {...actions} detailsRequested={false}>{split}</PulseCoachOverview>);
-    const entry = screen.getByRole("button", { name: paceSummaryCopy("en", "details") });
-    const details = screen.getByTestId("details-slot");
-    expect(entry).toHaveAttribute("aria-expanded", "false");
-    expect(screen.queryByTestId("pace-popover")).not.toBeInTheDocument();
-    expect(await within(screen.getByTestId("summary-slot")).findByTestId("coach-reference")).toBeVisible();
-
-    entry.focus();
-    await user.keyboard("{Enter}");
-    expect(entry).toHaveAttribute("aria-expanded", "true");
-    const region = details.firstElementChild;
-    expect(region).toHaveAttribute("id", entry.getAttribute("aria-controls"));
+describe("paper workspace pacing", () => {
+  it("keeps a stable focus destination for the companion detail action without a separate details region", async () => {
+    render(<PulseCoachOverview {...actions} paper/>);
+    const region = screen.getByTestId("pulse-coach-overview");
+    expect(region).toHaveAttribute("id", "pulse-pace-details");
+    expect(region).toHaveAttribute("tabindex", "-1");
+    region.focus();
     expect(region).toHaveFocus();
-    expect(screen.getAllByTestId("pace-popover")).toHaveLength(1);
-    expect(screen.getAllByTestId("coach-reference")).toHaveLength(1);
-    await user.click(within(details).getByRole("button", { name: "Close usage rhythm" }));
-    expect(entry).toHaveFocus();
-    expect(entry).toHaveAttribute("aria-expanded", "false");
-  });
-
-  it("reopens the pace details whenever a new companion request arrives", async () => {
-    const { rerender } = render(<PulseCoachOverview {...actions} detailsRequested={false}>{split}</PulseCoachOverview>);
-    await screen.findByTestId("coach-reference");
-    rerender(<PulseCoachOverview {...actions} detailsRequested>{split}</PulseCoachOverview>);
-    expect(screen.getByTestId("pace-popover")).toBeVisible();
-    expect(screen.getByTestId("coach-window-details")).not.toHaveAttribute("open");
-    expect(screen.queryByTestId("coach-cycle-observations")).not.toBeInTheDocument();
-    rerender(<PulseCoachOverview {...actions} detailsRequested={false}>{split}</PulseCoachOverview>);
-    expect(screen.getByTestId("pace-popover")).toBeVisible();
-    fireEvent.click(screen.getByRole("button", { name: "Close usage rhythm" }));
+    expect(await within(region).findByTestId("coach-reference")).toBeVisible();
+    expect(screen.queryByRole("button", { name: paceSummaryCopy("en", "details") })).not.toBeInTheDocument();
     expect(screen.queryByTestId("pace-popover")).not.toBeInTheDocument();
-    rerender(<PulseCoachOverview {...actions} detailsRequested>{split}</PulseCoachOverview>);
-    expect(screen.getByTestId("pace-popover")).toBeVisible();
-    expect(screen.getByTestId("coach-window-details")).not.toHaveAttribute("open");
   });
 
-  it("keeps a failed acknowledgement visible in the same unread notice", async () => {
+  it("discloses the no-notice status on demand", async () => {
+    render(<PulseCoachOverview {...actions} paper/>);
+    await screen.findByTestId("coach-reference");
+    const entry = screen.getByText(quotaCoachCopy("en", "notice"), { selector: "summary" });
+    expect(entry.closest("details")).not.toHaveAttribute("open");
+    expect(screen.getByText("No current notice")).not.toBeVisible();
+    entry.focus();
+    expect(entry).toHaveFocus();
+    fireEvent.click(entry);
+    expect(screen.getByText("No current notice")).toBeVisible();
+    fireEvent.click(entry);
+    expect(screen.getByText("No current notice")).not.toBeVisible();
+  });
+
+  it("starts with the active notice closed and keeps acknowledgement failures inside it", async () => {
     vi.mocked(invoke).mockImplementation(async command => {
       if (command === "mark_pulse_notice_read") throw new Error("Unavailable");
       return syntheticCoachSnapshot("notice", new Date(now));
     });
     const user = userEvent.setup();
-    render(<PulseCoachOverview {...actions} detailsRequested={false}>{split}</PulseCoachOverview>);
-    await user.click(await screen.findByRole("button", { name: quotaCoachFeedback("en", "noticeCompact") }));
-    const details = screen.getByTestId("details-slot");
-    const notice = within(details).getByRole("note");
+    render(<PulseCoachOverview {...actions} paper/>);
+    const entry = screen.getByText(quotaCoachCopy("en", "notice"), { selector: "summary" });
+    expect(entry.closest("details")).not.toHaveAttribute("open");
+    expect(screen.queryByRole("button", { name: "Mark read" })).not.toBeInTheDocument();
+    await user.click(entry);
+    const notice = await screen.findByRole("note");
     await user.click(within(notice).getByRole("button", { name: "Mark read" }));
     expect(await within(notice).findByRole("alert")).toHaveTextContent(quotaCoachCopy("en", "markFailed"));
     expect(within(notice).getByRole("button", { name: "Mark read" })).toBeEnabled();
-    await user.click(within(details).getByRole("button", { name: "Close usage rhythm" }));
-    expect(screen.getByRole("alert")).toHaveTextContent(quotaCoachCopy("en", "markFailed"));
-    expect(screen.getByRole("button", { name: quotaCoachFeedback("en", "noticeCompact") })).toBeVisible();
+    await user.click(entry);
+    expect(entry.closest("details")).not.toHaveAttribute("open");
+    expect(within(notice).getByRole("alert")).not.toBeVisible();
+    expect(entry).toHaveFocus();
+    expect(screen.queryByRole("button", { name: quotaCoachFeedback("en", "noticeCompact") })).not.toBeInTheDocument();
     expect(invoke).toHaveBeenCalledWith("mark_pulse_notice_read", { id: "synthetic-reset-notice-v3" });
   });
 });

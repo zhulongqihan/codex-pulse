@@ -4,6 +4,17 @@ User-facing changes are grouped by release, following [Keep a Changelog](https:/
 
 ## [Unreleased]
 
+## [0.14.7] - 2026-11-24
+
+### Changed / 变更
+
+- Align all Paper workspace tabs to the left and right pages, switch to one sheet in narrow or short windows, and open account details in a drawer.
+- 纸册各标签页对齐左右书页，窄窗或矮窗切换单页。账号额度通过抽屉查看。
+- Keep three readings in the Paper dashboard pacing tooltip, retire the extra pacing evidence section, and collapse reset forecasts by default.
+- 纸册仪表盘配速提示保留用量与时间进度、重置时间和最近更新时间，移除配速依据，默认折叠重置预告。
+
+[完整中英说明 / Full release notes](docs/releases/v0.14.7.md)
+
 ## [0.14.6] - 2026-11-24
 
 ### Fixed / 修复
@@ -415,7 +426,8 @@ User-facing changes are grouped by release, following [Keep a Changelog](https:/
 
 Earlier releases remain available in [GitHub Releases](https://github.com/zhulongqihan/codex-pulse/releases). / 更早版本保留在 GitHub Releases。
 
-[Unreleased]: https://github.com/zhulongqihan/codex-pulse/compare/v0.14.6...HEAD
+[Unreleased]: https://github.com/zhulongqihan/codex-pulse/compare/v0.14.7...HEAD
+[0.14.7]: https://github.com/zhulongqihan/codex-pulse/compare/v0.14.6...v0.14.7
 [0.14.6]: https://github.com/zhulongqihan/codex-pulse/compare/v0.14.5...v0.14.6
 [0.14.5]: https://github.com/zhulongqihan/codex-pulse/compare/v0.14.4...v0.14.5
 [0.14.4]: https://github.com/zhulongqihan/codex-pulse/compare/v0.14.3...v0.14.4

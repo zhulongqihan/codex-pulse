@@ -81,8 +81,8 @@ export function ModelsPage({ models, range, timezone, onRangeChange, onPricingRe
     return formatCurrency(value);
   };
 
-  return <div className="space-y-4">
-    <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+  return <div className="pulse-book-models space-y-4">
+    <div className="pulse-book-heading flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
       <div>
         <h2 className="text-xl font-bold tracking-tight text-foreground">{t("models.title")}</h2>
         <p className="text-sm text-muted-foreground">{view === "usage" ? t("models.subtitle") : t("models.catalog.subtitle")}</p>
@@ -90,7 +90,7 @@ export function ModelsPage({ models, range, timezone, onRangeChange, onPricingRe
       {view === "usage" ? <RangeSwitcher value={range} onChange={onRangeChange} timezone={timezone} /> : catalog ? <Button data-testid="refresh-pricing" variant="secondary" disabled={isRefreshing} onClick={refreshCatalog}>{isRefreshing ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}{t("models.catalog.refresh")}</Button> : null}
     </div>
 
-    <div role="tablist" aria-label={t("models.views.label")} className="inline-flex rounded-lg border border-border bg-muted/50 p-1">
+    <div role="tablist" aria-label={t("models.views.label")} className="pulse-book-model-tabs inline-flex rounded-lg border border-border bg-muted/50 p-1">
       {(["usage", "catalog"] as const).map((item) => <button key={item} id={`models-${item}-tab`} data-testid={`models-${item}-tab`} type="button" role="tab" aria-selected={view === item} aria-controls={`models-${item}-panel`} onClick={() => selectView(item)} className={cn("rounded-md px-3 py-1.5 text-sm font-medium", view === item ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground")}>{t(`models.views.${item}`)}</button>)}
     </div>
 
@@ -102,15 +102,17 @@ export function ModelsPage({ models, range, timezone, onRangeChange, onPricingRe
         {catalog.stale || error ? <span className="text-warning">{t("models.catalog.stale")}</span> : null}
       </div> : null}
       {catalog?.isLimited ? <div role="status" className="flex items-start gap-2 rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-sm text-amber-700 dark:text-amber-300"><AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />{t("models.catalog.limited")}</div> : null}
-      {catalog ? <div className="flex flex-col gap-3 sm:flex-row">
+      {catalog ? <div className="pulse-book-catalog-filters flex flex-col gap-3 sm:flex-row">
         <label className="relative flex-1"><span className="sr-only">{t("models.catalog.search")}</span><Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" /><input data-testid="pricing-search" value={query} onChange={(event) => { setQuery(event.target.value); resetPage(); }} placeholder={t("models.catalog.search")} className="h-10 w-full rounded-md border border-input bg-background pl-9 pr-3 text-sm outline-none focus:ring-2 focus:ring-ring" /></label>
         <Select value={provider} onValueChange={(value) => { setProvider(value); resetPage(); }}><SelectTrigger aria-label={t("models.catalog.provider")} className="w-full sm:w-[220px]"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="all">{t("models.catalog.all_providers")}</SelectItem>{providers.map((item) => <SelectItem key={item} value={item}>{item}</SelectItem>)}</SelectContent></Select>
       </div> : null}
+      <div className="pulse-book-catalog-records space-y-4">
       {!catalog && !error ? <Card><CardContent className="py-14 text-center text-sm text-muted-foreground">{t("models.catalog.loading")}</CardContent></Card> : null}
       {error ? <Card><CardContent className="py-14 text-center text-sm text-destructive">{t("models.catalog.error")}</CardContent></Card> : null}
       {catalog && filtered.length === 0 ? <Card><CardContent className="py-14 text-center text-sm text-muted-foreground">{t("models.catalog.no_results")}</CardContent></Card> : null}
       {catalog && filtered.length > 0 ? <Card><CardContent className="p-0"><div className="overflow-x-auto"><table className="w-full min-w-[760px] text-sm"><caption className="sr-only">{t("models.catalog.unit")}</caption><thead><tr className="border-b text-left text-xs text-muted-foreground"><th className="p-4">{t("models.catalog.model")}</th><th className="p-4">{t("models.catalog.provider")}</th><th className="p-4 text-right">{t("models.prices.input")}<span className="block font-normal">{t("models.catalog.unit")}</span></th><th className="p-4 text-right">{t("models.prices.cached")}<span className="block font-normal">{t("models.catalog.unit")}</span></th><th className="p-4 text-right">{t("models.prices.output")}<span className="block font-normal">{t("models.catalog.unit")}</span></th></tr></thead><tbody>{visibleModels.map((model) => <tr key={`${model.model}:${model.provider}`} className="border-b last:border-0"><td className="p-4 font-medium">{model.model}</td><td className="p-4 text-muted-foreground">{model.provider}</td>{[model.inputCostPerMillionTokens, model.cachedInputCostPerMillionTokens, model.outputCostPerMillionTokens].map((value, index) => <td key={index} className="p-4 text-right tabular-nums">{price(value, model.pricingStatus)}</td>)}</tr>)}</tbody></table></div></CardContent></Card> : null}
       {catalog && filtered.length > 0 ? <div className="flex items-center justify-between text-sm text-muted-foreground"><span>{t("models.catalog.count", { count: filtered.length })}</span><div className="flex items-center gap-2"><Button variant="secondary" size="icon" aria-label={t("models.catalog.previous")} disabled={currentPage === 1} onClick={() => setPage((value) => Math.max(1, value - 1))}><ChevronLeft className="h-4 w-4" /></Button><span>{t("models.catalog.page", { page: currentPage, pages: pageCount })}</span><Button variant="secondary" size="icon" aria-label={t("models.catalog.next")} disabled={currentPage === pageCount} onClick={() => setPage((value) => Math.min(pageCount, value + 1))}><ChevronRight className="h-4 w-4" /></Button></div></div> : null}
+      </div>
     </div> : null}
   </div>;
 }

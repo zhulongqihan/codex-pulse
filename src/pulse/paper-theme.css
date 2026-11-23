@@ -1,4 +1,5 @@
 @import "./paper-content.css";
+@import "./paper-ledgers.css";
 
 /* Paper is additive. The original Clear/Meter selectors and business tree stay intact. */
 .pulse-preview-paper{background:#79846a url('./assets/paper/desk-book.png') center/cover;grid-template-columns:1fr 1fr;grid-template-rows:16px 58px;gap:7px;padding:15px 9px 13px;border:1px solid #acb290}
@@ -55,11 +56,8 @@
 :root[data-skin="paper"] .pulse-account-rail{background:rgb(var(--surface)) var(--paper-texture) center/600px;background-blend-mode:multiply;border:1px solid rgb(var(--border));border-radius:5px;box-shadow:3px 5px 0 #a6a28040;padding:18px;width:min(320px,32%);min-width:245px}
 :root[data-skin="paper"] .pulse-main-scroll>div>header,:root[data-skin="paper"] .pulse-main-scroll .pulse-dashboard-header{background:transparent}
 .pulse-paper-dashboard-spread {
-  --paper-spread-gap: clamp(24px, 3vw, 48px);
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  grid-template-areas: "quota today" "pacing today" "details details";
-  gap: 22px var(--paper-spread-gap);
+  gap: 24px;
   align-items: start;
   font-family: var(--pulse-reading);
   font-size: 14px;
@@ -74,22 +72,10 @@
   min-width: 0;
 }
 
-.pulse-paper-dashboard-page--quota { container-type: inline-size; grid-area: quota; }
-.pulse-paper-dashboard-page--today { grid-area: today; }
-.pulse-paper-dashboard-page--pacing { container-type: inline-size; grid-area: pacing; }
+.pulse-paper-dashboard-page--quota,
+.pulse-paper-dashboard-page--pacing { container-type: inline-size; }
 
-.pulse-paper-dashboard-details {
-  grid-area: details;
-  min-width: 0;
-  border-top: 1px solid rgb(var(--border));
-  padding-top: 18px;
-}
-
-.pulse-paper-dashboard-details:has(> .pulse-coach-details[hidden]) {
-  display: none;
-}
-
-.pulse-paper-dashboard-page--pacing > .pulse-summary {
+.pulse-paper-dashboard-page--pacing .pulse-summary {
   border-top: 1px solid rgb(var(--border));
   padding-top: 14px;
 }
@@ -101,10 +87,6 @@
   padding-top: 8px;
 }
 
-.pulse-paper-dashboard-page--pacing .pulse-summary-bottom {
-  flex-wrap: wrap;
-}
-
 .pulse-paper-dashboard-page--pacing .pulse-summary-advice {
   color: rgb(var(--foreground));
   font-size: 14px;
@@ -112,7 +94,7 @@
 }
 
 @container (min-width: 440px) {
-  .pulse-paper-dashboard-page--pacing > .pulse-summary:has(> .coach-reference) {
+  .pulse-paper-dashboard-page--pacing .pulse-summary:has(> .coach-reference) {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
     column-gap: 16px;
@@ -133,7 +115,7 @@
   }
 
   .pulse-paper-dashboard-page--pacing .pulse-summary:has(> .coach-reference)
-    > :is(.pulse-summary-heading, .pulse-summary-bottom, .pulse-summary-wait, .pulse-summary-notice, [role="alert"]) {
+    > :is(.pulse-summary-heading, .pulse-summary-forecast) {
     grid-column: 1 / -1;
   }
 }
@@ -287,29 +269,13 @@
 :root[data-skin="paper"] .pulse-dashboard-home .pulse-quota-summary dt{font-size:14px}
 :root[data-skin="paper"] .pulse-dashboard-home .pulse-quota-summary dd{font-size:18px;color:rgb(var(--foreground))}
 :root[data-skin="paper"] .pulse-dashboard-analysis-entry{display:flex;align-items:center;justify-content:space-between;border-top:1px solid rgb(var(--border));gap:12px;margin-top:0;padding-top:12px}
-@container app-content (min-width:1000px){
-  :root[data-skin="paper"] .pulse-usage-analysis{display:grid;grid-template-columns:minmax(0,3fr) minmax(220px,1fr);gap:20px 25px;align-items:start}
-  :root[data-skin="paper"] .pulse-usage-analysis>.pulse-period-summary{display:contents}
-  :root[data-skin="paper"] .pulse-usage-analysis .pulse-analysis-heading{grid-column:1/-1;grid-row:1;margin-bottom:0;padding-bottom:12px}
-  :root[data-skin="paper"] .pulse-usage-analysis .pulse-analysis-export-error{grid-column:1/-1;grid-row:2}
-  :root[data-skin="paper"] .pulse-usage-analysis .pulse-analysis-totals{grid-column:2;grid-row:3;padding:20px;margin:0;display:block}
-  :root[data-skin="paper"] .pulse-usage-analysis .pulse-analysis-totals>dl{display:block}
-  :root[data-skin="paper"] .pulse-usage-analysis .pulse-analysis-totals>dl>div{padding:0;margin:0 0 18px;border:0}
-  :root[data-skin="paper"] .pulse-usage-analysis .pulse-analysis-totals dd{font-size:32px;overflow-wrap:anywhere}
-  :root[data-skin="paper"] .pulse-usage-analysis .pulse-analysis-totals>p{font-size:11px;line-height:1.8}
-  :root[data-skin="paper"] .pulse-usage-analysis .pulse-period-details{grid-column:2;grid-row:4;margin:0;font-size:12px}
-  :root[data-skin="paper"] .pulse-usage-analysis .pulse-period-breakdown{display:grid;grid-template-columns:minmax(0,1fr);gap:8px}
-  :root[data-skin="paper"] .pulse-usage-analysis .pulse-analysis-pricing{grid-column:2;grid-row:5;margin:0}
-  :root[data-skin="paper"] .pulse-usage-analysis .pulse-analysis-trend{grid-column:1;grid-row:3/span 3;margin:0;min-width:0}
-  :root[data-skin="paper"] .pulse-usage-analysis .pulse-distribution{grid-column:1/-1;grid-row:6;min-width:0}
-}
 :root[data-skin="paper"][data-theme="dark"] .pulse-paper-quotas .pulse-limit-row,:root[data-skin="paper"][data-theme="dark"] .pulse-dashboard-today-readings{border-color:rgb(var(--border))}
 @media(max-width:1200px){:root[data-skin="paper"] .pulse-topbar{padding-inline:7% 7%;gap:14px}:root[data-skin="paper"] .pulse-paper-clock{font-size:12px;padding-left:12px;gap:6px}:root[data-skin="paper"] .pulse-dashboard-today-readings{padding:16px}}
 @media(max-width:900px){:root[data-skin="paper"] .pulse-paper-clock{display:none}:root[data-skin="paper"] .pulse-brand>strong{font-size:25px}:root[data-skin="paper"] .pulse-brand img,:root[data-skin="paper"] .pulse-brand svg{width:34px;height:34px}:root[data-skin="paper"] .pulse-global-actions{gap:7px}:root[data-skin="paper"] .pulse-topbar{padding-inline:5%}:root[data-skin="paper"] .pulse-workspace{padding-inline:6% 5%}:root[data-skin="paper"] .pulse-paper-navigation{left:6%;right:5%}:root[data-skin="paper"] .pulse-paper-navigation button{min-width:85px}:root[data-skin="paper"] .pulse-dashboard-today-values{flex-direction:row;gap:24px}:root[data-skin="paper"] .pulse-dashboard-today-values>div{flex:1}:root[data-skin="paper"] .pulse-dashboard-today-values > .pulse-dashboard-today-cost{border-top:0;padding-top:4px}:root[data-skin="paper"] .pulse-statusbar{padding-inline:20% 15%}}
 @media(max-width:620px){:root[data-skin="paper"] .pulse-app:before{background-size:auto 900px;background-position:50% 0}:root[data-skin="paper"] .pulse-topbar{height:66px;min-height:66px;padding:10px 16px;background:rgb(var(--surface)) var(--paper-texture) center/500px;background-blend-mode:multiply}:root[data-skin="paper"] .pulse-workspace{padding:66px 12px 12px}:root[data-skin="paper"] .pulse-main-column{background:rgb(var(--surface)) var(--paper-texture) center/600px;background-blend-mode:multiply;border:4px double rgb(var(--border));border-radius:4px;box-shadow:3px 4px 0 #a5a27c70}:root[data-skin="paper"] .pulse-main-scroll>.max-w-layout{padding:12px 14px 25px}:root[data-skin="paper"] .pulse-paper-navigation{left:12px;right:12px;top:8px;height:54px;min-height:0}:root[data-skin="paper"] .pulse-paper-navigation button{min-height:38px;padding:8px 10px 10px;flex-basis:max-content}:root[data-skin="paper"] .pulse-paper-navigation button[aria-selected=true]{min-height:47px;padding-top:11px}:root[data-skin="paper"] .pulse-statusbar{height:auto;max-height:none;min-height:42px;padding:8px 16px;background:rgb(var(--surface)) var(--paper-texture) center/500px;background-blend-mode:multiply}:root[data-skin="paper"] .pulse-dashboard-today-values{flex-direction:column;gap:8px}:root[data-skin="paper"] .pulse-dashboard-today-values > .pulse-dashboard-today-cost{border-top:1px solid rgb(var(--border));padding-top:12px}:root[data-skin="paper"] .pulse-dashboard-today-values dd{font-size:28px}:root[data-skin="paper"] .pulse-dashboard-analysis-entry{flex-wrap:wrap}:root[data-skin="paper"] .pulse-global-actions .pulse-widget-action{display:inline-flex}:root[data-skin="paper"] .pulse-brand{gap:7px}:root[data-skin="paper"] .pulse-brand>strong{font-size:23px}}
 
 @media (max-width: 900px) {
-  .pulse-paper-dashboard-spread { grid-template-columns: minmax(0, 1fr); grid-template-areas: "quota" "today" "pacing" "details"; row-gap: 12px; }
+  .pulse-paper-dashboard-spread { row-gap: 12px; }
   .pulse-paper-dashboard-page--today { padding-top: 10px; border-top: 1px solid rgb(var(--border)); }
   .pulse-paper-quotas .pulse-limit-value { font-size: 34px; }
   .pulse-paper-quotas .pulse-limit-row { padding-block: 6px; }

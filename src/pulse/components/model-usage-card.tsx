@@ -116,7 +116,7 @@ export function ModelUsageCard({ models }: ModelUsageCardProps) {
   const hasQuotaSamples = models.some(model => model.fiveHourQuota != null || model.weeklyQuota != null);
 
   if (models.length === 0) {
-    return <Card><CardContent className="py-14 text-center text-sm text-muted-foreground">{t("models.no_data")}</CardContent></Card>;
+    return <Card className="pulse-book-model-records"><CardContent className="py-14 text-center text-sm text-muted-foreground">{t("models.no_data")}</CardContent></Card>;
   }
 
   const summary = [
@@ -165,7 +165,7 @@ export function ModelUsageCard({ models }: ModelUsageCardProps) {
         </CardContent>
       </Card>
 
-      <div className="grid gap-4 content-lg:grid-cols-2">
+      <div className="pulse-book-model-charts grid gap-4 content-lg:grid-cols-2">
         <Card>
           <CardHeader><CardTitle>{t("models.composition.title")}</CardTitle><CardDescription>{t("models.composition.subtitle")}</CardDescription></CardHeader>
           <CardContent className="space-y-5">
@@ -200,7 +200,7 @@ export function ModelUsageCard({ models }: ModelUsageCardProps) {
         </Card>
       </div>
 
-      <Card>
+      <Card className="pulse-book-model-records">
         <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div><CardTitle>{t("models.comparison.title")}</CardTitle><CardDescription>{t("models.comparison.subtitle")}</CardDescription></div>
           <div className="flex items-center gap-2 text-[12px] text-muted-foreground">

@@ -34,6 +34,7 @@ type SessionUsageTableProps = {
   agentGroupPageSize?: number;
   showSessionCredits?: boolean;
   creditsActive?: boolean;
+  paperSpread?: boolean;
 };
 
 function formatBytes(bytes: number) {
@@ -370,6 +371,7 @@ export function SessionUsageTable({
   agentGroupPageSize,
   showSessionCredits = false,
   creditsActive = true,
+  paperSpread = false,
 }: SessionUsageTableProps) {
   const { t, i18n } = useTranslation();
   // Track which date groups are collapsed
@@ -562,8 +564,7 @@ export function SessionUsageTable({
     );
   }
 
-  return (
-    <div className="pulse-session-list space-y-4">
+  const controls = <>
       {showSessionCredits && creditsActive ? <div className="flex items-center gap-3 text-[12px] text-muted-foreground">
         <Button variant="secondary" size="sm" onClick={() => credits.refresh()} disabled={credits.loading || creditThreads.length === 0}>{t("session_credits.refresh")}</Button>
         {credits.error ? <span role="status">{t(`session_credits.errors.${credits.error}`)}</span> : null}
@@ -622,7 +623,20 @@ export function SessionUsageTable({
         </div>
       )}
 
-      <div className="space-y-3">
+      {paperSpread && !embedded && groups.length > 1 ? <nav className="pulse-book-session-index" aria-label={t("daily.cols.date")}>
+        {groups.slice(0, 8).map(group => <button type="button" key={group.date} className="pulse-text-button" onClick={() => {
+          const target = document.getElementById(`date-group-${group.date}`);
+          const heading = target?.querySelector("button");
+          target?.scrollIntoView({ block: "start", behavior: "instant" });
+          heading?.focus({ preventScroll: true });
+        }}><time dateTime={group.date}>{formatDateHeader(group.date, i18n.resolvedLanguage ?? i18n.language)}</time></button>)}
+      </nav> : null}
+    </>;
+
+  return (
+    <div className="pulse-session-list space-y-4">
+      {paperSpread ? <div className="pulse-book-session-controls space-y-4">{controls}</div> : controls}
+      <div className="pulse-book-session-records space-y-3">
         {groups.length === 0 && searchActive ? <Card>
           <CardContent className="space-y-2 py-8 text-center">
             <h3 className="text-base font-semibold">{searchCopy("empty")}</h3>

@@ -70,8 +70,10 @@ export default function App() {
   const officialAnalysisVisited = useRef(false);
   if (analysisSource === "official") officialAnalysisVisited.current = true;
   const preferences = usePulsePreferences();
+  const paperWorkspace = preferences.skinId === "paper";
   const [accountExpanded, setAccountExpanded] = useState(() => { try { return localStorage.getItem(ACCOUNT_EXPANDED) === "true"; } catch { return false; } });
   const compactWindow = useCompactWindow();
+  const accountUsesDrawer = paperWorkspace || compactWindow;
   const [accountDrawerOpen, setAccountDrawerOpen] = useState(false);
   const [accountFocusRequested, setAccountFocusRequested] = useState(false);
   const [accountDetailsRequested, setAccountDetailsRequested] = useState(false);
@@ -195,7 +197,7 @@ export default function App() {
     handleTrayMenuShowChange,
     trayCountdownUnits,
     handleTrayCountdownUnitChange,
-  } = useUsageDashboard({ accountVisible: compactWindow ? accountDrawerOpen : accountExpanded });
+  } = useUsageDashboard({ accountVisible: accountUsesDrawer ? accountDrawerOpen : accountExpanded });
 
   useEffect(() => { try { localStorage.setItem(ACCOUNT_EXPANDED, String(accountExpanded)); } catch { /* The panel remains usable without storage. */ } }, [accountExpanded]);
 
@@ -294,7 +296,7 @@ export default function App() {
     }
     previousView.current = view;
   }, [view]);
-  useEffect(() => { if (!compactWindow) setAccountDrawerOpen(false); }, [compactWindow]);
+  useEffect(() => { if (!accountUsesDrawer) setAccountDrawerOpen(false); }, [accountUsesDrawer]);
   const navigate = (nextView: DashboardView) => {
     if (nextView !== view) savedScroll.current[view] = contentScroll.current?.scrollTop ?? 0;
     if (nextView === "settings" && view !== "settings") {
@@ -311,7 +313,7 @@ export default function App() {
 
   const openSettings = (section: SettingsSection = "appearance") => { setSettingsInitialSection(section); setSettingsEntry(value => value + 1); navigate("settings"); };
   const showAccount = () => {
-    if (compactWindow) setAccountDrawerOpen(true);
+    if (accountUsesDrawer) setAccountDrawerOpen(true);
     else {
       setAccountExpanded(true);
       setAccountFocusRequested(true);
@@ -320,7 +322,7 @@ export default function App() {
   };
   const closeAccountDrawer = () => { setAccountDrawerOpen(false); setAccountDetailsRequested(false); };
   useEffect(() => {
-    if (!accountFocusRequested || compactWindow || view === "settings" || view === "logs") return;
+    if (!accountFocusRequested || accountUsesDrawer || view === "settings" || view === "logs") return;
     let frame = 0;
     const focus = () => {
       cancelAnimationFrame(frame);
@@ -333,7 +335,7 @@ export default function App() {
     };
     focus(); window.addEventListener("focus", focus);
     return () => { cancelAnimationFrame(frame); window.removeEventListener("focus", focus); };
-  }, [accountFocusRequested, compactWindow, view]);
+  }, [accountFocusRequested, accountUsesDrawer, view]);
   const accountRecovery = useRef<() => void>(() => {});
   accountRecovery.current = () => {
     setSelectedProjectForModal(null);
@@ -376,7 +378,7 @@ export default function App() {
     };
     focus(); window.addEventListener("focus", focus);
     return () => { cancelAnimationFrame(frame); window.removeEventListener("focus", focus); };
-  }, [accountDetailsRequested, accountExpanded, accountDrawerOpen, compactWindow, view]);
+  }, [accountDetailsRequested, accountExpanded, accountDrawerOpen, accountUsesDrawer, view]);
   useEffect(() => {
     let disposed = false;
     let stop: (() => void) | undefined;
@@ -421,6 +423,7 @@ export default function App() {
     finally { setDesktopAction(null); }
   }
   const quotaSummary = [codexLimits?.session, codexLimits?.weekly].filter(window => window != null).map(window => `${Math.round(window.remainingPercent)}%`).join(" / ");
+  const accountForecast = <CodexForecastCard {...forecast} resets={recentCodexResets} onRefresh={() => void forecast.refresh()} inDisclosure={paperWorkspace}/>;
   const accountPanel = <>
     <div className="pulse-account-identity"><UserRound size={20} aria-hidden="true"/><div><strong>{codexLimits?.account ?? copy("unknown")}</strong><p>{codexLimits?.membershipLevel ?? "—"}{codexLimits?.workspaceName ? ` · ${codexLimits.workspaceName}` : ""}</p></div></div>
     <CodexSidebarLimits compact={false} limits={codexLimits} error={codexLimitsError} isLimitsRefreshing={isLimitsRefreshing} isWindowActivating={isWindowActivating} windowActivationStatus={windowActivationStatus} windowActivationError={windowActivationError} onRefreshLimits={() => void handleLimitsRefresh()} onActivateWindow={() => void handleActivateCodexWindow()}/>
@@ -430,15 +433,16 @@ export default function App() {
       <h3 id="pulse-account-details-heading">{copy("details")}</h3>
       <CodexLimitsCard limits={codexLimits} isLimitsLoading={isLimitsLoading} limitsError={codexLimitsError} isResetLoading={isResetLoading} resetError={resetError} onRetryReset={() => void handleResetHistoryRefresh()} latestReset={latestCodexReset} recentResets={recentCodexResets}
         onOpenResetHistory={() => { closeAccountDrawer(); if (view === "settings") navigate(settingsReturnView === "logs" && !showLogsTab ? "dashboard" : settingsReturnView); setIsResetHistoryOpen(true); }} onOpenResetCredits={() => void handleOpenResetCredits()}/>
-      <CodexForecastCard {...forecast} resets={recentCodexResets} onRefresh={() => void forecast.refresh()}/>
+      {paperWorkspace
+        ? <details className="pulse-book-account-forecast"><summary>{t("forecast.title")}</summary>{accountForecast}</details>
+        : accountForecast}
     </section>
   </>;
 
-  const paperDashboard = preferences.skinId === "paper";
   const quotaAvailable = hasReturnedQuota(codexLimits);
   const openQuotaHistory = () => { setAnalysisSource("official"); navigate("analysis"); };
   const coachProps = { onDetails: () => paceDetails.current(), onRecover: showAccount };
-  const dashboardCoach = <PulseCoachOverview {...coachProps} summary={!paceDetailsExpanded} detailsRequested={paceDetailsRequested}/>;
+  const dashboardCoach = <PulseCoachOverview {...coachProps} summary={!paceDetailsExpanded}/>;
   const dashboardToday = awaitingFirstScan && !todayOverview?.updatedAt ? null : todayOverview;
   const scanWait = <ScanWaitNotice active={isLoading || isScanning} diagnostics={diagnostics}/>;
   const recovery = showRecovery && view !== "settings" ? <UsageRecoveryCard
@@ -454,7 +458,7 @@ export default function App() {
     onChoose={() => void handleCodexHomeChange(true)}
     onExpandRange={() => void handleRangeChange("365d")}
   /> : null;
-  const renderDashboard = (coach: ReactNode, coachDetails?: ReactNode) => <DashboardHeroCard
+  const renderDashboard = (coach: ReactNode) => <DashboardHeroCard
     timezone={overview?.timezone}
     todayOverview={dashboardToday}
     todayLoading={(isLoading || (awaitingFirstScan && isScanning)) && !dashboardToday}
@@ -465,11 +469,10 @@ export default function App() {
       navigate("sessions");
     }}
     coach={coach}
-    paperSpread={paperDashboard}
-    coachDetails={coachDetails}
+    paperSpread={paperWorkspace}
     localRecovery={view === "dashboard" ? <>{scanWait}{recovery}</> : null}
     quotaHistory={<QuotaHistorySummary onOpenHistory={openQuotaHistory}/>}
-    quotaLimits={paperDashboard ? <CodexSidebarLimits paper limits={codexLimits} error={codexLimitsError} isLimitsRefreshing={isLimitsRefreshing} onRefreshLimits={() => void handleLimitsRefresh()} isWindowActivating={isWindowActivating} windowActivationStatus={windowActivationStatus} windowActivationError={windowActivationError} onActivateWindow={() => void handleActivateCodexWindow()}/> : undefined}
+    quotaLimits={paperWorkspace ? <CodexSidebarLimits paper limits={codexLimits} error={codexLimitsError} isLimitsRefreshing={isLimitsRefreshing} onRefreshLimits={() => void handleLimitsRefresh()} isWindowActivating={isWindowActivating} windowActivationStatus={windowActivationStatus} windowActivationError={windowActivationError} onActivateWindow={() => void handleActivateCodexWindow()}/> : undefined}
     onOpenAnalysis={() => navigate("analysis")}
   />;
   const scanHeader = <DashboardHeader
@@ -484,7 +487,7 @@ export default function App() {
     overview={overview}
     scanMessage={scanError ? t("recovery.last_scan_failed") : scanMessage}
     syncFailed={!!scanError}
-    secondaryRefresh={view === "dashboard"}
+    secondaryRefresh={view === "dashboard" || paperWorkspace}
     lastRescanDurationMs={lastRescanDurationMs}
   />;
 
@@ -495,7 +498,7 @@ export default function App() {
         {preferences.skinId === "paper" ? <PaperClock/> : null}
         <div className="pulse-global-actions"><PulseStyleSwitcher/>
           <button type="button" data-testid="open-widget" className="pulse-shell-action pulse-widget-action" disabled={desktopAction !== null} aria-busy={desktopAction === "widget"} onClick={() => void runDesktopAction("widget")}><MonitorUp size={16}/><span>{shellCopy(desktopAction === "widget" ? "widgetBusy" : preferences.widgetVisible ? "widgetVisible" : "widget")}</span></button>
-          <button type="button" data-testid="account-toggle" className="pulse-shell-action" aria-label={shellCopy("account")} aria-expanded={compactWindow ? accountDrawerOpen : accountExpanded && view !== "settings" && view !== "logs"} aria-controls={compactWindow ? "pulse-account-drawer" : "pulse-account-rail"} onClick={() => compactWindow || view === "settings" || view === "logs" ? showAccount() : setAccountExpanded(value => !value)}><UserRound size={17}/><span>{shellCopy("account")}</span>{compactWindow && quotaSummary ? <small className="pulse-account-summary">{quotaSummary} {shellCopy("remaining")}</small> : null}</button>
+          <button type="button" data-testid="account-toggle" className="pulse-shell-action" aria-label={shellCopy("account")} aria-expanded={accountUsesDrawer ? accountDrawerOpen : accountExpanded && view !== "settings" && view !== "logs"} aria-controls={accountUsesDrawer ? "pulse-account-drawer" : "pulse-account-rail"} onClick={() => accountUsesDrawer || view === "settings" || view === "logs" ? showAccount() : setAccountExpanded(value => !value)}><UserRound size={17}/><span>{shellCopy("account")}</span>{compactWindow && quotaSummary ? <small className="pulse-account-summary">{quotaSummary} {shellCopy("remaining")}</small> : null}</button>
           <button ref={helpButton} type="button" data-testid="help" className="pulse-shell-action pulse-help-action" onClick={openHelp} aria-label={shellCopy("help")} aria-expanded={view === "dashboard" && helpOpen} aria-controls={helpOpen ? "pulse-workspace-help" : undefined} title={shellCopy("help")}><CircleHelp size={17} aria-hidden="true"/><span>{shellCopy("help")}</span></button>
           <button type="button" className="pulse-icon-button" aria-label={copy("appearance")} title={t("common.settings")} onClick={() => openSettings()}><Settings2 size={18}/></button>
         </div>
@@ -521,7 +524,7 @@ export default function App() {
       <div aria-hidden="true" className="h-[var(--window-controls-height)] shrink-0" />
       <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden [container-type:inline-size] [container-name:app-content]" data-app-content>
       {view === "settings" ? (
-        <div className="mx-auto w-full max-w-layout shrink-0 px-6 pt-4 content-sm:px-8 content-lg:px-10">
+        <div className="pulse-book-settings-back mx-auto w-full max-w-layout shrink-0 px-6 pt-4 content-sm:px-8 content-lg:px-10">
           <header className="flex items-center gap-3 border-b border-border/80 pb-3">
             <Button variant="secondary" size="sm" onClick={() => navigate(settingsReturnView === "logs" && !showLogsTab ? "dashboard" : settingsReturnView)}>
               <ArrowLeft className="h-4 w-4" aria-hidden="true" />
@@ -539,7 +542,7 @@ export default function App() {
       >
       <div className={`relative mx-auto flex min-h-full w-full max-w-layout flex-col px-6 pb-8 content-sm:px-8 content-lg:px-10 ${view === "settings" ? "pt-0" : "pt-4"}`}>
 
-        {view !== "settings" && view !== "dashboard" ? scanHeader : null}
+        {!paperWorkspace && view !== "settings" && view !== "dashboard" ? scanHeader : null}
 
         <main className={view === "dashboard" ? "flex-1 py-3" : "flex-1 py-6"}>
           {updateInfo?.hasUpdate && !isUpdateDismissed ? (
@@ -667,9 +670,7 @@ export default function App() {
             <Activity mode={view === "dashboard" ? "visible" : "hidden"}>
             <div className="space-y-5">
               {helpOpen ? <PulseGettingStarted panelRef={helpPanel} accountReady={!!codexLimits} quotaAvailable={quotaAvailable} busy={desktopAction !== null} notice={desktopNotice} error={desktopError} onSource={() => openSettings("source")} onAccount={showAccount} onWidget={() => void runDesktopAction("widget")} onShortcuts={() => void runDesktopAction("shortcuts")} onDismiss={closeHelp}/> : null}
-              {paperDashboard ? <PulseCoachOverview {...coachProps} detailsRequested={paceDetailsRequested} pacingOnly={quotaAvailable}>
-                {({ summary, details }) => renderDashboard(summary, details)}
-              </PulseCoachOverview> : renderDashboard(dashboardCoach)}
+              {renderDashboard(paperWorkspace ? <PulseCoachOverview {...coachProps} paper pacingOnly={quotaAvailable}/> : dashboardCoach)}
               {view === "dashboard" ? scanHeader : null}
 
             </div>
@@ -678,12 +679,14 @@ export default function App() {
 
           {visitedViews.current.has("analysis") ? (
             <Activity mode={view === "analysis" ? "visible" : "hidden"}>
+              <div className="pulse-book-analysis">
               <div className="pulse-analysis-source-tabs" role="group" aria-label={shellCopy("analysis")}>
                 <button type="button" aria-pressed={analysisSource === "local"} onClick={() => setAnalysisSource("local")}>{quotaCopy("local")}</button>
                 <button type="button" aria-pressed={analysisSource === "official"} onClick={() => setAnalysisSource("official")}>{quotaCopy("title")}</button>
               </div>
               {officialAnalysisVisited.current ? <Activity mode={analysisSource === "official" ? "visible" : "hidden"}><QuotaHistoryView/></Activity> : null}
               <Activity mode={analysisSource === "local" ? "visible" : "hidden"}>{overview ? <UsageAnalysisView overview={overview} range={range} isBusy={isLoading || isRefreshing || isResetting || isExporting !== null} isExporting={isExporting} exportError={exportError} onRangeChange={handleRangeChange} onExport={(format) => void handleExport(format)} metrics={metrics} onOpenDay={date => { setSelectedProjectFilter(null); setSelectedSessionDate(date); navigate("sessions"); }}/> : <p className="pulse-empty">{t("common.no_data")}</p>}</Activity>
+              </div>
             </Activity>
           ) : null}
 
@@ -695,8 +698,8 @@ export default function App() {
 
           {visitedViews.current.has("projects") && overview ? (
             <Activity mode={view === "projects" ? "visible" : "hidden"}>
-            <div className="space-y-4">
-              <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+            <div className="pulse-book-ledger space-y-4">
+              <div className="pulse-book-heading flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
                 <div>
                   <h2 className="text-xl font-bold tracking-tight text-foreground">{t("projects.title")}</h2>
                   <p className="text-sm text-muted-foreground">{t("projects.subtitle")}</p>
@@ -706,6 +709,7 @@ export default function App() {
                 </div>
               </div>
               <ProjectUsageCard
+                paperSpread={paperWorkspace}
                 projects={projects}
                 projectDaily={overview.projectDaily}
                 onProjectClick={(proj) => setSelectedProjectForModal(proj)}
@@ -716,8 +720,8 @@ export default function App() {
 
           {visitedViews.current.has("daily") && overview ? (
             <Activity mode={view === "daily" ? "visible" : "hidden"}>
-            <div className="space-y-4">
-              <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+            <div className="pulse-book-ledger space-y-4">
+              <div className="pulse-book-heading flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
                 <div>
                   <h2 className="text-xl font-bold tracking-tight text-foreground">{t("daily.title", { defaultValue: "Daily Usage Details" })}</h2>
                   <p className="text-sm text-muted-foreground">{t("daily.subtitle")}</p>
@@ -727,6 +731,7 @@ export default function App() {
                 </div>
               </div>
               <DailyUsageTable
+                paperSpread={paperWorkspace}
                 range={range}
                 daily={overview.daily}
                 onRowClick={(date) => {
@@ -741,14 +746,14 @@ export default function App() {
 
           {visitedViews.current.has("monthly") && monthlyUsage ? (
             <Activity mode={view === "monthly" ? "visible" : "hidden"}>
-            <div className="space-y-4">
-              <div>
+            <div className="pulse-book-ledger space-y-4">
+              <div className="pulse-book-heading">
                 <h2 className="text-xl font-bold tracking-tight text-foreground">{t("monthly.title")}</h2>
                 <p className="text-sm text-muted-foreground">
                   {t("monthly.subtitle", { start: monthlyUsage.startMonth, end: monthlyUsage.endMonth, tz: monthlyUsage.timezone })}
                 </p>
               </div>
-              <MonthlyUsageTable data={monthlyUsage} />
+              <MonthlyUsageTable data={monthlyUsage} paperSpread={paperWorkspace} />
             </div>
             </Activity>
           ) : null}
@@ -757,6 +762,7 @@ export default function App() {
             <Activity mode={view === "sessions" ? "visible" : "hidden"}>
             <SessionUsageTable
               sessions={sessions}
+              paperSpread={paperWorkspace}
               showSessionCredits={showSessionCredits}
               creditsActive={view === "sessions" && !selectedProjectForModal && !selectedSession && !isResetHistoryOpen}
               initialExpandedDate={selectedSessionDate}
@@ -856,18 +862,19 @@ export default function App() {
       ) : null}
       </div>
       </div>
-      {!compactWindow && accountExpanded && view !== "settings" && view !== "logs" ? <aside id="pulse-account-rail" className="pulse-account-rail" aria-label={copy("account")} tabIndex={-1}>
+      {!accountUsesDrawer && accountExpanded && view !== "settings" && view !== "logs" ? <aside id="pulse-account-rail" className="pulse-account-rail" aria-label={copy("account")} tabIndex={-1}>
         <h2>{copy("account")}</h2>
         {accountPanel}
       </aside> : null}
       </div>
-      {compactWindow && accountDrawerOpen ? <PulseAccountDrawer onClose={closeAccountDrawer}>{accountPanel}</PulseAccountDrawer> : null}
+      {accountUsesDrawer && accountDrawerOpen ? <PulseAccountDrawer onClose={closeAccountDrawer}>{accountPanel}</PulseAccountDrawer> : null}
       <footer className="pulse-statusbar">
         <span>{copy("local")}</span>
         <ReadingInfo label={copy("local")}>
           <p>{diagnostics?.runtime ?? "Codex"}{diagnostics?.filesFound != null ? <> · {diagnostics.filesFound} {t("session.file", {defaultValue: "logs"})}</> : null}</p>
           {overview ? <p>{t("reading_context.statistics_dates", { zone: overview.timezone })}</p> : null}
         </ReadingInfo>
+        {paperWorkspace && view !== "settings" && view !== "dashboard" ? <div className="pulse-book-status-controls">{scanHeader}</div> : null}
       </footer>
     </div>
   );

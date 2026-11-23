@@ -3,7 +3,8 @@ import { ArrowDown, ArrowUp } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import type { OverviewResponse } from "@/lib/api";
-import { formatCurrency, formatCurrencyShort, formatNumber, formatPercent } from "@/lib/formatters";
+import { formatCompactNumber, formatCurrency, formatCurrencyShort, formatNumber, formatPercent } from "@/lib/formatters";
+import { useHomeCopy } from "@/lib/home-copy";
 import {
   defaultProjectSortDirection,
   isPositivePeak,
@@ -24,6 +25,7 @@ type ProjectUsageCardProps = {
   projects: OverviewResponse["projects"];
   projectDaily?: OverviewResponse["projectDaily"];
   onProjectClick?: (project: OverviewResponse["projects"][number]) => void;
+  paperSpread?: boolean;
 };
 
 const costToneClasses: Record<CostTone, string> = {
@@ -39,12 +41,14 @@ function Peak({ show, label }: { show: boolean; label: string }) {
   return show ? <span className="rounded-full bg-primary/10 px-1.5 py-0.5 text-[12px] font-semibold uppercase tracking-wide text-primary">{label}</span> : null;
 }
 
-export function ProjectUsageCard({ projects, projectDaily, onProjectClick }: ProjectUsageCardProps) {
+export function ProjectUsageCard({ projects, projectDaily, onProjectClick, paperSpread = false }: ProjectUsageCardProps) {
   const { t } = useTranslation();
+  const home = useHomeCopy();
   const [sort, setSort] = useState<ProjectSort>("total");
   const [direction, setDirection] = useState<SortDirection>("desc");
   const sortedProjects = useMemo(() => sortProjects(projects, sort, direction), [direction, projects, sort]);
   const peaks = useMemo(() => positivePeaks(projects), [projects]);
+  const totalTokens = paperSpread && projects.length > 0 ? projects.reduce((sum, project) => sum + project.totalTokens, 0) : null;
 
   const changeSort = (value: ProjectSort) => {
     setSort(value);
@@ -52,16 +56,20 @@ export function ProjectUsageCard({ projects, projectDaily, onProjectClick }: Pro
   };
 
   return (
-    <Card data-testid="project-comparison">
-      <CardContent className="p-0">
-        <div className="flex flex-wrap items-center justify-between gap-4 border-b border-border px-4 py-4 sm:px-6">
-          <div className="flex flex-wrap items-center gap-x-5 gap-y-2 text-[12px] text-muted-foreground" aria-label={t("projects.token_legend")}>
+    <Card className="pulse-book-ledger-card" data-testid="project-comparison">
+      <CardContent className="pulse-book-ledger-body p-0">
+        <div className="pulse-book-ledger-tools flex flex-wrap items-center justify-between gap-4 border-b border-border px-4 py-4 sm:px-6">
+          {totalTokens !== null ? <dl className="pulse-book-ledger-total">
+            <dt>{home("periodTokens")}</dt>
+            <dd title={formatNumber(totalTokens)}>{formatCompactNumber(totalTokens)}</dd>
+          </dl> : null}
+          <div className="pulse-book-ledger-legend flex flex-wrap items-center gap-x-5 gap-y-2 text-[12px] text-muted-foreground" aria-label={t("projects.token_legend")}>
             <span className="inline-flex items-center gap-1.5"><i className="h-2 w-2 rounded-full pulse-token-input" />{t("projects.legend.uncached")}</span>
             <span className="inline-flex items-center gap-1.5"><i className="h-2 w-2 rounded-full pulse-token-cached" />{t("projects.legend.cached")}</span>
             <span className="inline-flex items-center gap-1.5"><i className="h-2 w-2 rounded-full pulse-token-output" />{t("projects.legend.output")}</span>
             <span>{t("ux.relative_project_cost")}</span>
           </div>
-          <div className="flex min-w-0 items-center gap-2">
+          <div className="pulse-book-ledger-sort flex min-w-0 items-center gap-2">
             <label htmlFor="project-sort" className="shrink-0 text-[12px] text-muted-foreground">{t("projects.sort.label")}</label>
             <Select value={sort} onValueChange={(value) => changeSort(value as ProjectSort)}>
               <SelectTrigger id="project-sort" aria-label={t("projects.sort.label")} className="h-9 w-[150px]">
@@ -83,9 +91,10 @@ export function ProjectUsageCard({ projects, projectDaily, onProjectClick }: Pro
           </div>
         </div>
         {projects.length === 0 ? (
-          <p className="px-6 py-10 text-center text-sm text-muted-foreground">{t("projects.no_projects")}</p>
+          <p className="pulse-book-ledger-records px-6 py-10 text-center text-sm text-muted-foreground">{t("projects.no_projects")}</p>
         ) : (
-          <div className="overflow-x-auto px-4 sm:px-6">
+          <div className="pulse-book-ledger-records pulse-book-ledger-records--projects overflow-x-auto px-4 sm:px-6"
+            role={paperSpread ? "region" : undefined} aria-label={paperSpread ? t("projects.title") : undefined} tabIndex={paperSpread ? 0 : undefined}>
             <table className="min-w-[680px] w-full table-fixed border-separate border-spacing-0 text-sm">
               <thead><tr className="text-left text-[12px] uppercase tracking-[0.14em] text-muted-foreground">
                 <th className="w-[25%] border-b border-border py-3 font-medium">{t("projects.cols.project")}</th>

@@ -8,14 +8,16 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import type { MonthlyUsageResponse } from "@/lib/api";
-import { formatCurrency, formatNumber, formatPercent } from "@/lib/formatters";
+import { formatCompactNumber, formatCurrency, formatNumber, formatPercent } from "@/lib/formatters";
 import { ArrowDown, ArrowUp } from "lucide-react";
 import { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { monthCoverage, type MonthCoverage } from "@/lib/monthly-coverage";
+import { useHomeCopy } from "@/lib/home-copy";
 
 type MonthlyUsageTableProps = {
   data: MonthlyUsageResponse;
+  paperSpread?: boolean;
 };
 
 type MonthlyRow = MonthlyUsageResponse["monthly"][number];
@@ -148,12 +150,13 @@ function QuotaPercent({ value }: { value?: number | null }) {
   return <span>{value < 0.5 ? "<1%" : `${t("sessions.quota.approx")} ${Math.round(value)}%`}</span>;
 }
 
-export function MonthlyUsageTable({ data }: MonthlyUsageTableProps) {
+export function MonthlyUsageTable({ data, paperSpread = false }: MonthlyUsageTableProps) {
   const { t } = useTranslation();
+  const home = useHomeCopy();
   const [sortField, setSortField] = useState<SortField>("month");
   const [sortDirection, setSortDirection] = useState<SortDirection>("desc");
 
-  const { displayRows, peaks } = useMemo(() => {
+  const { displayRows, peaks, totalTokens } = useMemo(() => {
     const monthMap = new Map(data.monthly.map((month) => [month.month, month]));
     const nextPeaks: Record<MetricField, number> = {
       totalTokens: 0,
@@ -162,10 +165,12 @@ export function MonthlyUsageTable({ data }: MonthlyUsageTableProps) {
       outputTokens: 0,
       costUSD: 0,
     };
+    let totalTokens: number | null = null;
     const derived = data.monthly.map((month): DerivedMonth => {
       const coverage = monthCoverage(month.month, data.retainedFrom);
-      for (const field of metricFields) {
-        if (coverage !== "unavailable") nextPeaks[field] = Math.max(nextPeaks[field], month[field] ?? 0);
+      if (coverage !== "unavailable") {
+        totalTokens = (totalTokens ?? 0) + month.totalTokens;
+        for (const field of metricFields) nextPeaks[field] = Math.max(nextPeaks[field], month[field] ?? 0);
       }
       const previous = monthMap.get(getPreviousMonth(month.month));
       return { ...month, coverage, previous: coverage === "retained" && previous && monthCoverage(previous.month, data.retainedFrom) === "retained" ? previous : null };
@@ -174,6 +179,7 @@ export function MonthlyUsageTable({ data }: MonthlyUsageTableProps) {
     return {
       displayRows: buildDisplayRows(derived, sortField, sortDirection),
       peaks: nextPeaks,
+      totalTokens,
     };
   }, [data.monthly, data.retainedFrom, sortDirection, sortField]);
 
@@ -185,11 +191,15 @@ export function MonthlyUsageTable({ data }: MonthlyUsageTableProps) {
   };
 
   return (
-    <Card>
-      <CardContent className="p-0">
-        <div className="flex flex-wrap items-center justify-between gap-4 border-b border-border px-4 py-4 sm:px-6">
-          <div className="flex flex-wrap items-center gap-x-5 gap-y-2 text-[12px] text-muted-foreground">
-            <span>{t("monthly.comparison_range", { start: data.startMonth, end: data.endMonth })}</span>
+    <Card className="pulse-book-ledger-card">
+      <CardContent className="pulse-book-ledger-body p-0">
+        <div className="pulse-book-ledger-tools flex flex-wrap items-center justify-between gap-4 border-b border-border px-4 py-4 sm:px-6">
+          {paperSpread && totalTokens !== null ? <dl className="pulse-book-ledger-total">
+            <dt>{home("periodTokens")}</dt>
+            <dd title={formatNumber(totalTokens)}>{formatCompactNumber(totalTokens)}</dd>
+          </dl> : null}
+          <div className="pulse-book-ledger-legend flex flex-wrap items-center gap-x-5 gap-y-2 text-[12px] text-muted-foreground">
+            {!paperSpread ? <span>{t("monthly.comparison_range", { start: data.startMonth, end: data.endMonth })}</span> : null}
             {data.throughDate ? <span>{t("monthly.through_date", { date: data.throughDate })}</span> : null}
             {data.retainedFrom ? <span title={t("monthly.retention_note")}>{t("monthly.retained_from", { date: data.retainedFrom })}</span> : null}
             <span className="inline-flex items-center gap-3" aria-label={t("monthly.token_legend_label")}>
@@ -201,7 +211,7 @@ export function MonthlyUsageTable({ data }: MonthlyUsageTableProps) {
               {t("monthly.cost_scale")} <span className="text-emerald-600">●</span> ≤⅓ <span className="text-amber-500">●</span> ≤⅔ <span className="text-rose-500">●</span> &gt;⅔
             </span>
           </div>
-          <div className="flex min-w-0 items-center gap-2">
+          <div className="pulse-book-ledger-sort flex min-w-0 items-center gap-2">
             <label className="shrink-0 text-[12px] text-muted-foreground" htmlFor="monthly-sort">{t("monthly.sort.label")}</label>
             <Select
               value={sortField}
@@ -230,9 +240,10 @@ export function MonthlyUsageTable({ data }: MonthlyUsageTableProps) {
         </div>
 
         {displayRows.length === 0 ? (
-          <p className="px-6 py-10 text-center text-sm text-muted-foreground">{t("monthly.no_data")}</p>
+          <p className="pulse-book-ledger-records px-6 py-10 text-center text-sm text-muted-foreground">{t("monthly.no_data")}</p>
         ) : (
-          <div className="overflow-x-auto px-4 sm:px-6" data-monthly-scroll>
+          <div className="pulse-book-ledger-records pulse-book-ledger-records--monthly overflow-x-auto px-4 sm:px-6" data-monthly-scroll
+            role={paperSpread ? "region" : undefined} aria-label={paperSpread ? t("monthly.title") : undefined} tabIndex={paperSpread ? 0 : undefined}>
             <table className="min-w-[680px] w-full border-separate border-spacing-0 text-sm">
               <thead>
                 <tr className="text-left text-[12px] uppercase tracking-[0.14em] text-muted-foreground">

@@ -26,7 +26,6 @@ type DashboardHeroCardProps = {
   quotaHistory?: ReactNode;
   quotaLimits?: ReactNode;
   paperSpread?: boolean;
-  coachDetails?: ReactNode;
   localRecovery?: ReactNode;
 };
 
@@ -39,7 +38,7 @@ export type UsageAnalysisViewProps = {
 };
 
 /** Today is independent of the analysis range and any selected historical day. */
-export function DashboardHeroCard({ timezone, todayOverview = null, todayLoading = false, todayUnavailable = false, todayStale = false, onOpenToday, onOpenAnalysis, coach, quotaHistory, quotaLimits, paperSpread = false, coachDetails, localRecovery }: DashboardHeroCardProps) {
+export function DashboardHeroCard({ timezone, todayOverview = null, todayLoading = false, todayUnavailable = false, todayStale = false, onOpenToday, onOpenAnalysis, coach, quotaHistory, quotaLimits, paperSpread = false, localRecovery }: DashboardHeroCardProps) {
   const { t, i18n } = useTranslation();
   const copy = usePulseCopy();
   const home = useHomeCopy();
@@ -105,6 +104,7 @@ export function DashboardHeroCard({ timezone, todayOverview = null, todayLoading
     {paperSpread ? <>
       <div className="pulse-paper-dashboard-page pulse-paper-dashboard-page--quota">
         <div className="pulse-paper-quotas">{quotaLimits}</div>
+        <div className="pulse-paper-dashboard-page--pacing">{coach}</div>
       </div>
       <div className="pulse-paper-dashboard-page pulse-paper-dashboard-page--today">
         {today}
@@ -112,8 +112,6 @@ export function DashboardHeroCard({ timezone, todayOverview = null, todayLoading
         {quotaHistory}
         {analysis}
       </div>
-      <div className="pulse-paper-dashboard-page pulse-paper-dashboard-page--pacing">{coach}</div>
-      {coachDetails ? <div className="pulse-paper-dashboard-details">{coachDetails}</div> : null}
     </> : <>
       {coach}
       {today}

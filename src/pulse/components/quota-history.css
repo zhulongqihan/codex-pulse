@@ -12,10 +12,11 @@
 .pulse-quota-status { flex-basis:100%; font-size:13px; }
 .pulse-quota-status:empty { display:none; }
 .pulse-quota-status p { margin:0 0 6px; max-width:80ch; overflow-wrap:anywhere; }
-.pulse-quota-status [role=alert],.pulse-quota-history > [role=alert],.pulse-quota-settings [role=alert] { color:rgb(var(--error)); }
+.pulse-quota-status [role=alert],.pulse-book-official-notes > [role=alert],.pulse-quota-settings [role=alert] { color:rgb(var(--error)); }
 .pulse-quota-history { display:flex; flex-direction:column; gap:20px; min-width:0; color:rgb(var(--foreground)); }
 .pulse-quota-heading h1 { font-size:22px; font-weight:600; letter-spacing:-.03em; }
-.pulse-quota-heading p,.pulse-quota-history > p,.pulse-quota-day > p { max-width:80ch; color:rgb(var(--muted-foreground)); font-size:13px; line-height:1.65; }
+.pulse-quota-heading p,.pulse-book-official-notes > p,.pulse-quota-day > p { max-width:80ch; color:rgb(var(--muted-foreground)); font-size:13px; line-height:1.65; }
+.pulse-book-official-notes,.pulse-book-official-records { display:contents; }
 .pulse-quota-controls { display:flex; align-items:flex-end; flex-wrap:wrap; gap:14px; }
 .pulse-quota-controls label { display:flex; flex-direction:column; gap:6px; font-size:12px; color:rgb(var(--muted-foreground)); }
 .pulse-quota-controls select,.pulse-quota-controls input { min-height:36px; max-width:100%; border:1px solid rgb(var(--border)); border-radius:6px; background:rgb(var(--background)); color:rgb(var(--foreground)); padding:6px 9px; font-size:13px; }

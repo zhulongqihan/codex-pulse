@@ -31,7 +31,7 @@
 - **导出与更新**：XLSX／Markdown 包含所选范围的汇总、日期、模型和项目。自有更新源验证签名、品牌、平台与包摘要，更新失败保留数据并恢复原程序。
 - **帮助与反馈**：设置内集中查看使用帮助、分享体验或报告问题。反馈摘要只包含可见的最少环境与用户选择项，先预览再复制，不自动上传账号、日志或会话。
 
-0.14.6 精简标题栏配速浮窗，移除重复的用尽提醒和额度窗口明细。刷新冷却期间显示静态倒计时。[本版更新说明](docs/releases/v0.14.6.md)。
+0.14.7 将纸册的各标签页对齐左右书页，窗口较窄或较矮时切换单页。仪表盘配速说明保留三项读数，重置预告默认折叠。[本版更新说明](docs/releases/v0.14.7.md)。
 
 纸册配套界面（合成数据）：[配速详情](docs/screenshots/paper-0.14.6-pace-panel.png) · [系统托盘](docs/screenshots/paper-0.13.2-tray.png) · [Codex 面板样式](docs/screenshots/paper-0.14.3-mcp.png)。
 
@@ -47,7 +47,7 @@
 
 | 清爽 Clear | 刻度 Meter | 纸册 Paper |
 |---|---| --- |
-| ![清爽界面，合成数据](docs/screenshots/clear-overview.png) | ![刻度界面，合成数据](docs/screenshots/meter-overview.png) | ![纸册仪表盘，合成数据](docs/screenshots/paper-0.14.3-dashboard.png) |
+| ![清爽界面，合成数据](docs/screenshots/clear-overview.png) | ![刻度界面，合成数据](docs/screenshots/meter-overview.png) | ![纸册仪表盘，合成数据](docs/screenshots/paper-0.14.7-dashboard.png) |
 
 三种外观共用相同功能。仪表盘展示账号剩余额度、重置时间和今日本机 Token；“用量分析”提供完整时段趋势、分布与导出。清爽使用轻量比较图与连续表格，刻度突出深色趋势区域，纸册使用横向纸签、书册布局和纸张纹理。逐日细看、数据表、全屏和键盘操作均可使用。
 
@@ -57,7 +57,7 @@
 
 | 清爽 Clear | 刻度 Meter | 纸册 Paper |
 |---|---| --- |
-| ![清爽用量分析，合成数据](docs/screenshots/clear-analysis.png) | ![刻度用量分析，合成数据](docs/screenshots/meter-analysis.png) | ![纸册用量分析，合成数据](docs/screenshots/paper-0.13.2-analysis-local.png) |
+| ![清爽用量分析，合成数据](docs/screenshots/clear-analysis.png) | ![刻度用量分析，合成数据](docs/screenshots/meter-analysis.png) | ![纸册用量分析，合成数据](docs/screenshots/paper-0.14.7-analysis-local.png) |
 
 ## 每日官方额度记录
 
@@ -65,7 +65,7 @@
 
 | 清爽 Clear | 刻度 Meter | 纸册 Paper |
 |---|---| --- |
-| ![清爽每日官方额度记录，合成数据](docs/screenshots/clear-quota-history.png) | ![刻度每日官方额度记录，合成数据](docs/screenshots/meter-quota-history.png) | ![纸册每日官方额度记录，合成数据](docs/screenshots/paper-0.13.2-analysis-official.png) |
+| ![清爽每日官方额度记录，合成数据](docs/screenshots/clear-quota-history.png) | ![刻度每日官方额度记录，合成数据](docs/screenshots/meter-quota-history.png) | ![纸册每日官方额度记录，合成数据](docs/screenshots/paper-0.14.7-analysis-official.png) |
 
 在 **设置 → 数据来源** 中可关闭或重新开启记录。默认开启，正常约每 60 秒读取当前已选择账号，错误与限流时退避；隐藏主窗、浮窗和标题栏不会停止记录。Pulse 退出或系统休眠时不采集，不新增系统服务或模型请求。
 

@@ -4,6 +4,7 @@ import "./i18n";
 import "./styles.css";
 import "./components/pulse-pace.css";
 import "./paper-theme.css";
+import "./paper-spread.css";
 import { isTauri } from "@tauri-apps/api/core";
 import { migrateLegacyPreferences } from "./lib/legacy-preferences";
 import { initializePulseAppearance } from "./lib/pulse-appearance";

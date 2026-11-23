@@ -8,7 +8,8 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import type { OverviewResponse, RangeKey } from "@/lib/api";
-import { formatCurrency, formatNumber, formatPercent } from "@/lib/formatters";
+import { formatCompactNumber, formatCurrency, formatNumber, formatPercent } from "@/lib/formatters";
+import { useHomeCopy } from "@/lib/home-copy";
 import { getRangeLabel } from "@/lib/usage-dashboard";
 import { ArrowDown, ArrowUp } from "lucide-react";
 import { type KeyboardEvent, useMemo, useState } from "react";
@@ -18,6 +19,7 @@ type DailyUsageTableProps = {
   range: RangeKey;
   daily: OverviewResponse["daily"];
   onRowClick?: (date: string) => void;
+  paperSpread?: boolean;
 };
 
 type DailyRow = OverviewResponse["daily"][number];
@@ -108,12 +110,13 @@ function QuotaPercent({ value }: { value?: number | null }) {
   return <span>{value < 0.5 ? "<1%" : `${t("sessions.quota.approx")} ${Math.round(value)}%`}</span>;
 }
 
-export function DailyUsageTable({ range, daily, onRowClick }: DailyUsageTableProps) {
+export function DailyUsageTable({ range, daily, onRowClick, paperSpread = false }: DailyUsageTableProps) {
   const { t, i18n } = useTranslation();
+  const home = useHomeCopy();
   const [sortField, setSortField] = useState<SortField>("date");
   const [sortDirection, setSortDirection] = useState<SortDirection>("desc");
 
-  const { displayRows, peaks } = useMemo(() => {
+  const { displayRows, peaks, totalTokens } = useMemo(() => {
     const nextPeaks = {
       totalTokens: 0,
       inputTokens: 0,
@@ -121,7 +124,9 @@ export function DailyUsageTable({ range, daily, onRowClick }: DailyUsageTablePro
       outputTokens: 0,
       costUSD: 0,
     };
+    let totalTokens = 0;
     for (const day of daily) {
+      totalTokens += day.totalTokens;
       nextPeaks.totalTokens = Math.max(nextPeaks.totalTokens, day.totalTokens);
       nextPeaks.inputTokens = Math.max(nextPeaks.inputTokens, day.inputTokens);
       nextPeaks.cachedInputTokens = Math.max(nextPeaks.cachedInputTokens, day.cachedInputTokens);
@@ -131,6 +136,7 @@ export function DailyUsageTable({ range, daily, onRowClick }: DailyUsageTablePro
     return {
       displayRows: buildDisplayRows(daily, sortField, sortDirection),
       peaks: nextPeaks,
+      totalTokens,
     };
   }, [daily, sortDirection, sortField]);
 
@@ -149,10 +155,14 @@ export function DailyUsageTable({ range, daily, onRowClick }: DailyUsageTablePro
   };
 
   return (
-    <Card>
-      <CardContent className="p-0">
-        <div className="flex flex-wrap items-center justify-between gap-4 border-b border-border px-4 py-4 sm:px-6">
-          <div className="flex flex-wrap items-center gap-x-5 gap-y-2 text-[12px] text-muted-foreground">
+    <Card className="pulse-book-ledger-card">
+      <CardContent className="pulse-book-ledger-body p-0">
+        <div className="pulse-book-ledger-tools flex flex-wrap items-center justify-between gap-4 border-b border-border px-4 py-4 sm:px-6">
+          {paperSpread && daily.length > 0 ? <dl className="pulse-book-ledger-total">
+            <dt>{home("periodTokens")}</dt>
+            <dd title={formatNumber(totalTokens)}>{formatCompactNumber(totalTokens)}</dd>
+          </dl> : null}
+          <div className="pulse-book-ledger-legend flex flex-wrap items-center gap-x-5 gap-y-2 text-[12px] text-muted-foreground">
             <span>{t("daily.comparison_range", { range: getRangeLabel(range, t) })}</span>
             <span className="inline-flex items-center gap-3" aria-label={t("daily.token_legend_label")}>
               <span className="inline-flex items-center gap-1.5"><span className="h-2 w-2 rounded-full pulse-token-input" />{t("daily.uncached_input")}</span>
@@ -163,7 +173,7 @@ export function DailyUsageTable({ range, daily, onRowClick }: DailyUsageTablePro
               {t("daily.cost_scale")} <span className="text-emerald-600">●</span> ≤⅓ <span className="text-amber-500">●</span> ≤⅔ <span className="text-rose-500">●</span> &gt;⅔
             </span>
           </div>
-          <div className="flex min-w-0 items-center gap-2">
+          <div className="pulse-book-ledger-sort flex min-w-0 items-center gap-2">
             <label className="shrink-0 text-[12px] text-muted-foreground" htmlFor="daily-sort">{t("daily.sort.label")}</label>
             <Select
               value={sortField}
@@ -192,9 +202,10 @@ export function DailyUsageTable({ range, daily, onRowClick }: DailyUsageTablePro
         </div>
 
         {displayRows.length === 0 ? (
-          <p className="px-6 py-10 text-center text-sm text-muted-foreground">{t("daily.no_data")}</p>
+          <p className="pulse-book-ledger-records px-6 py-10 text-center text-sm text-muted-foreground">{t("daily.no_data")}</p>
         ) : (
-          <div className="overflow-x-auto px-4 sm:px-6">
+          <div className="pulse-book-ledger-records pulse-book-ledger-records--daily overflow-x-auto px-4 sm:px-6"
+            role={paperSpread ? "region" : undefined} aria-label={paperSpread ? t("daily.title") : undefined} tabIndex={paperSpread ? 0 : undefined}>
             <table className="min-w-[800px] w-full border-separate border-spacing-0 text-sm">
               <thead>
                 <tr className="text-left text-[12px] uppercase tracking-[0.14em] text-muted-foreground">

@@ -58,6 +58,24 @@ beforeAll(async () => {
 });
 
 describe("MonthlyUsageTable", () => {
+  it("totals the visible retained records in Paper without counting unavailable months", () => {
+    const data = response([
+      month("2026-08", { totalTokens: 900 }),
+      month("2026-09", { totalTokens: 120 }),
+      month("2026-10", { totalTokens: 230 }),
+    ]);
+    data.retainedFrom = "2026-09-15";
+
+    const { rerender } = render(<MonthlyUsageTable data={data} paperSpread />);
+    const label = screen.getByText("Period tokens");
+    expect(label.nextElementSibling).toHaveTextContent("350");
+    expect(screen.getByRole("region")).toHaveAttribute("tabindex", "0");
+    expect(row("2026-08")).toHaveAttribute("data-coverage", "unavailable");
+
+    rerender(<MonthlyUsageTable data={{ ...data, retainedFrom: "2026-11-01" }} paperSpread />);
+    expect(screen.queryByText("Period tokens")).not.toBeInTheDocument();
+  });
+
   it("does not merge unavailable history into zero-activity months or calculate a misleading change", () => {
     const data = response([inactive("2026-08"), month("2026-09"), inactive("2026-10"), month("2026-11")]);
     data.retainedFrom = "2026-09-15";

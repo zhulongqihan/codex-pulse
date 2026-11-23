@@ -1,0 +1,441 @@
+:root[data-skin="paper"] .pulse-app {
+  --book-inset: 9.5%;
+  --book-gutter: clamp(38px, 4.3vw, 104px);
+  --book-section-spacing: clamp(16px, 1.65vw, 28px);
+  --book-rule: rgb(var(--border) / .8);
+}
+
+:root[data-skin="paper"] .pulse-main-scroll {
+  padding-inline-end: 0;
+  scrollbar-gutter: stable both-edges;
+}
+
+:root[data-skin="paper"] .pulse-book-session-index {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .25rem .85rem;
+  border-block-start: 1px solid var(--book-rule);
+  padding-block-start: .7rem;
+}
+
+:root[data-skin="paper"] .pulse-book-session-index > button {
+  min-height: 32px;
+  color: rgb(var(--primary));
+}
+
+:root[data-skin="paper"] .pulse-book-account-forecast {
+  border-block-start: 1px solid rgb(var(--border));
+}
+
+:root[data-skin="paper"] .pulse-book-account-forecast > summary {
+  cursor: pointer;
+  padding-block: .75rem;
+  font-weight: 600;
+}
+
+:root[data-skin="paper"] .pulse-book-account-forecast > summary:focus-visible {
+  outline: 2px solid var(--paper-accent);
+  outline-offset: 2px;
+}
+
+:root[data-skin="paper"] .pulse-book-status-controls {
+  min-width: 0;
+}
+
+:root[data-skin="paper"] .pulse-book-status-controls > header,
+:root[data-skin="paper"] .pulse-book-status-controls > header > div > div:last-child {
+  padding-block: 0;
+}
+
+:root[data-skin="paper"] .pulse-book-status-controls > header > div {
+  border: 0;
+  min-height: 0;
+  gap: 0;
+}
+
+@media (min-width: 1101px) and (min-height: 600px) {
+  /* The artwork spans the app. Keep page insets and the gap symmetric around its spine. */
+  :root[data-skin="paper"] .pulse-workspace {
+    --book-top: max(68px, 10.85vh);
+    /* The illustrated leaf starts at 80% of the artwork height. */
+    padding: var(--book-top) var(--book-inset) 9.6vh;
+  }
+
+  :root[data-skin="paper"] .pulse-paper-navigation {
+    inset: 0 var(--book-inset) auto;
+    height: var(--book-top);
+    max-height: none;
+  }
+
+  :root[data-skin="paper"] .pulse-statusbar {
+    height: 10.5vh;
+    max-height: none;
+  }
+
+  :root[data-skin="paper"] .pulse-main-scroll > .max-w-layout {
+    padding-inline: 0;
+    padding-bottom: 26px;
+  }
+
+  :root[data-skin="paper"] .pulse-main-scroll main {
+    padding-block-start: 16px;
+  }
+
+  :root[data-skin="paper"] .pulse-app[data-view="dashboard"] .pulse-main-scroll main > div > header {
+    margin-inline-start: calc((100% + var(--book-gutter)) / 2);
+  }
+
+  :root[data-skin="paper"] .pulse-app :is(
+    .pulse-paper-dashboard-spread,
+    .pulse-book-analysis,
+    .pulse-session-list:has(> .pulse-book-session-controls),
+    .pulse-book-models,
+    .pulse-book-ledger,
+    .pulse-book-settings,
+    .pulse-book-logs
+  ) {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    column-gap: var(--book-gutter);
+    row-gap: var(--book-section-spacing);
+    align-items: start;
+    max-width: none;
+  }
+
+  :root[data-skin="paper"] .pulse-main-scroll :is(.pulse-book-ledger, .pulse-book-models, .pulse-book-settings, .pulse-session-list:has(> .pulse-book-session-controls)) > * {
+    min-width: 0;
+    margin-block: 0;
+  }
+
+  :root[data-skin="paper"] .pulse-paper-dashboard-page {
+    gap: var(--book-section-spacing);
+  }
+
+  :root[data-skin="paper"] .pulse-dashboard-home .pulse-dashboard-today-heading h2::after {
+    inset-inline-end: 0;
+  }
+
+  :root[data-skin="paper"] .pulse-book-analysis > .pulse-analysis-source-tabs {
+    grid-area: 1 / 1;
+    min-width: 0;
+    margin-block-end: 0;
+  }
+
+  :root[data-skin="paper"] .pulse-book-analysis {
+    grid-template-rows: max-content max-content minmax(0, 1fr);
+  }
+
+  :root[data-skin="paper"] .pulse-book-analysis > :is(.pulse-usage-analysis, .pulse-quota-history) {
+    display: contents;
+  }
+
+  :root[data-skin="paper"] .pulse-usage-analysis > .pulse-period-summary {
+    grid-area: 2 / 1;
+    min-width: 0;
+  }
+
+  :root[data-skin="paper"] .pulse-usage-analysis > .pulse-analysis-trend {
+    grid-area: 1 / 2 / span 3;
+    min-width: 0;
+    margin: 0;
+    padding-block-start: 0;
+    border-block-start: 0;
+  }
+
+  :root[data-skin="paper"] .pulse-usage-analysis > .pulse-distribution {
+    grid-area: 3 / 1;
+    min-width: 0;
+    margin: 0;
+    padding-block-start: 1rem;
+    border-block-start: 1px solid var(--book-rule);
+  }
+
+  :root[data-skin="paper"] .pulse-usage-analysis .pulse-fit-trends:has(.pulse-day-inspector) {
+    display: flex;
+    flex-direction: column;
+    gap: var(--book-section-spacing);
+  }
+
+  :root[data-skin="paper"] .pulse-quota-history .pulse-book-official-notes,
+  :root[data-skin="paper"] .pulse-quota-history .pulse-book-official-records {
+    display: flex;
+    flex-direction: column;
+    gap: var(--book-section-spacing);
+    min-width: 0;
+  }
+
+  :root[data-skin="paper"] .pulse-book-official-notes {
+    grid-area: 2 / 1 / span 2;
+  }
+
+  :root[data-skin="paper"] .pulse-book-official-records {
+    grid-area: 1 / 2 / span 3;
+  }
+
+  :root[data-skin="paper"] .pulse-quota-history .pulse-quota-export {
+    margin-inline-start: 0;
+  }
+
+  :root[data-skin="paper"] .pulse-quota-history .pulse-quota-chart-scroll {
+    background-color: rgb(var(--surface) / .58);
+  }
+
+  :root[data-skin="paper"] .pulse-session-list > :is(.pulse-book-session-controls, .pulse-book-session-records) {
+    min-width: 0;
+  }
+
+  :root[data-skin="paper"] .pulse-session-list > .pulse-book-session-records {
+    grid-column: 2;
+    container: app-content / inline-size;
+  }
+
+  :root[data-skin="paper"] .pulse-book-models {
+    grid-template-rows: repeat(4, max-content) minmax(0, 1fr);
+  }
+
+  :root[data-skin="paper"] .pulse-book-models :is([role="tabpanel"], [data-testid="model-analytics"]) {
+    display: contents;
+  }
+
+  :root[data-skin="paper"] .pulse-book-models :is(.pulse-book-heading, .pulse-book-model-tabs, [data-testid="model-summary"], [data-testid="model-quota-estimates"], .pulse-book-model-charts, .pulse-catalog-source, .pulse-book-catalog-filters, [role="alert"]) {
+    grid-column: 1;
+    min-width: 0;
+    margin: 0;
+  }
+
+  :root[data-skin="paper"] .pulse-book-models > .pulse-book-model-tabs {
+    justify-self: start;
+    max-width: 100%;
+  }
+
+  :root[data-skin="paper"] .pulse-book-models [data-testid="model-summary"] {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  :root[data-skin="paper"] .pulse-book-models [data-testid="model-summary"] > div:last-child {
+    grid-column: 1 / -1;
+  }
+
+  :root[data-skin="paper"] .pulse-book-models .pulse-book-model-charts {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  :root[data-skin="paper"] .pulse-book-models :is(.pulse-book-model-records, .pulse-book-catalog-records) {
+    grid-area: 1 / 2 / span 5;
+    min-width: 0;
+    margin: 0;
+    container: app-content / inline-size;
+  }
+
+  :root[data-skin="paper"] .pulse-book-models .pulse-book-model-records table :is(td, th) {
+    padding-inline: .4rem;
+    overflow-wrap: anywhere;
+  }
+
+  :root[data-skin="paper"] .pulse-book-ledger {
+    grid-template-rows: max-content minmax(0, 1fr);
+  }
+
+  :root[data-skin="paper"] .pulse-book-ledger :is(.pulse-book-ledger-card, .pulse-book-ledger-body) {
+    display: contents;
+  }
+
+  :root[data-skin="paper"] .pulse-book-ledger > .pulse-book-heading {
+    grid-area: 1 / 1;
+  }
+
+  :root[data-skin="paper"] .pulse-book-ledger > .pulse-book-ledger-card .pulse-book-ledger-tools {
+    grid-area: 2 / 1;
+  }
+
+  :root[data-skin="paper"] .pulse-book-ledger > .pulse-book-ledger-card .pulse-book-ledger-records {
+    grid-area: 1 / 2 / span 2;
+    width: 100%;
+  }
+
+  :root[data-skin="paper"] .pulse-book-heading {
+    flex-wrap: wrap;
+    justify-content: flex-start;
+    gap: .75rem 1rem;
+    align-items: flex-start;
+    overflow-wrap: anywhere;
+  }
+
+  :root[data-skin="paper"] .pulse-book-settings-back {
+    max-width: none;
+    padding-inline: 0;
+  }
+
+  :root[data-skin="paper"] .pulse-book-settings-back > header {
+    width: calc((100% - var(--book-gutter)) / 2);
+  }
+
+  :root[data-skin="paper"] .pulse-book-settings {
+    grid-template-rows: max-content max-content minmax(0, 1fr);
+  }
+
+  :root[data-skin="paper"] .pulse-book-settings .pulse-settings-layout {
+    display: contents;
+  }
+
+  :root[data-skin="paper"] .pulse-book-settings :is(.pulse-settings-tabs, [role="alert"]) {
+    grid-column: 1;
+    min-width: 0;
+  }
+
+  :root[data-skin="paper"] .pulse-book-settings .pulse-settings-tabs {
+    position: static;
+    align-self: start;
+    justify-self: start;
+    width: min(100%, 22rem);
+    border-inline-start: 0;
+    padding: 0;
+  }
+
+  :root[data-skin="paper"] .pulse-book-settings #settings-panel {
+    grid-area: 1 / 2 / span 3;
+    min-width: 0;
+    container: app-content / inline-size;
+  }
+
+  @container app-content (min-width: 450px) {
+    :root[data-skin="paper"] .pulse-book-settings #settings-panel .pulse-skin-options {
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+  }
+
+  :root[data-skin="paper"] .pulse-book-logs {
+    height: auto;
+    overflow: visible;
+    background: none;
+    border: 0;
+  }
+
+  :root[data-skin="paper"] .pulse-book-log-controls {
+    flex-wrap: wrap;
+    gap: .75rem;
+    padding-inline: 0;
+    background: none;
+  }
+
+  :root[data-skin="paper"] .pulse-book-log-records {
+    min-width: 0;
+    max-height: 50vh;
+    background: rgb(var(--surface));
+    overflow-wrap: anywhere;
+  }
+}
+
+@media (max-width: 1100px), (max-height: 599px) {
+  :root[data-skin="paper"] .pulse-app {
+    --book-inset: clamp(10px, 2.75vw, 38px);
+  }
+
+  :root[data-skin="paper"] .pulse-app::before,
+  :root[data-skin="paper"][data-theme="dark"] .pulse-app::before {
+    background: rgb(var(--sidebar));
+    filter: none;
+  }
+
+  :root[data-skin="paper"] .pulse-topbar {
+    height: 62px;
+    min-height: 62px;
+    padding-inline: var(--book-inset);
+    background: rgb(var(--surface)) var(--paper-texture) center / 640px;
+    background-blend-mode: multiply;
+  }
+
+  :root[data-skin="paper"] .pulse-workspace {
+    padding: 58px var(--book-inset) 8px;
+  }
+
+  :root[data-skin="paper"] .pulse-paper-navigation {
+    inset: 4px var(--book-inset) auto;
+    height: 55px;
+    min-height: 0;
+  }
+
+  :root[data-skin="paper"] .pulse-paper-navigation button {
+    min-height: 40px;
+  }
+
+  :root[data-skin="paper"] .pulse-paper-navigation button[aria-selected="true"] {
+    min-height: 48px;
+    padding-top: 10px;
+  }
+
+  :root[data-skin="paper"] .pulse-main-column {
+    background: rgb(var(--surface)) var(--paper-texture) center / 640px;
+    background-blend-mode: multiply;
+    border: 1px solid rgb(var(--border));
+    border-radius: 2px;
+    box-shadow: 0 3px 7px rgb(23 26 18 / .24);
+  }
+
+  :root[data-skin="paper"] .pulse-main-scroll {
+    scrollbar-gutter: stable;
+  }
+
+  :root[data-skin="paper"] .pulse-main-scroll > .max-w-layout,
+  :root[data-skin="paper"] .pulse-book-settings-back {
+    padding-inline: clamp(12px, 2.6vw, 28px);
+  }
+
+  :root[data-skin="paper"] .pulse-main-scroll > .max-w-layout {
+    padding-block: 12px 24px;
+  }
+
+  :root[data-skin="paper"] .pulse-paper-dashboard-page--today {
+    border-block-start: 1px solid var(--book-rule);
+    padding-block-start: 1rem;
+  }
+
+  :root[data-skin="paper"] .pulse-paper-dashboard-spread {
+    gap: 1.4rem;
+  }
+
+  :root[data-skin="paper"] .pulse-statusbar {
+    height: auto;
+    min-height: 38px;
+    padding: 4px var(--book-inset);
+    color: rgb(var(--primary-foreground));
+    background: rgb(var(--sidebar));
+  }
+
+  :root[data-skin="paper"][data-theme="dark"] .pulse-statusbar {
+    color: rgb(var(--foreground));
+  }
+}
+
+@media (max-width: 450px) {
+  :root[data-skin="paper"] .pulse-topbar {
+    gap: .5rem;
+  }
+
+  :root[data-skin="paper"] .pulse-brand {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    flex-shrink: 1;
+    gap: 0 6px;
+  }
+
+  :root[data-skin="paper"] .pulse-brand :is(img, svg) {
+    grid-row: 1 / span 2;
+    width: 28px;
+    height: 28px;
+  }
+
+  :root[data-skin="paper"] .pulse-brand > strong {
+    font-size: clamp(15px, 4.6vw, 20px);
+  }
+
+  :root[data-skin="paper"] .pulse-demo-label {
+    grid-column: 2;
+    justify-self: start;
+  }
+
+  :root[data-skin="paper"] .pulse-brand:has(.pulse-demo-label) > strong::after,
+  :root[data-skin="paper"] .pulse-account-summary {
+    display: none;
+  }
+}

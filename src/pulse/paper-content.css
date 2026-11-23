@@ -229,12 +229,3 @@ html[data-skin="paper"] :is(.pulse-main-scroll, .pulse-chart-fullscreen, .pulse-
   outline: 2px solid var(--paper-accent);
   outline-offset: 2px;
 }
-
-@container app-content (min-width: 1000px) {
-  html[data-skin="paper"] .pulse-app .pulse-usage-analysis .pulse-fit-trends:has(.pulse-day-inspector) {
-    display: grid;
-    grid-template-columns: minmax(0, 3fr) minmax(220px, 1fr);
-    align-items: start;
-    gap: clamp(1rem, 3vw, 1.75rem);
-  }
-}

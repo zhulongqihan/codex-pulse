@@ -4,3 +4,45 @@
 
 .pulse-summary-judgment [role="status"] { margin: 0; }
 .pulse-summary-judgment > button { margin-inline-start: 7px; }
+
+.pulse-summary-forecast {
+  --pace-line: rgb(var(--border));
+  --pace-accent: rgb(var(--primary));
+  --pace-warn: rgb(var(--foreground));
+  margin-block-start: 12px;
+  border-block-start: 1px solid rgb(var(--border));
+  color: rgb(var(--foreground));
+  font-size: 13px;
+}
+.pulse-summary-forecast > summary {
+  min-block-size: 38px;
+  align-content: center;
+  cursor: pointer;
+  font-weight: 550;
+}
+.pulse-summary-forecast > summary:focus-visible {
+  outline: 2px solid rgb(var(--primary));
+  outline-offset: 2px;
+}
+.pulse-summary-forecast-state {
+  display: grid;
+  gap: 4px;
+  padding-block: 6px;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+.pulse-summary-forecast-state > p { color: rgb(var(--muted-foreground)); }
+.pulse-summary-forecast .coach-reset-notice {
+  margin: 4px 0 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font-size: inherit;
+}
+.pulse-summary-forecast .coach-notice-summary {
+  display: block;
+  overflow: visible;
+  overflow-wrap: anywhere;
+}
+.pulse-summary-forecast .coach-notice-actions { flex-wrap: wrap; }

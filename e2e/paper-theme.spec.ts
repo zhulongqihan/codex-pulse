@@ -89,16 +89,24 @@ describe('paper theme in the native app', () => {
 
     const size = await browser.getWindowSize();
     try {
-      await browser.setWindowSize(1000, 780);
-      await $('[data-testid="account-toggle"]').click();
-      await $('[data-testid="account-drawer"]').waitForDisplayed();
-      await expectReadingFonts([
-        '#pulse-account-drawer-title',
-        '[data-testid="account-drawer"] #pulse-account-details-heading',
-        '[data-testid="account-drawer"] .pulse-account-identity strong',
-      ]);
-      await browser.keys('Escape');
-      await $('[data-testid="account-drawer"]').waitForExist({ reverse: true });
+      for (const width of [1000, 1360]) {
+        await browser.setWindowSize(width, 780);
+        await $('[data-testid="account-toggle"]').click();
+        const drawer = $('[data-testid="account-drawer"]');
+        await drawer.waitForDisplayed();
+        await expectReadingFonts([
+          '#pulse-account-drawer-title',
+          '[data-testid="account-drawer"] #pulse-account-details-heading',
+          '[data-testid="account-drawer"] .pulse-account-identity strong',
+        ]);
+        const forecast = drawer.$('.pulse-book-account-forecast');
+        const card = forecast.$('[data-testid="global-reset-forecast"]');
+        await expect(card).not.toBeDisplayed();
+        await forecast.$('summary').click();
+        await expect(card).toBeDisplayed();
+        await browser.keys('Escape');
+        await drawer.waitForExist({ reverse: true });
+      }
     } finally {
       await browser.setWindowSize(size.width, size.height);
     }

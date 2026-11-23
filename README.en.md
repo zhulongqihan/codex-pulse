@@ -31,7 +31,7 @@ A quiet quota-pacing companion for Codex on Windows: view remaining quota and re
 - **Exports and updates:** XLSX/Markdown contain range summary, daily, model and project statistics. Pulse updates verify the release signature, product, platform and package digest, preserving data and restoring the previous executable if startup fails.
 - **Help and feedback:** find usage guidance, experience discussions and bug reporting in settings. Preview a minimal summary of visible environment and selected options before copying it; account data, logs and conversations are not uploaded automatically.
 
-0.14.6 streamlines the title-bar pacing panel, removing duplicate depletion warnings and the quota-window breakdown. A static countdown shows when refresh is available again. [Release notes](docs/releases/v0.14.6.md#english).
+0.14.7 aligns Paper tabs with the left and right pages and switches to one sheet in narrow or short windows. Dashboard pacing keeps three tooltip readings, and reset forecasts start collapsed. [Release notes](docs/releases/v0.14.7.md#english).
 
 Paper companion views with synthetic data: [pacing details](docs/screenshots/paper-0.14.6-pace-panel.png) · [system tray](docs/screenshots/paper-0.13.2-tray.png) · [Codex panel styling](docs/screenshots/paper-0.14.3-mcp.png).
 
@@ -47,7 +47,7 @@ Try the [roomy quota](https://zhulongqihan.github.io/codex-pulse/?demo=1&coachSc
 
 | Clear | Meter | Paper |
 |---|---| --- |
-| ![Clear with synthetic data](docs/screenshots/clear-overview.png) | ![Meter with synthetic data](docs/screenshots/meter-overview.png) | ![Paper dashboard with synthetic data](docs/screenshots/paper-0.14.3-dashboard.png) |
+| ![Clear with synthetic data](docs/screenshots/clear-overview.png) | ![Meter with synthetic data](docs/screenshots/meter-overview.png) | ![Paper dashboard with synthetic data](docs/screenshots/paper-0.14.7-dashboard.png) |
 
 All three styles share the same capabilities. The dashboard shows remaining account quota, reset time and today's local tokens. Usage analysis offers complete-range trends, distributions and exports. Clear uses lightweight comparisons and continuous tables. Meter emphasizes one dark trend field, and Paper uses a bound-journal layout with page tabs and textured paper. Daily detail, a data table, fullscreen viewing and keyboard controls remain available.
 
@@ -57,7 +57,7 @@ Open historical trends and distributions from **Usage analysis**. Today's dashbo
 
 | Clear | Meter | Paper |
 |---|---| --- |
-| ![Clear Usage analysis with synthetic data](docs/screenshots/clear-analysis.png) | ![Meter Usage analysis with synthetic data](docs/screenshots/meter-analysis.png) | ![Paper Usage analysis with synthetic data](docs/screenshots/paper-0.13.2-analysis-local.png) |
+| ![Clear Usage analysis with synthetic data](docs/screenshots/clear-analysis.png) | ![Meter Usage analysis with synthetic data](docs/screenshots/meter-analysis.png) | ![Paper Usage analysis with synthetic data](docs/screenshots/paper-0.14.7-analysis-local.png) |
 
 ## Daily official quota history
 
@@ -65,7 +65,7 @@ The dashboard shows today's observed consumption. Open **Usage analysis → Offi
 
 | Clear | Meter | Paper |
 |---|---| --- |
-| ![Clear daily official quota history, synthetic data](docs/screenshots/clear-quota-history.png) | ![Meter daily official quota history, synthetic data](docs/screenshots/meter-quota-history.png) | ![Paper daily official quota history with synthetic data](docs/screenshots/paper-0.13.2-analysis-official.png) |
+| ![Clear daily official quota history, synthetic data](docs/screenshots/clear-quota-history.png) | ![Meter daily official quota history, synthetic data](docs/screenshots/meter-quota-history.png) | ![Paper daily official quota history with synthetic data](docs/screenshots/paper-0.14.7-analysis-official.png) |
 
 Recording is enabled by default and can be changed under **Settings → Data source**. While Pulse is running, it reads the selected account approximately every 60 seconds, with backoff for failures and rate limits. Hiding the main window, widget or corner indicator does not stop recording. Quitting or system sleep stops sampling; no system service or model request is added.
 

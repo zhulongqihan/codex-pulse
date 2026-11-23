@@ -16,12 +16,13 @@ function ExternalLink({ href, children }: { href: string; children: ReactNode })
   }}>{children}</a>;
 }
 
-export function CodexForecastCard({ data, error, isRefreshing, onRefresh, resets }: {
+export function CodexForecastCard({ data, error, isRefreshing, onRefresh, resets, inDisclosure = false }: {
   data: CodexQuotaForecastResponse | null;
   error: string | null;
   isRefreshing: boolean;
   onRefresh: () => void;
   resets?: CodexResetAnnouncement[] | null;
+  inDisclosure?: boolean;
 }) {
   const { t, i18n } = useTranslation();
   const [, refreshClock] = useState(0);
@@ -71,8 +72,8 @@ export function CodexForecastCard({ data, error, isRefreshing, onRefresh, resets
   return (
     <Card data-testid="global-reset-forecast" className="min-w-0 rounded-lg">
       <CardContent className="space-y-3 p-3 sm:p-4">
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <h2 className="flex items-center gap-2 text-sm font-semibold"><RotateCcw className="h-5 w-5 text-primary" aria-hidden="true" />{t("forecast.title")}</h2>
+        <div className={cn("flex flex-wrap items-center gap-2", inDisclosure ? "justify-end" : "justify-between")}>
+          {!inDisclosure ? <h2 className="flex items-center gap-2 text-sm font-semibold"><RotateCcw className="h-5 w-5 text-primary" aria-hidden="true" />{t("forecast.title")}</h2> : null}
           <Button variant="ghost" size="sm" className="bg-primary/5 text-primary hover:bg-primary/10 hover:text-primary" onClick={onRefresh} disabled={isRefreshing} aria-label={t(error && !data ? "forecast.retry" : "forecast.refresh")}>
             <RefreshCw className={cn("mr-1.5 h-3.5 w-3.5", isRefreshing && "animate-spin")} aria-hidden="true" />
             {t(error && !data ? "forecast.retry" : "forecast.refresh")}
@@ -82,7 +83,7 @@ export function CodexForecastCard({ data, error, isRefreshing, onRefresh, resets
         {error ? <p role="alert" className="text-xs text-warning">{t(data ? "forecast.refresh_failed" : "forecast.load_failed")}</p> : null}
         {!data && isRefreshing ? (
           <div data-testid="forecast-skeleton" role="status" aria-label={t("forecast.loading")}>
-            <div aria-hidden="true" className="grid min-w-0 gap-4 motion-safe:animate-pulse lg:grid-cols-[minmax(0,3fr)_minmax(0,7fr)]">
+            <div aria-hidden="true" className={cn("grid min-w-0 gap-4 motion-safe:animate-pulse", !inDisclosure && "lg:grid-cols-[minmax(0,3fr)_minmax(0,7fr)]")}>
               <div className="space-y-4 rounded-xl border border-border p-4">
                 <div className="h-3 w-20 rounded bg-muted" />
                 <div className="h-5 w-3/4 rounded bg-muted" />
@@ -103,7 +104,7 @@ export function CodexForecastCard({ data, error, isRefreshing, onRefresh, resets
         ) : null}
         {!data && !isRefreshing && !error ? <p className="text-xs text-muted-foreground">{t("recovery.forecast_empty")}</p> : null}
         {data ? <>
-          <div className="grid min-w-0 gap-4 lg:grid-cols-[minmax(0,3fr)_minmax(0,7fr)]">
+          <div className={cn("grid min-w-0 gap-4", !inDisclosure && "lg:grid-cols-[minmax(0,3fr)_minmax(0,7fr)]")}>
             <div data-testid="forecast-announcement" className={cn("min-w-0 space-y-3 rounded-xl border p-4 text-xs leading-relaxed", stale ? "border-border bg-muted/20" : pending && watch ? "border-success/30 bg-success/5" : promised ? "border-primary/25 bg-primary/5" : "border-warning/30 bg-warning/5")}>
               <p className="text-muted-foreground">{t("forecast.status_label")}</p>
               <p data-testid="forecast-status" role="status" className={cn("flex items-start gap-2 text-base font-semibold", stale ? "text-muted-foreground" : pending && watch ? "text-success" : promised ? "text-primary" : "text-amber-700 dark:text-amber-400")}>

@@ -92,8 +92,8 @@ export function LogPanel({ isActive }: LogPanelProps) {
   }
 
   return (
-    <div className="flex h-[600px] flex-col overflow-hidden rounded-md border border-border bg-background">
-      <div className="flex items-center justify-between border-b border-border bg-muted/20 px-4 py-2">
+    <div className="pulse-book-logs flex h-[600px] flex-col overflow-hidden rounded-md border border-border bg-background">
+      <div className="pulse-book-log-controls flex items-center justify-between border-b border-border bg-muted/20 px-4 py-2">
         <div className="flex items-center gap-2 text-sm font-medium">
           <Terminal className="h-4 w-4" />
           {t("logs.title", { defaultValue: "Diagnostics Log" })}
@@ -111,7 +111,7 @@ export function LogPanel({ isActive }: LogPanelProps) {
           </Button>
         </div>
       </div>
-      <div ref={scrollRef} className="flex-1 overflow-y-auto p-4 font-mono text-xs leading-relaxed">
+      <div ref={scrollRef} className="pulse-book-log-records flex-1 overflow-y-auto p-4 font-mono text-xs leading-relaxed">
         {logs.length === 0 ? (
           <div className="text-center text-muted-foreground mt-10">{t("logs.waiting", { defaultValue: "Waiting for logs..." })}</div>
         ) : (

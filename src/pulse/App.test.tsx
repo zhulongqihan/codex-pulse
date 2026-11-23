@@ -7,6 +7,7 @@ import { listen } from "@tauri-apps/api/event";
 import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from "vitest";
 import App from "./App";
 import { syntheticCoachSnapshot } from "@/lib/pulse-pace";
+import { quotaCoachCopy } from "@/lib/quota-pace-coach-copy";
 import i18n from "./i18n";
 import tauriConfig from "../../src-tauri/tauri.conf.json";
 import forecastFixture from "../../e2e/fixtures/reset-forecast.json";
@@ -312,7 +313,7 @@ describe("App", () => {
 
   it.each([
     ["sessions", "clear"], ["settings", "clear"], ["sessions", "paper"], ["settings", "paper"],
-  ] as const)("opens and focuses pace details from %s in %s after a native request", async (source, skinId) => {
+  ] as const)("opens the dashboard and focuses pacing from %s in %s after a native request", async (source, skinId) => {
     mockLoadedDashboard();
     if (skinId === "paper") {
       onTestFinished(async () => { await act(async () => { await updatePulsePreferences({ skinId: "clear" }); }); });
@@ -338,24 +339,24 @@ describe("App", () => {
     fireEvent.focus(window);
     await waitFor(() => expect(document.activeElement).toBe(document.getElementById("pulse-pace-details")));
     const details = document.getElementById("pulse-pace-details")!;
-    expect(within(details).getByTestId("pace-popover")).toBeVisible();
-    expect(within(details).getByTestId("coach-window-details")).not.toHaveAttribute("open");
-    expect(within(details).queryByTestId("coach-cycle-observations")).not.toBeInTheDocument();
     if (skinId === "paper") {
-      expect(screen.getByTestId("dashboard-hero").lastElementChild).toContainElement(details);
-      fireEvent.keyDown(details, { key: "Escape" });
-      expect(details).toHaveAttribute("hidden");
-      expect(document.activeElement).toHaveAttribute("aria-controls", "pulse-pace-details");
+      expect(screen.getByTestId("dashboard-hero").firstElementChild).toContainElement(details);
+      expect(within(details).getByTestId("pulse-pace-summary")).toBeVisible();
+      expect(within(details).queryByTestId("coach-window-details")).not.toBeInTheDocument();
+      expect(within(details).getByText(quotaCoachCopy("en", "notice"), { selector: "summary" }).parentElement).not.toHaveAttribute("open");
     } else {
-      await userEvent.click(screen.getByTestId("sessions-nav-tab"));
+      expect(within(details).getByTestId("pace-popover")).toBeVisible();
+      expect(within(details).getByTestId("coach-window-details")).not.toHaveAttribute("open");
     }
+    expect(within(details).queryByTestId("coach-cycle-observations")).not.toBeInTheDocument();
+    await userEvent.click(screen.getByTestId("sessions-nav-tab"));
     await act(async () => {
       for (const callback of eventListeners.get("pulse-show-pace-details") ?? []) callback({ payload: null });
     });
-    await waitFor(() => expect(document.getElementById("pulse-pace-details")).toHaveFocus());
-    expect(within(document.getElementById("pulse-pace-details")!).getByTestId("pace-popover")).toBeVisible();
+    await waitFor(() => expect(details).toHaveFocus());
+    expect(within(details).getByTestId(skinId === "paper" ? "pulse-pace-summary" : "pace-popover")).toBeVisible();
   });
-  it("keeps a Paper companion request open and focused when the first overview arrives late", async () => {
+  it("keeps the Paper pacing summary focused when the first overview arrives late", async () => {
     onTestFinished(async () => { await act(async () => { await updatePulsePreferences({ skinId: "clear" }); }); });
     await updatePulsePreferences({ skinId: "paper" });
     setPageActive(true);
@@ -389,12 +390,33 @@ describe("App", () => {
     expect(within(dashboard).getByTestId("today-tokens")).toHaveTextContent("—");
     const details = within(dashboard).getByTestId("pulse-coach-overview");
     expect(details).toBeVisible();
-    expect(within(details).getByTestId("pace-popover")).toBeVisible();
-    expect(within(details).getByTestId("coach-window-details")).not.toHaveAttribute("open");
+    expect(within(details).getByTestId("pulse-pace-summary")).toBeVisible();
+    expect(within(details).queryByTestId("coach-window-details")).not.toBeInTheDocument();
     await waitFor(() => expect(details).toHaveFocus());
     await act(async () => { resolveOverview(overview()); });
     expect(within(dashboard).getByTestId("pulse-coach-overview")).toBe(details);
     expect(details).toHaveFocus();
+  });
+  it("opens a wide Paper account drawer with its forecast folded", async () => {
+    Object.defineProperty(window, "innerWidth", { configurable: true, writable: true, value: 1440 });
+    onTestFinished(async () => { await act(async () => { await updatePulsePreferences({ skinId: "clear" }); }); });
+    await updatePulsePreferences({ skinId: "paper" });
+    mockLoadedDashboard();
+    forecastInvokeMock.mockResolvedValue(forecastFixture);
+    render(<App/>);
+    const toggle = screen.getByTestId("account-toggle");
+    await userEvent.click(toggle);
+    const drawer = await screen.findByTestId("account-drawer");
+    const forecast = within(drawer).getByTestId("global-reset-forecast");
+    const disclosure = forecast.closest("details");
+    expect(disclosure).not.toHaveAttribute("open");
+    expect(forecast).not.toBeVisible();
+    await userEvent.click(disclosure!.querySelector("summary")!);
+    expect(forecast).toBeVisible();
+    expect(await within(forecast).findByRole("region", { name: "Latest 5 feed posts" })).toBeVisible();
+    await userEvent.keyboard("{Escape}");
+    expect(drawer).not.toBeInTheDocument();
+    expect(toggle).toHaveFocus();
   });
   it("publishes a resolved theme change to the local plugin snapshot without querying usage", async () => {
     mockLoadedDashboard();

@@ -4,7 +4,8 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import i18n from "../i18n";
 import { syntheticCoachSnapshot } from "@/lib/pulse-pace";
 import { paceSummaryCopy } from "@/lib/pace-summary-copy";
-import { quotaCoachClarity, quotaCoachCopy, quotaCoachFeedback } from "@/lib/quota-pace-coach-copy";
+import { formatCoachReset, quotaCoachClarity, quotaCoachCopy, quotaCoachFeedback } from "@/lib/quota-pace-coach-copy";
+import { localTimeZone, timeZoneLabel } from "@/lib/time-context";
 import { paceCopy } from "@/lib/pulse-pace-copy";
 import { PulsePaceSummary } from "./pulse-pace-summary";
 
@@ -66,14 +67,36 @@ describe("dashboard quota summary", () => {
     expect(screen.getByRole("status")).toHaveTextContent(quotaCoachCopy("en", status));
     expect(screen.queryByTestId("coach-reference")).not.toBeInTheDocument();
   });
-  it("surfaces the projected depletion of a fast cycle before external details open", () => {
+  it("surfaces the projected depletion of a fast cycle on paper without opening a details region", () => {
     const data = syntheticCoachSnapshot("fast", new Date(now));
     Object.assign(data.windows[1], {
       state: "forecast", rateLowerPerHour: 2, rateUpperPerHour: 3,
     });
-    render(<PulsePaceSummary data={data} detailsPlacement="external" expanded={false} {...actions()}/>);
+    render(<PulsePaceSummary data={data} paper {...actions()}/>);
     expect(screen.getByText("Recent observations point to possible depletion before reset.")).toBeVisible();
     expect(screen.queryByTestId("pace-popover")).not.toBeInTheDocument();
+  });
+  it.each([false, true])("shows exactly the three marked lines on paper (failed=%s)", async failed => {
+    await i18n.changeLanguage("zh");
+    const data = syntheticCoachSnapshot("roomy", new Date(now));
+    render(<PulsePaceSummary data={{ ...data, refreshFailed: failed }} paper pacingOnly {...actions()}/>);
+    fireEvent.click(screen.getByRole("button", { name: quotaCoachClarity("zh", "explain") }));
+    const tooltip = await screen.findByRole("tooltip");
+    const zone = localTimeZone();
+    const reset = Date.parse(data.windows[1].resetsAt!);
+    expect(Array.from(tooltip.querySelectorAll("p"), line => line.textContent)).toEqual([
+      `${failed ? "上次" : ""}额度已用20%，周期时间已过28.6%`,
+      `${quotaCoachCopy("zh", "resetAt", { time: formatCoachReset(reset, "zh") })}${zone ? ` · ${timeZoneLabel(zone, "zh", reset)}` : ""}`,
+      paceCopy("zh", "updated", { time: new Date(data.updatedAt!).toLocaleTimeString("zh", { hour: "2-digit", minute: "2-digit" }) }),
+    ]);
+    expect(tooltip.querySelector("time")).toHaveAttribute("datetime", data.updatedAt);
+    expect(screen.queryByRole("button", { name: paceSummaryCopy("zh", "details") })).not.toBeInTheDocument();
+  });
+  it("omits the paper info trigger when it has no reading or valid date", () => {
+    render(<PulsePaceSummary data={null} paper {...actions()}/>);
+    expect(screen.queryByRole("button", { name: quotaCoachClarity("en", "explain") })).not.toBeInTheDocument();
+    expect(screen.getByRole("status")).toHaveTextContent(quotaCoachCopy("en", "unavailable"));
+    expect(screen.getByRole("button", { name: quotaCoachFeedback("en", "recover") })).toBeEnabled();
   });
   it("does not turn unavailable data into zero or bypass existing cooldown", () => {
     const handlers = actions();

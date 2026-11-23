@@ -12,7 +12,11 @@ export function PulseAccountDrawer({ children, onClose }: { children: ReactNode;
   useEffect(() => {
     const opener = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     close.current?.focus({ preventScroll: true });
-    const controls = () => [...(panel.current?.querySelectorAll<HTMLElement>('button:not(:disabled),a[href],input:not(:disabled),select:not(:disabled),[tabindex="0"]') ?? [])].filter(node => !node.closest('[hidden],[inert]'));
+    const controls = () => [...(panel.current?.querySelectorAll<HTMLElement>('button:not(:disabled),a[href],input:not(:disabled),select:not(:disabled),summary,[tabindex="0"]') ?? [])].filter(node => {
+      if (node.closest('[hidden],[inert]')) return false;
+      const collapsed = node.closest('details:not([open])');
+      return !collapsed || node.closest('summary')?.parentElement === collapsed;
+    });
     const key = (event: KeyboardEvent) => {
       if (event.key === "Escape") { event.preventDefault(); event.stopPropagation(); onCloseRef.current(); }
       if (event.key === "Tab") {

@@ -207,6 +207,7 @@ export function QuotaHistoryView() {
     finally { setExporting(false); }
   };
   return <section className="pulse-quota-history" data-testid="quota-history-view" aria-labelledby="quota-history-title">
+    <div className="pulse-book-official-notes">
     <header className="pulse-quota-heading"><div><h1 id="quota-history-title">{copy("title")}</h1><p>{copy("note")}</p></div></header>
     <div className="pulse-quota-controls"><label>{copy("range")}<select value={rangeChoice} onChange={event => { const value = event.target.value; setRangeChoice(value); setRangeError(false); if (value !== "custom") setRange(value); }}>
       {["1d", "7d", "14d", "30d", "90d", "180d", "365d"].map(value => <option value={value} key={value}>{t(`ranges.${value}`)}</option>)}<option value="custom">{t("range_switcher.custom_range")}</option>
@@ -223,11 +224,14 @@ export function QuotaHistoryView() {
       <dl className="pulse-quota-total"><div><dt>{copy("sum")}</dt><dd>{points(total)}</dd></div></dl>
       <p>{rows.length > 0 ? <strong className="pulse-quota-observed-days">{copy("observedDays", { observed: number(known.length), total: number(rows.length) })}</strong> : null}{copy("sumNote")}</p>
       {data.unallocatedCount > 0 ? <p className="pulse-quota-gap">{copy("unallocated", { count: data.unallocatedCount })}</p> : null}
+    </> : null}
+    </div>
+    {data ? <div className="pulse-book-official-records">
       {rows.length ? <><DailyChart rows={rows}/><div className="pulse-quota-table-scroll"><table aria-label={copy("table")}><thead><tr><th>{copy("date")}</th><th>{copy("consumption")}</th><th>{copy("state")}</th><th>{copy("partial")}</th></tr></thead><tbody>{[...rows].reverse().map(row => <tr key={row.date}>
         <th scope="row"><button type="button" className="pulse-text-button" onClick={event => { dayTrigger.current = event.currentTarget; setSelectedDate(row.date); }}>{row.date}</button></th><td>{points(row.consumedPercentPoints)}</td><td>{copy(statusKey(row))}{row.gapCount > 0 ? <small>{copy("gaps", { count: row.gapCount })}</small> : null}{row.unallocatedCount > 0 ? <small>{copy("unallocated", { count: row.unallocatedCount })}</small> : null}{row.source !== "official" ? <small>{copy(row.source === "mixed" ? "mixed" : "migrated")}</small> : null}</td><td>{copy("coverage", { minutes: number(row.coveredMinutes) })}<small>{copy("samples", { count: row.sampleCount })} · {copy("cycles", { count: row.cycleCount })}</small></td>
       </tr>)}</tbody></table></div></> : <p className="pulse-empty">{copy("noWindows")}</p>}
       {selectedDate ? <QuotaDayDetail key={`${selectedDate}:${kind}:${minutes}:${data.identityRevision}`} date={selectedDate} kind={kind} minutes={minutes} identityRevision={data.identityRevision} timezone={data.timezone} onClose={() => { setSelectedDate(null); dayTrigger.current?.focus(); }}/>: null}
-    </> : null}
+    </div> : null}
   </section>;
 }
 

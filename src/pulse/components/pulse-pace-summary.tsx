@@ -1,7 +1,9 @@
-import { useEffect, useId, useState, type ComponentProps, type Ref } from "react";
+import { useEffect, useId, useState, type ComponentProps } from "react";
 import { useTranslation } from "react-i18next";
 import { Bell, ChevronDown, RefreshCw } from "lucide-react";
-import { CoachReference, PulsePaceCard } from "./pulse-pace";
+import { NoticeStatusText } from "./notice-status-details";
+import { CoachReference, CoachResetNotice, PulsePaceCard } from "./pulse-pace";
+import { noticeStateCopy } from "@/lib/notice-state-copy";
 import { quotaCoachFromSnapshot } from "@/lib/quota-pace-coach";
 import { formatCoachComparison, formatCoachCountdown, formatCoachNumber, formatCoachReset, formatCoachWindow, quotaCoachClarity, quotaCoachCopy, quotaCoachFeedback, quotaCoachReason } from "@/lib/quota-pace-coach-copy";
 import { paceCopy } from "@/lib/pulse-pace-copy";
@@ -10,32 +12,18 @@ import { localTimeZone, timeZoneLabel } from "@/lib/time-context";
 import { ReadingInfo } from "./reading-info";
 import "./pulse-pace-summary.css";
 
-/** A summary of the existing quota model. Opening its details preserves all original explanations. */
 export function PulsePaceSummary({
-  expanded: controlledExpanded, onExpandedChange, detailsId, detailsPlacement = "inline", detailsTriggerRef, pacingOnly = false, ...props
-}: ComponentProps<typeof PulsePaceCard> & {
-  expanded?: boolean;
-  onExpandedChange?: (expanded: boolean) => void;
-  detailsId?: string;
-  detailsPlacement?: "inline" | "external";
-  detailsTriggerRef?: Ref<HTMLButtonElement>;
-  pacingOnly?: boolean;
-}) {
+  paper = false, pacingOnly = false, ...props
+}: ComponentProps<typeof PulsePaceCard> & { paper?: boolean; pacingOnly?: boolean }) {
   const { data, failed = false, refreshing = false, onRefresh, onRecover } = props;
   const { i18n } = useTranslation();
   const language = i18n.resolvedLanguage ?? i18n.language;
   const copy = (key: Parameters<typeof quotaCoachCopy>[1]) => quotaCoachCopy(language, key);
   const summary = (key: Parameters<typeof paceSummaryCopy>[1]) => paceSummaryCopy(language, key);
   const [now, setNow] = useState(Date.now);
-  const [inlineExpanded, setInlineExpanded] = useState(false);
+  const [expanded, setExpanded] = useState(false);
   const generatedId = useId();
-  const targetId = detailsId ?? generatedId;
-  const expanded = controlledExpanded ?? inlineExpanded;
-  const external = detailsPlacement === "external";
-  const changeExpanded = (next: boolean) => {
-    if (controlledExpanded == null) setInlineExpanded(next);
-    onExpandedChange?.(next);
-  };
+  const targetId = `${generatedId}-details`;
   useEffect(() => { const timer = window.setInterval(() => setNow(Date.now()), data?.refreshAfterSeconds ? 1_000 : 30_000); return () => clearInterval(timer); }, [data?.refreshAfterSeconds]);
   const coach = quotaCoachFromSnapshot(data, now, failed);
   const ready = coach.status === "ready" && coach.tone != null;
@@ -53,18 +41,20 @@ export function PulsePaceSummary({
   const errorStatus = coach.status === "ready" ? "unavailable" : coach.status;
   const resetTimezone = localTimeZone();
   const advice = ready ? recentRisk ? copy("recentRiskAdvice") : coach.tone === "roomy" ? summary("roomy") : copy(`${coach.tone!}Advice`) : null;
+  const notice = coach.resetNotice;
+  const showUpdated = paper ? updatedDate != null : updated != null;
   return <section className={`pulse-summary coach-${coach.status}${pacingOnly ? " pulse-summary-pacing-only" : ""}`} aria-labelledby={`${generatedId}-title`} data-testid="pulse-pace-summary">
     <header className="pulse-summary-heading">
       <div><h2 id={`${generatedId}-title`}>{summary(pacingOnly ? "pacing" : "title")}</h2><span>{formatCoachWindow(coach.window, language)}</span>
-        <ReadingInfo label={quotaCoachClarity(language, "explain")}>
-          {!ready ? <p>{reason ?? copy(`${errorStatus}Detail`)}</p> : null}
+        {!paper || comparison || coach.resetAt != null || showUpdated ? <ReadingInfo label={quotaCoachClarity(language, "explain")}>
+          {!paper && !ready ? <p>{reason ?? copy(`${errorStatus}Detail`)}</p> : null}
           {comparison ? <p>{comparison}</p> : null}
-          <p>{copy("scope")}</p>
-          {coach.hasUnknownWindows ? <p>{quotaCoachFeedback(language, "unknownWindows")}</p> : null}
+          {!paper ? <p>{copy("scope")}</p> : null}
+          {!paper && coach.hasUnknownWindows ? <p>{quotaCoachFeedback(language, "unknownWindows")}</p> : null}
           {coach.resetAt != null ? <p>{quotaCoachCopy(language, "resetAt", { time: formatCoachReset(coach.resetAt, language) })}
             {resetTimezone ? ` · ${timeZoneLabel(resetTimezone, language, coach.resetAt)}` : null}</p> : null}
-          {updated ? <p><time dateTime={updatedDate?.toISOString()}>{updated}</time></p> : null}
-        </ReadingInfo>
+          {showUpdated ? <p><time dateTime={updatedDate?.toISOString()}>{updated}</time></p> : null}
+        </ReadingInfo> : null}
       </div>
       <div className="pulse-summary-updated">{wait > 0 ? <span role="timer">{quotaCoachFeedback(language, "cooldownShort", { seconds: wait })}</span> : null}<button type="button" onClick={onRefresh} disabled={refreshing || wait > 0} aria-busy={refreshing} aria-label={paceCopy(language, "refresh")} title={paceCopy(language, "refresh")}><RefreshCw size={16}/></button></div>
     </header>
@@ -82,13 +72,22 @@ export function PulsePaceSummary({
           <span className="pulse-summary-status">{copy(errorStatus)}</span>
           {onRecover ? <button className="pulse-text-button" type="button" onClick={onRecover}>{quotaCoachFeedback(language, "recover")}</button> : null}
         </>}
-        {external && projectedDepletion && !recentRisk ? <p className="pulse-summary-advice">{copy("projectedDepletion")}</p> : null}
+        {paper && projectedDepletion && !recentRisk ? <p className="pulse-summary-advice">{copy("projectedDepletion")}</p> : null}
       </div>
     </div>
-    {external && !pacingOnly && ready && coach.reference ? <CoachReference reference={coach.reference} language={language}/> : null}
-    <div className="pulse-summary-bottom"><button ref={detailsTriggerRef} type="button" className="pulse-text-button" aria-expanded={expanded} aria-controls={targetId} onClick={() => changeExpanded(!expanded)}>{summary("details")}<ChevronDown size={14}/></button></div>
-    {coach.resetNotice?.isUnread ? <button type="button" className="pulse-summary-notice" aria-controls={targetId} aria-expanded={expanded} onClick={() => changeExpanded(true)}><Bell size={14}/>{quotaCoachFeedback(language, "noticeCompact")}</button> : null}
-    {props.noticeFailed && (!external || !expanded) ? <p role="alert">{copy("markFailed")}</p> : null}
-    {!external ? <div id={targetId} hidden={!expanded}>{expanded ? <PulsePaceCard {...props} variant="workspace"/> : null}</div> : null}
+    {paper && !pacingOnly && ready && coach.reference ? <CoachReference reference={coach.reference} language={language}/> : null}
+    {paper ? <details className="pulse-summary-forecast">
+      <summary>{copy("notice")}</summary>
+      {notice ? <CoachResetNotice notice={notice} language={language} onRead={props.onMarkNoticeRead} pending={props.noticePending} failed={props.noticeFailed} showHeading={false}/> :
+        <div className="pulse-summary-forecast-state">
+          <strong>{noticeStateCopy(language, coach.noticeState.status === "active" ? "unknown" : coach.noticeState.status)}</strong>
+          <NoticeStatusText state={coach.noticeState} language={language}/>
+        </div>}
+    </details> : <>
+      <div className="pulse-summary-bottom"><button type="button" className="pulse-text-button" aria-expanded={expanded} aria-controls={targetId} onClick={() => setExpanded(!expanded)}>{summary("details")}<ChevronDown size={14}/></button></div>
+      {notice?.isUnread ? <button type="button" className="pulse-summary-notice" aria-controls={targetId} aria-expanded={expanded} onClick={() => setExpanded(true)}><Bell size={14}/>{quotaCoachFeedback(language, "noticeCompact")}</button> : null}
+      {props.noticeFailed ? <p role="alert">{copy("markFailed")}</p> : null}
+      <div id={targetId} hidden={!expanded}>{expanded ? <PulsePaceCard {...props} variant="workspace"/> : null}</div>
+    </>}
   </section>;
 }
