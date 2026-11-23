@@ -31,9 +31,9 @@
 - **导出与更新**：XLSX／Markdown 包含所选范围的汇总、日期、模型和项目。自有更新源验证签名、品牌、平台与包摘要，更新失败保留数据并恢复原程序。
 - **帮助与反馈**：设置内集中查看使用帮助、分享体验或报告问题。反馈摘要只包含可见的最少环境与用户选择项，先预览再复制，不自动上传账号、日志或会话。
 
-0.14.5 在额度刷新失败后仍可查看上次额度已用百分比和当前周期进度，适用于尚未重置的额度窗口。[本版更新说明](docs/releases/v0.14.5.md)。
+0.14.6 精简标题栏配速浮窗，移除重复的用尽提醒和额度窗口明细。刷新冷却期间显示静态倒计时。[本版更新说明](docs/releases/v0.14.6.md)。
 
-纸册配套界面（合成数据）：[配速详情](docs/screenshots/paper-0.14.3-pace-panel.png) · [系统托盘](docs/screenshots/paper-0.13.2-tray.png) · [Codex 面板样式](docs/screenshots/paper-0.14.3-mcp.png)。
+纸册配套界面（合成数据）：[配速详情](docs/screenshots/paper-0.14.6-pace-panel.png) · [系统托盘](docs/screenshots/paper-0.13.2-tray.png) · [Codex 面板样式](docs/screenshots/paper-0.14.3-mcp.png)。
 
 ## 工作情境与节奏卡片预览
 

@@ -4,6 +4,15 @@ User-facing changes are grouped by release, following [Keep a Changelog](https:/
 
 ## [Unreleased]
 
+## [0.14.6] - 2026-11-24
+
+### Fixed / 修复
+
+- Simplify the title-bar pacing panel by removing the two depletion warnings and the quota-window breakdown. Show a static retry timer during cooldown and keep the refresh icon still.
+- 精简标题栏配速浮窗，移除两处用尽提醒及额度窗口明细。刷新冷却只显示静态提示和倒计时，刷新图标保持静止。
+
+[完整中英说明 / Full release notes](docs/releases/v0.14.6.md)
+
 ## [0.14.5] - 2026-11-23
 
 ### Fixed / 修复
@@ -406,7 +415,8 @@ User-facing changes are grouped by release, following [Keep a Changelog](https:/
 
 Earlier releases remain available in [GitHub Releases](https://github.com/zhulongqihan/codex-pulse/releases). / 更早版本保留在 GitHub Releases。
 
-[Unreleased]: https://github.com/zhulongqihan/codex-pulse/compare/v0.14.5...HEAD
+[Unreleased]: https://github.com/zhulongqihan/codex-pulse/compare/v0.14.6...HEAD
+[0.14.6]: https://github.com/zhulongqihan/codex-pulse/compare/v0.14.5...v0.14.6
 [0.14.5]: https://github.com/zhulongqihan/codex-pulse/compare/v0.14.4...v0.14.5
 [0.14.4]: https://github.com/zhulongqihan/codex-pulse/compare/v0.14.3...v0.14.4
 [0.14.1]: https://github.com/zhulongqihan/codex-pulse/compare/v0.14.0...v0.14.1

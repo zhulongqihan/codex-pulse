@@ -31,6 +31,37 @@ function recentDepletion(remaining = 77): PaceSnapshot {
 }
 
 describe("shared cycle pace card", () => {
+  it("keeps the readings and reference without depletion messages or the window list in the title-bar popover", () => {
+    const data = recentDepletion(39);
+    Object.assign(data.windows[1], { resetsAt: iso(13 * 60 + 17), rateLowerPerHour: 4, rateUpperPerHour: 5 });
+    render(<PulsePaceCard data={data} {...actions()}/>);
+    expect(screen.getByTestId("coach-remaining")).toHaveTextContent("39%");
+    expect(screen.getByTestId("coach-countdown")).toHaveTextContent("13h 17m");
+    expect(screen.getByTestId("coach-reference")).toBeVisible();
+    expect(screen.queryByText(quotaCoachCopy("en", "recentRiskAdvice"))).not.toBeInTheDocument();
+    expect(screen.queryByText(quotaCoachCopy("en", "projectedDepletion"))).not.toBeInTheDocument();
+    expect(screen.queryByTestId("coach-window-details")).not.toBeInTheDocument();
+    fireEvent.click(timeInfo());
+    expect(screen.getByRole("tooltip")).toHaveTextContent("61% of quota used");
+  });
+  it("shows just the title-bar retry timer during cooldown and restores the refresh action", () => {
+    vi.useFakeTimers();
+    try {
+      vi.setSystemTime(now);
+      vi.spyOn(Date, "now").mockImplementation(() => new Date().getTime());
+      const data = { ...cycle(), generatedAt: iso(0), refreshAfterSeconds: 3 };
+      const handlers = actions();
+      render(<PulsePaceCard data={data} {...handlers}/>);
+      const timer = screen.getByRole("timer");
+      expect(timer).toHaveTextContent("Retry in 3s");
+      expect(timer).not.toHaveAttribute("title");
+      expect(screen.queryByRole("button", { name: paceCopy("en", "refresh") })).not.toBeInTheDocument();
+      act(() => { vi.advanceTimersByTime(3000); });
+      expect(screen.queryByRole("timer")).not.toBeInTheDocument();
+      fireEvent.click(screen.getByRole("button", { name: paceCopy("en", "refresh") }));
+      expect(handlers.onRefresh).toHaveBeenCalledOnce();
+    } finally { vi.useRealTimers(); }
+  });
   it.each(["failed", "stale"] as const)("shows the cached quota comparison in the title-bar hint when %s", async state => {
     await i18n.changeLanguage("zh");
     const data = cycle(58), resetsAt = iso(88 * 60), checkedAt = iso(-2);
@@ -256,7 +287,7 @@ describe("shared cycle pace card", () => {
   it.each(["en", "zh", "zh-Hant", "ja", "ko", "de"])("keeps the cycle baseline but warns about fresh recent depletion in %s", async language => {
     await i18n.changeLanguage(language);
     const data = recentDepletion();
-    const { rerender } = render(<><PulsePaceCard data={data} {...actions()}/><PulsePaceBadgeView data={data} onToggle={vi.fn()}/></>);
+    const { rerender } = render(<><PulsePaceCard data={data} variant="workspace" {...actions()}/><PulsePaceBadgeView data={data} onToggle={vi.fn()}/></>);
     expect(screen.getByTestId("coach-remaining")).toHaveTextContent("77%");
     fireEvent.click(timeInfo(language));
     expect(within(await screen.findByRole("tooltip")).getByTestId("coach-comparison")).toHaveTextContent(quotaCoachCopy(language, "comparison", { used: 23, elapsed: 29 }));
@@ -275,11 +306,11 @@ describe("shared cycle pace card", () => {
 
   it("also warns for a balanced cycle, then restores ordinary guidance when the forecast is unavailable", () => {
     const data = recentDepletion(71);
-    const { rerender } = render(<PulsePaceCard data={data} {...actions()}/>);
+    const { rerender } = render(<PulsePaceCard data={data} variant="workspace" {...actions()}/>);
     expect(screen.getByTestId("pace-popover")).toHaveClass("tone-balanced", "has-recent-depletion");
     expect(screen.getByText(quotaCoachCopy("en", "recentRiskAdvice"))).toBeVisible();
     data.windows[1].state = "idle";
-    rerender(<PulsePaceCard data={data} {...actions()}/>);
+    rerender(<PulsePaceCard data={data} variant="workspace" {...actions()}/>);
     expect(screen.getByTestId("pace-popover")).not.toHaveClass("has-recent-depletion");
     expect(screen.getByText(quotaCoachCopy("en", "balancedAdvice"))).toBeVisible();
     expect(screen.queryByText(quotaCoachCopy("en", "projectedDepletion"))).not.toBeInTheDocument();
@@ -287,11 +318,11 @@ describe("shared cycle pace card", () => {
 
   it("keeps stale/failure and an unread notice ahead of the recent-pace label", () => {
     const data = withNotice(recentDepletion());
-    const { rerender } = render(<><PulsePaceCard data={data} {...actions()}/><PulsePaceBadgeView data={data} onToggle={vi.fn()}/></>);
+    const { rerender } = render(<><PulsePaceCard data={data} variant="workspace" {...actions()}/><PulsePaceBadgeView data={data} onToggle={vi.fn()}/></>);
     expect(screen.getByTestId("pace-badge")).toHaveTextContent("Reset notice");
     expect(screen.getByText(quotaCoachCopy("en", "recentRiskAdvice"))).toBeVisible();
     data.updatedAt = iso(-7);
-    rerender(<><PulsePaceCard data={data} {...actions()}/><PulsePaceBadgeView data={data} onToggle={vi.fn()}/></>);
+    rerender(<><PulsePaceCard data={data} variant="workspace" {...actions()}/><PulsePaceBadgeView data={data} onToggle={vi.fn()}/></>);
     expect(screen.getByRole("status")).toHaveTextContent(quotaCoachCopy("en", "stale"));
     expect(screen.queryByText(quotaCoachCopy("en", "recentRiskAdvice"))).not.toBeInTheDocument();
     expect(screen.getByTestId("pace-popover")).not.toHaveClass("has-recent-depletion");
@@ -325,7 +356,10 @@ describe("shared cycle pace card", () => {
   it("preserves keyboard close, details, and a visibly pending refresh in the popover", () => {
     const handlers = actions(); render(<PulsePaceCard data={cycle()} refreshing {...handlers}/>);
     expect(screen.getByRole("button", { name: "Close usage rhythm" })).toHaveFocus();
-    expect(screen.getByRole("button", { name: "Refresh account readings" })).toBeDisabled();
+    const refresh = screen.getByRole("button", { name: "Refresh account readings" });
+    expect(refresh).toBeDisabled();
+    expect(refresh).toHaveAttribute("aria-busy", "true");
+    expect(refresh.querySelector("svg")).not.toHaveClass("is-refreshing");
     fireEvent.keyDown(document, { key: "Escape" }); expect(handlers.onClose).toHaveBeenCalledOnce();
     fireEvent.click(screen.getByRole("button", { name: "View usage details" })); expect(handlers.onDetails).toHaveBeenCalledOnce();
   });

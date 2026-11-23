@@ -1,6 +1,6 @@
 {
   "name": "codex-pulse",
-  "version": "0.14.5",
+  "version": "0.14.6",
   "private": true,
   "type": "module",
   "description": "Local Codex usage, complete session replay and account capacity in Clear, Meter and Paper styles.",
