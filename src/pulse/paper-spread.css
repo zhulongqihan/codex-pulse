@@ -304,11 +304,13 @@
     }
   }
 
-  :root[data-skin="paper"] .pulse-book-logs {
+  :root[data-skin="paper"] .pulse-main-scroll .pulse-book-logs {
     height: auto;
     overflow: visible;
-    background: none;
+    background-color: transparent;
     border: 0;
+    border-radius: 0;
+    box-shadow: none;
   }
 
   :root[data-skin="paper"] .pulse-book-log-controls {

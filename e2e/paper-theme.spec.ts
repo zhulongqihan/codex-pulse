@@ -84,7 +84,7 @@ describe('paper theme in the native app', () => {
       '#settings-tab-appearance',
     ]);
     await $('[data-testid="analysis-nav-tab"]').click();
-    await $('[data-testid="usage-analysis"]').waitForDisplayed();
+    await $('[data-testid="usage-analysis"] .pulse-period-summary').waitForDisplayed();
     await expectReadingFonts(['#pulse-analysis-title', '.pulse-analysis-totals dd']);
 
     const size = await browser.getWindowSize();
@@ -136,6 +136,54 @@ describe('paper theme in the native app', () => {
       await browser.switchToWindow('main');
       await invoke('tray_popover_action', { action: 'showMain' });
       await invoke('update_tray', { payload: { title: 'Codex Pulse', items: [], popover: previous } });
+    }
+  });
+
+  it('leaves the spine visible behind the optional log tab', async () => {
+    await browser.switchToWindow('main');
+    const size = await browser.getWindowSize();
+    const prior = await browser.execute(() => {
+      const value = localStorage.getItem('show_logs_tab');
+      localStorage.setItem('show_logs_tab', 'true');
+      return value;
+    });
+    try {
+      await browser.refresh();
+      await openAppearance();
+      await selectSkin('paper');
+      await browser.setWindowSize(1440, 900);
+      await $('[data-testid="logs-nav-tab"]').click();
+      const log = $('.pulse-book-logs');
+      await log.waitForDisplayed();
+      const measure = () => browser.execute(() => {
+        const element = document.querySelector('.pulse-book-logs')!;
+        const style = getComputedStyle(element);
+        return {
+          display: style.display,
+          background: style.backgroundColor,
+          shadow: style.boxShadow,
+          tools: element.querySelector('.pulse-book-log-controls')!.getBoundingClientRect().right,
+          records: element.querySelector('.pulse-book-log-records')!.getBoundingClientRect().left,
+          spine: innerWidth / 2,
+        };
+      });
+      const spread = await measure();
+      expect(spread.display).toBe('grid');
+      expect(spread.background).toBe('rgba(0, 0, 0, 0)');
+      expect(spread.shadow).toBe('none');
+      expect(spread.tools).toBeLessThan(spread.spine);
+      expect(spread.records).toBeGreaterThan(spread.spine);
+      await browser.setWindowSize(1000, 780);
+      const sheet = await measure();
+      expect(sheet.display).toBe('flex');
+      expect(sheet.background).not.toBe('rgba(0, 0, 0, 0)');
+    } finally {
+      await browser.execute(value => {
+        if (value === null) localStorage.removeItem('show_logs_tab');
+        else localStorage.setItem('show_logs_tab', value);
+      }, prior);
+      await browser.setWindowSize(size.width, size.height);
+      await browser.refresh();
     }
   });
 

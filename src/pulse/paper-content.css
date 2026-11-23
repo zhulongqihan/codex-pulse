@@ -167,12 +167,12 @@ html[data-skin="paper"] :is(.pulse-main-scroll, .pulse-chart-fullscreen, [data-t
   border-color: var(--paper-line);
 }
 
-html[data-skin="paper"] .pulse-main-scroll .h-\[600px\] > .font-mono {
+html[data-skin="paper"] .pulse-main-scroll .pulse-book-log-records {
   background-image: repeating-linear-gradient(transparent 0 19px, var(--journal-grid) 19px 20px);
   color: var(--paper-ink);
 }
 
-html[data-skin="paper"] .pulse-main-scroll .h-\[600px\] {
+html[data-skin="paper"] .pulse-main-scroll .pulse-book-logs {
   height: clamp(18rem, 64vh, 37.5rem);
   background-color: var(--paper-surface);
   box-shadow: var(--journal-shadow);

@@ -4,6 +4,15 @@ User-facing changes are grouped by release, following [Keep a Changelog](https:/
 
 ## [Unreleased]
 
+## [0.14.8] - 2026-11-24
+
+### Fixed / 修复
+
+- Keep the book spine visible between the controls and output on the optional Paper log tab.
+- 修复纸册可选日志页底板遮住书脊的问题，控件与日志输出沿左右书页排列。
+
+[完整中英说明 / Full release notes](docs/releases/v0.14.8.md)
+
 ## [0.14.7] - 2026-11-24
 
 ### Changed / 变更
@@ -426,7 +435,8 @@ User-facing changes are grouped by release, following [Keep a Changelog](https:/
 
 Earlier releases remain available in [GitHub Releases](https://github.com/zhulongqihan/codex-pulse/releases). / 更早版本保留在 GitHub Releases。
 
-[Unreleased]: https://github.com/zhulongqihan/codex-pulse/compare/v0.14.7...HEAD
+[Unreleased]: https://github.com/zhulongqihan/codex-pulse/compare/v0.14.8...HEAD
+[0.14.8]: https://github.com/zhulongqihan/codex-pulse/compare/v0.14.7...v0.14.8
 [0.14.7]: https://github.com/zhulongqihan/codex-pulse/compare/v0.14.6...v0.14.7
 [0.14.6]: https://github.com/zhulongqihan/codex-pulse/compare/v0.14.5...v0.14.6
 [0.14.5]: https://github.com/zhulongqihan/codex-pulse/compare/v0.14.4...v0.14.5
