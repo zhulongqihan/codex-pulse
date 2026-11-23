@@ -151,7 +151,9 @@ describe('paper theme in the native app', () => {
       await browser.refresh();
       await openAppearance();
       await selectSkin('paper');
+      const showsSpread = () => browser.execute(() => matchMedia('(min-width: 1101px) and (min-height: 600px)').matches);
       await browser.setWindowSize(1440, 900);
+      await browser.waitUntil(showsSpread, { timeoutMsg: 'The WebView did not enter the Paper spread viewport' });
       await $('[data-testid="logs-nav-tab"]').click();
       const log = $('.pulse-book-logs');
       await log.waitForDisplayed();
@@ -174,6 +176,7 @@ describe('paper theme in the native app', () => {
       expect(spread.tools).toBeLessThan(spread.spine);
       expect(spread.records).toBeGreaterThan(spread.spine);
       await browser.setWindowSize(1000, 780);
+      await browser.waitUntil(async () => !(await showsSpread()), { timeoutMsg: 'The WebView did not enter the Paper single-sheet viewport' });
       const sheet = await measure();
       expect(sheet.display).toBe('flex');
       expect(sheet.background).not.toBe('rgba(0, 0, 0, 0)');
