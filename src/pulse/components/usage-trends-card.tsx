@@ -8,9 +8,11 @@ import type { MetricCardData } from "@/lib/usage-dashboard";
 import { usePulseCopy } from "@/lib/pulse-copy";
 import { usePulsePreferences } from "@/lib/pulse-appearance";
 import { useHomeCopy } from "@/lib/home-copy";
+import { ReadingInfo } from "@/components/reading-info";
 import { getLanguage, languages } from "@/lib/languages";
 import { quotaHistoryCopy } from "@/lib/quota-history-copy";
-import { buildTrendBuckets, currentDateInTimezone, type TrendBucket } from "@/lib/trend-buckets";
+import { buildTrendBuckets, currentDateInTimezone, niceScale, type TrendBucket } from "@/lib/trend-buckets";
+export { niceScale } from "@/lib/trend-buckets";
 
 type Day = OverviewResponse["daily"][number];
 type Mode = "tokens" | "cost" | "quota";
@@ -36,12 +38,6 @@ export function UsageTrendTooltip({active,payload,label,t,compact=false,view="co
     {!compact ? <><div><dt>{t("project_modal.input")}</dt><dd>{formatNumber(input)}</dd></div><div><dt>{t("project_modal.cached")}</dt><dd>{formatNumber(cached)}</dd></div><div><dt>{t("project_modal.output")}</dt><dd>{formatNumber(output)}</dd></div></> : null}
     {view !== "quota" ? <div><dt>{t("common.cost")}</dt><dd>{cost == null ? "—" : formatCurrencyShort(cost)}</dd></div> : <><div><dt>{t("trends.five_hour_usage")}</dt><dd>{day?.fiveHourPercent == null ? "—" : `${formatNumber(day.fiveHourPercent)}%`}</dd></div><div><dt>{t("trends.weekly_monthly_usage")}</dt><dd>{day?.weeklyPercent == null ? "—" : `${formatNumber(day.weeklyPercent)}%`}</dd></div></>}
   </dl></div>;
-}
-
-export function niceScale(value: number): number {
-  if (!(value > 0) || !Number.isFinite(value)) return 1;
-  const magnitude = 10 ** Math.floor(Math.log10(value));
-  return ([1,2,2.5,5,10].find(step => value <= step*magnitude) ?? 10)*magnitude;
 }
 
 export function UsageTrendsCard({daily,metrics,cacheHitRate,chartHeight,className="",title,compact=false,onOpenDay,todayDate,retainedFrom,deferInspection=false,initialMode="tokens",localQuotaRangeDays}:UsageTrendsCardProps) {
@@ -85,6 +81,8 @@ export function UsageTrendsCard({daily,metrics,cacheHitRate,chartHeight,classNam
   const today = todayDate ?? currentDateInTimezone();
   const hasToday = daily.some(day => day.date === today);
   const isMeter = skinId === "meter" && !compact;
+  const isPaper = skinId === "paper" && !compact;
+  const paperOverview = isPaper && !detail;
   const viewKey = `${skinId}:${detail}:${table}:${fullscreen}`;
   useLayoutEffect(() => {
     const node = scrollRef.current;
@@ -138,7 +136,7 @@ export function UsageTrendsCard({daily,metrics,cacheHitRate,chartHeight,classNam
     const item=items.find(item=>today>=item.startDate && today<=item.endDate);
     if(item)buttonsRef.current.get(item.date)?.focus();
   }
-  const linePaths = !detail && !isMeter ? visibleSeries.flatMap(seriesItem => {
+  const linePaths = !detail && !isMeter && !paperOverview ? visibleSeries.flatMap(seriesItem => {
     const paths: string[] = []; let points: string[] = [];
     const flush = () => { if(points.length)paths.push(points.join(" "));points=[]; };
     items.forEach((item,index) => {
@@ -148,7 +146,8 @@ export function UsageTrendsCard({daily,metrics,cacheHitRate,chartHeight,classNam
     }); flush();
     return paths.map((points,index)=>points.includes(" ") ? <polyline key={`${seriesItem.key}-${index}`} className={`pulse-line-${seriesItem.style}`} points={points} fill="none" strokeWidth="2.5" vectorEffect="non-scaling-stroke"/> : <circle key={`${seriesItem.key}-${index}`} className={`pulse-line-${seriesItem.style}`} cx={points.split(",")[0]} cy={points.split(",")[1]} r="4" fill="none" strokeWidth="2.5" vectorEffect="non-scaling-stroke"/>);
   }) : null;
-  const plot = <section data-testid="usage-trends-card" className={`pulse-trends pulse-fit-trends ${isMeter ? "pulse-trends-meter" : "pulse-trends-clear"} ${compact ? "is-compact" : ""} ${detail ? "is-day-detail" : "is-overview"} ${className}`}>
+  const paperTicks = Array.from({ length: 6 }, (_, index) => Math.round(index * (items.length - 1) / 5));
+  const plot = <section data-testid="usage-trends-card" className={`pulse-trends pulse-fit-trends ${isMeter ? "pulse-trends-meter" : "pulse-trends-clear"} ${isPaper ? "pulse-trends-paper" : ""} ${compact ? "is-compact" : ""} ${detail ? "is-day-detail" : "is-overview"} ${className}`}>
     <div className="pulse-trend-main">
       <div className="pulse-section-heading"><h2 className={compact ? "sr-only" : undefined}>{title ?? copy("trend")}</h2><div className="pulse-segments" role="group" aria-label={t("trends.view_label")}>{(["tokens","cost","quota"] as const).map(value => <button type="button" key={value} aria-pressed={mode===value} onClick={() => setMode(value)}>{modeLabel(value)}</button>)}</div>
       {!compact ? <><button type="button" className="pulse-icon-button" aria-label={copy("showTable")} aria-pressed={table} onClick={() => setTable(!table)}><Table2 size={16}/></button><button ref={fullscreenButton} type="button" className="pulse-icon-button" aria-label={copy(fullscreen?"exitFullscreen":"fullscreen")} onClick={() => setFullscreen(!fullscreen)}>{fullscreen ? <Minimize2 size={16}/> : <Maximize2 size={16}/>}</button></> : null}</div>
@@ -160,24 +159,26 @@ export function UsageTrendsCard({daily,metrics,cacheHitRate,chartHeight,classNam
           <dd>{observed > 0 ? formatQuota(total) : quotaHistoryCopy(language, "unknown")}</dd>
           <dd>{quotaHistoryCopy(language, "localEstimateCoverage", { observed, total: localQuotaRangeDays })}</dd>
         </div>)}</dl>
-        <p className="pulse-source-note">{quotaHistoryCopy(language, "localEstimateNote")}</p>
+        {isPaper ? <ReadingInfo label={quotaHistoryCopy(language, "localEstimateMethod")}>{quotaHistoryCopy(language, "localEstimateNote")}</ReadingInfo> : <p className="pulse-source-note">{quotaHistoryCopy(language, "localEstimateNote")}</p>}
       </div> : mode === "quota" && !daily.some(day => day.fiveHourPercent != null || day.weeklyPercent != null) ? <p role="status" className="pulse-source-note">{t("trends.quota_no_data")}</p> : null}
       {daily.length === 0 ? <p className="pulse-empty">{copy("noData")}</p> : table ? <div className="pulse-chart-table" data-mode={mode}><table><thead><tr><th>{copy("dates")}</th>{mode === "quota" ? <><th>{shortWindowLabel}</th><th>{longWindowLabel}</th></> : mode === "cost" ? <th>{copy("estimate")}</th> : <><th>{copy("total")}</th><th>{copy("input")}</th><th>{copy("cached")}</th><th>{copy("output")}</th><th>{copy("estimate")}</th></>}</tr></thead><tbody>{daily.map(day => <tr key={day.date}><td><button type="button" onClick={() => {setSelectedDate(day.date);setHoveredDate(null);}}>{day.date}</button></td>{noRetention(day) ? <td data-no-retention colSpan={mode === "quota" ? 2 : mode === "cost" ? 1 : 5}>{t("ux.no_retained_record")}</td> : mode === "quota" ? <><td>{day.fiveHourPercent == null ? t("ux.no_quota_samples") : formatQuota(day.fiveHourPercent)}</td><td>{day.weeklyPercent == null ? t("ux.no_quota_samples") : formatQuota(day.weeklyPercent)}</td></> : mode === "cost" ? <td>{day.costUSD == null ? "—" : formatCurrencyShort(day.costUSD)}</td> : <><td>{formatNumber(day.totalTokens)}</td><td>{formatNumber(day.inputTokens)}</td><td>{formatNumber(day.cachedInputTokens)}</td><td>{formatNumber(day.outputTokens)}</td><td>{day.costUSD == null ? "—" : formatCurrencyShort(day.costUSD)}</td></>}</tr>)}</tbody></table></div>
       : <div ref={scrollRef} onMouseLeave={()=>setHoveredDate(null)} onScroll={event => { scrollPositions.current[viewKey] = {top:event.currentTarget.scrollTop,left:event.currentTarget.scrollLeft}; }} className="pulse-chart-scroll" style={detail && typeof chartHeight==="number" ? {maxHeight:chartHeight} : undefined}>
         <div className="pulse-chart-scale"><span>0</span><span>{formatAxis(max/2)}</span><span>{formatAxis(max)}</span></div>
         <div className="pulse-fit-plot" style={!detail ? {height:compact ? chartHeight ?? 96 : undefined} : undefined}>
-          {!detail && !isMeter ? <svg className="pulse-fit-lines" viewBox="0 0 1000 200" preserveAspectRatio="none" aria-hidden="true">{linePaths}</svg> : null}
+          {linePaths ? <svg className="pulse-fit-lines" viewBox="0 0 1000 200" preserveAspectRatio="none" aria-hidden="true">{linePaths}</svg> : null}
           <div className="pulse-trend-days" style={detail ? isMeter ? {minWidth:Math.max(320,items.length*46)} : undefined : {gridTemplateColumns:`repeat(${Math.max(1,items.length)},minmax(0,1fr))`}}>
             {items.map((day,index) => {
               const value=valueOf(day);
               const slices = mode === "cost" ? [{key:"cost",amount:noRetention(day) ? null : day.costUSD,style:"cost"}]
                 : series.filter(item=>!hidden.has(item.key)).map(item=>({key:item.key,amount:valueFor(day,item.key),style:item.style}));
               if(mode === "tokens" && day.totalTokens > day.inputTokens+day.outputTokens)slices.push({key:"aggregate",amount:day.totalTokens-day.inputTokens-day.outputTokens,style:"aggregate"});
+              const barTop = paperOverview && mode !== "quota" ? slices.findLastIndex(slice => (slice.amount ?? 0) > 0) : -1;
               const label = day.count === 1 ? day.date : `${day.startDate} — ${day.endDate}`;
-              const axisLabel = index===0 || index===items.length-1 || index % Math.max(1,Math.ceil(items.length/5))===0;
-              return <button type="button" ref={node=>{if(node)buttonsRef.current.set(day.date,node);else buttonsRef.current.delete(day.date);}} className="pulse-trend-day" key={day.date} aria-pressed={selected?.date===day.date} aria-label={`${label} · ${modeLabel(mode)} ${noRetention(day) ? t("ux.no_retained_record") : format(value)}`} tabIndex={selected?.date===day.date || (!selected && index===0) ? 0 : -1} data-axis-label={axisLabel ? "true" : "false"} data-preview={preview?.date===day.date ? "true" : undefined} onClick={()=>select(day)} onMouseEnter={()=>setHoveredDate(day.date)} onFocus={()=>select(day)} onKeyDown={event=>navigate(event,index)}>
+              const axisLabel = paperOverview ? paperTicks.includes(index)
+                : index===0 || index===items.length-1 || index % Math.max(1,Math.ceil(items.length/5))===0;
+              return <button type="button" ref={node=>{if(node)buttonsRef.current.set(day.date,node);else buttonsRef.current.delete(day.date);}} className="pulse-trend-day" key={day.date} aria-pressed={selected?.date===day.date} aria-label={`${label} · ${modeLabel(mode)} ${noRetention(day) ? t("ux.no_retained_record") : format(value)}`} tabIndex={selected?.date===day.date || (!selected && index===0) ? 0 : -1} data-axis-label={axisLabel ? "true" : "false"} data-preview={preview?.date===day.date ? "true" : undefined} data-reading={paperOverview ? value == null ? "missing" : value === 0 ? "zero" : "observed" : undefined} onClick={()=>select(day)} onMouseEnter={()=>setHoveredDate(day.date)} onFocus={()=>select(day)} onKeyDown={event=>navigate(event,index)}>
                 <span className="pulse-trend-date">{day.date.slice(5).replace("-","/")}</span><span className={`pulse-trend-bar ${mode==="quota"?"pulse-quota-bars":""}`} aria-hidden="true">
-                  {slices.map(slice => <i key={slice.key} className={`pulse-series-${slice.style} ${slice.amount == null ? "is-unknown" : ""}`} style={{"--amount":`${Math.max(0,(slice.amount??0)/max)*100}%`} as CSSProperties}/>)}
+                  {slices.map((slice, sliceIndex) => <i key={slice.key} className={`pulse-series-${slice.style} ${slice.amount == null ? "is-unknown" : ""}`} data-cap={sliceIndex === barTop ? "true" : undefined} data-zero={paperOverview && mode === "quota" && slice.amount === 0 ? "true" : undefined} style={{"--amount":`${Math.max(0,(slice.amount??0)/max)*100}%`} as CSSProperties}/>)}
                 </span>{value == null ? <span className="pulse-unknown-marker" aria-hidden="true"/> : null}<strong>{format(value)}</strong>
               </button>;
             })}

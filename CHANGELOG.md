@@ -4,6 +4,15 @@ User-facing changes are grouped by release, following [Keep a Changelog](https:/
 
 ## [Unreleased]
 
+## [0.14.9] - 2026-11-24
+
+- Redraw the Paper usage overview and official quota chart with columns and light horizontal rules. Keep the quota scale visible while scrolling.
+- 重绘纸册的本机完整概览与官方额度图，采用柱形和浅横线，滚动额度图时固定左侧刻度。
+- Give the official quota history's Excel and Markdown exports matching buttons.
+- 统一官方额度记录的 Excel 和 Markdown 导出按钮。
+
+[完整中英说明 / Full release notes](docs/releases/v0.14.9.md)
+
 ## [0.14.8] - 2026-11-24
 
 ### Fixed / 修复
@@ -435,7 +444,8 @@ User-facing changes are grouped by release, following [Keep a Changelog](https:/
 
 Earlier releases remain available in [GitHub Releases](https://github.com/zhulongqihan/codex-pulse/releases). / 更早版本保留在 GitHub Releases。
 
-[Unreleased]: https://github.com/zhulongqihan/codex-pulse/compare/v0.14.8...HEAD
+[Unreleased]: https://github.com/zhulongqihan/codex-pulse/compare/v0.14.9...HEAD
+[0.14.9]: https://github.com/zhulongqihan/codex-pulse/compare/v0.14.8...v0.14.9
 [0.14.8]: https://github.com/zhulongqihan/codex-pulse/compare/v0.14.7...v0.14.8
 [0.14.7]: https://github.com/zhulongqihan/codex-pulse/compare/v0.14.6...v0.14.7
 [0.14.6]: https://github.com/zhulongqihan/codex-pulse/compare/v0.14.5...v0.14.6

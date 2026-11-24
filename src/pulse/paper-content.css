@@ -123,14 +123,135 @@ html[data-skin="paper"] :is(.pulse-app, .pulse-chart-fullscreen) .pulse-trend-ma
   color: var(--paper-ink);
 }
 
-html[data-skin="paper"] :is(.pulse-app, .pulse-chart-fullscreen) .pulse-fit-trends.is-overview .pulse-fit-plot::before,
-html[data-skin="paper"] .pulse-app :is(.pulse-quota-chart-scroll, [data-testid="project-daily-trend"] .recharts-wrapper) {
+html[data-skin="paper"] .pulse-app [data-testid="project-daily-trend"] .recharts-wrapper {
   background-image: var(--journal-graph);
   background-size: 20px 20px;
 }
 
-html[data-skin="paper"] .pulse-app .pulse-quota-chart-scroll rect {
-  fill: var(--paper-accent);
+.pulse-fit-trends.pulse-trends-paper {
+  --paper-short-ink: #8c5938;
+  --paper-week-ink: #77556a;
+  --paper-chart-rule: color-mix(in srgb, var(--paper-line) 76%, transparent);
+}
+
+html[data-theme="dark"] .pulse-fit-trends.pulse-trends-paper {
+  --paper-short-ink: #deb27b;
+  --paper-week-ink: #d1a6c2;
+}
+
+html[data-skin="paper"] .pulse-fit-trends.pulse-trends-paper:not(.is-compact) .pulse-trend-main {
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+
+.pulse-trends-paper .pulse-section-heading h2 {
+  font-size: 18px;
+  padding-block: 4px;
+}
+
+.pulse-trends-paper :is(.pulse-section-heading, .pulse-trend-resolution) {
+  gap: 6px 12px;
+}
+
+.pulse-trends-paper .pulse-trend-resolution {
+  margin-block: 8px 10px;
+  padding-block-end: 5px;
+  border-block-end: 1px solid var(--journal-grid);
+}
+
+html[data-skin="paper"] .pulse-trends-paper .pulse-segments button[aria-pressed="true"] {
+  box-shadow: none;
+}
+
+.pulse-trends-paper .pulse-chart-legend {
+  margin-block-end: 14px;
+}
+
+.pulse-trends-paper .pulse-local-quota-summary {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  margin-block: 10px 18px;
+}
+
+.pulse-trends-paper .pulse-local-quota-summary dl {
+  flex: 1;
+}
+
+.pulse-trends-paper.is-overview .pulse-chart-scroll {
+  padding-inline-start: 3.5rem;
+}
+
+.pulse-trends-paper.is-overview .pulse-chart-scale {
+  width: 3rem;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+
+.pulse-trends-paper.is-overview .pulse-trend-date {
+  font-size: 11px;
+}
+
+.pulse-trends-paper.is-overview .pulse-fit-plot {
+  height: clamp(170px, 25vh, 255px);
+}
+
+.pulse-trends-paper.is-overview .pulse-fit-plot::before {
+  border-block-start: 1px solid var(--paper-chart-rule);
+  border-block-end: 1px solid var(--paper-line);
+  background: linear-gradient(var(--paper-chart-rule), var(--paper-chart-rule)) center / 100% 1px no-repeat;
+}
+
+.pulse-trends-paper.is-overview .pulse-trend-days {
+  border-block-end: 0;
+}
+
+.pulse-trends-paper.is-overview.pulse-trends-clear .pulse-trend-bar {
+  display: flex;
+  width: 76%;
+  max-width: 30px;
+  border-radius: 0;
+}
+
+.pulse-trends-paper.is-overview .pulse-trend-bar > i[data-cap="true"],
+.pulse-trends-paper.is-overview .pulse-quota-bars > i {
+  border-radius: 2px 2px 0 0;
+}
+
+.pulse-trends-paper.is-overview .pulse-quota-bars > i {
+  min-height: 0;
+  min-width: 0;
+  flex: 1 1 0;
+}
+
+.pulse-trends-paper .pulse-series-five-hour { background: var(--paper-short-ink); }
+.pulse-trends-paper .pulse-series-long-window { background: var(--paper-week-ink); }
+
+.pulse-trends-paper.is-overview .pulse-unknown-marker {
+  visibility: hidden;
+}
+
+.pulse-trends-paper.is-overview .pulse-trend-day:is(:hover, :focus-visible, [aria-pressed="true"]) .pulse-unknown-marker {
+  visibility: visible;
+}
+
+.pulse-trends-paper.is-overview .pulse-trend-day[data-reading="zero"]:not(:has(.pulse-quota-bars))::after {
+  content: "";
+  position: absolute;
+  inset-block-end: 20px;
+  width: min(70%, 6px);
+  height: 2px;
+  border-radius: 2px;
+  background: currentColor;
+}
+
+.pulse-trends-paper.is-overview .pulse-quota-bars > i[data-zero="true"] {
+  min-height: 2px;
+}
+
+.pulse-chart-fullscreen .pulse-trends-paper.is-overview .pulse-fit-plot {
+  height: min(48vh, 460px);
 }
 
 html[data-skin="paper"] :is(.pulse-app, .pulse-chart-fullscreen) .pulse-trends {

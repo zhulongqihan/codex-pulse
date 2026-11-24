@@ -36,6 +36,91 @@
 .pulse-quota-chart-scroll text { fill:rgb(var(--muted-foreground)); font-size:11px; }
 .pulse-quota-chart-scroll line { stroke:rgb(var(--border)); }
 .pulse-quota-chart-scroll .pulse-quota-chart-zero { stroke:rgb(var(--primary)); stroke-width:2; }
+.pulse-quota-chart--paper {
+  margin: 0;
+  min-width: 0;
+  color: var(--paper-ink);
+}
+.pulse-quota-chart--paper > figcaption {
+  margin-block-end: 14px;
+  font-size: 15px;
+  font-weight: 600;
+}
+.pulse-quota-chart-plot {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: start;
+  column-gap: 9px;
+}
+.pulse-quota-chart-axis {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  color: var(--paper-muted);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  line-height: 0;
+  text-align: end;
+}
+.pulse-quota-chart-scroll--paper {
+  overflow-y: hidden;
+  scroll-behavior: auto;
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in srgb, var(--paper-accent) 60%, transparent) transparent;
+}
+.pulse-quota-chart-scroll--paper:focus-visible {
+  outline: 2px solid var(--paper-accent);
+  outline-offset: 2px;
+}
+.pulse-quota-chart-scroll--paper text {
+  fill: var(--paper-muted);
+  font-variant-numeric: tabular-nums;
+}
+.pulse-quota-chart-scroll--paper .pulse-quota-chart-guide {
+  stroke: color-mix(in srgb, var(--paper-line) 65%, transparent);
+}
+.pulse-quota-chart-scroll--paper .pulse-quota-chart-guide[data-baseline] {
+  stroke: var(--paper-line);
+}
+.pulse-quota-chart-scroll--paper .pulse-quota-chart-hit { fill: transparent; }
+.pulse-quota-chart-bar,
+.pulse-quota-chart-zero-dot { fill: var(--paper-accent); }
+.pulse-quota-chart-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  margin-block-start: 8px;
+  color: var(--paper-muted);
+  font-size: 12px;
+  line-height: 1.55;
+}
+.pulse-quota-chart-zero-key {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.pulse-quota-chart-zero-key::before {
+  content: "";
+  width: 5px;
+  height: 5px;
+  flex: 0 0 auto;
+  border-radius: 50%;
+  background: var(--paper-accent);
+}
+html[data-skin="paper"] .pulse-quota-export {
+  gap: 8px;
+}
+html[data-skin="paper"] .pulse-quota-export > button {
+  min-height: 36px;
+  height: auto;
+  padding-block: 5px;
+  white-space: normal;
+}
+html[data-skin="paper"] .pulse-quota-export > button > svg {
+  flex: 0 0 auto;
+}
 .pulse-quota-table-scroll { overflow-x:auto; }
 .pulse-quota-table-scroll table { width:100%; border-collapse:collapse; text-align:start; font-size:13px; }
 .pulse-quota-table-scroll th,.pulse-quota-table-scroll td { border-bottom:1px solid rgb(var(--border)); padding:12px; text-align:start; vertical-align:top; }

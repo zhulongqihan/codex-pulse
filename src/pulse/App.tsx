@@ -684,7 +684,7 @@ export default function App() {
                 <button type="button" aria-pressed={analysisSource === "local"} onClick={() => setAnalysisSource("local")}>{quotaCopy("local")}</button>
                 <button type="button" aria-pressed={analysisSource === "official"} onClick={() => setAnalysisSource("official")}>{quotaCopy("title")}</button>
               </div>
-              {officialAnalysisVisited.current ? <Activity mode={analysisSource === "official" ? "visible" : "hidden"}><QuotaHistoryView/></Activity> : null}
+              {officialAnalysisVisited.current ? <Activity mode={analysisSource === "official" ? "visible" : "hidden"}><QuotaHistoryView paper={paperWorkspace}/></Activity> : null}
               <Activity mode={analysisSource === "local" ? "visible" : "hidden"}>{overview ? <UsageAnalysisView overview={overview} range={range} isBusy={isLoading || isRefreshing || isResetting || isExporting !== null} isExporting={isExporting} exportError={exportError} onRangeChange={handleRangeChange} onExport={(format) => void handleExport(format)} metrics={metrics} onOpenDay={date => { setSelectedProjectFilter(null); setSelectedSessionDate(date); navigate("sessions"); }}/> : <p className="pulse-empty">{t("common.no_data")}</p>}</Activity>
               </div>
             </Activity>

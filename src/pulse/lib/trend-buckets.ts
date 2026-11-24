@@ -3,6 +3,13 @@ import type { OverviewResponse } from "./api";
 type Day = OverviewResponse["daily"][number];
 export type TrendBucket = Day & { startDate: string; endDate: string; count: number };
 
+export function niceScale(value: number): number {
+  if (!(value > 0) || !Number.isFinite(value)) return 1;
+  const magnitude = 10 ** Math.floor(Math.log10(value));
+  const step = [1, 2, 2.5, 5, 10].find(candidate => value <= candidate * magnitude) ?? 10;
+  return step * magnitude;
+}
+
 /** Contiguous groups retain every natural day. A partially priced group stays unknown. */
 export function buildTrendBuckets(daily: Day[], maximum = 60, { observedQuotaPeaks = false } = {}): TrendBucket[] {
   const ordered = [...daily].sort((a, b) => a.date.localeCompare(b.date));

@@ -86,6 +86,24 @@ describe("Pulse full-range trends",()=>{
     const user=userEvent.setup();render(<UsageTrendsCard daily={daily} metrics={[]} cacheHitRate={.2}/>);await user.click(screen.getByRole("button",{name:"Show data table"}));const rows=within(screen.getByRole("table")).getAllByRole("row");expect(rows).toHaveLength(4);expect(rows[2]).toHaveTextContent("2026-10-26");expect(rows[2]).toHaveTextContent("—");
   });
   it("rounds a common scale instead of normalizing every bar",()=>{expect(niceScale(150)).toBe(200);expect(niceScale(2_400_000)).toBe(2_500_000);expect(niceScale(0)).toBe(1);});
+  it("uses a paper overview with stacked tokens and separate quota marks for zero and missing readings", async () => {
+    await updatePulsePreferences({ skinId: "paper" });
+    const user = userEvent.setup();
+    const { container } = render(<UsageTrendsCard daily={daily} metrics={[]} cacheHitRate={0} localQuotaRangeDays={3}/>);
+    expect(screen.getByTestId("usage-trends-card")).toHaveClass("pulse-trends-paper", "is-overview");
+    expect(container.querySelector(".pulse-fit-lines")).toBeNull();
+    const tokenBar = screen.getByRole("button", { name: /2026-10-25 · Tokens/ }).querySelector(".pulse-trend-bar")!;
+    expect(tokenBar.children).toHaveLength(3);
+    expect(tokenBar.querySelector(".pulse-series-output")).toHaveAttribute("data-cap", "true");
+    await user.click(screen.getByRole("button", { name: "Local quota estimate", pressed: false }));
+    const partialDay = screen.getByRole("button", { name: "2026-10-26 · Local quota estimate 0 pp" });
+    expect(partialDay.querySelector(".pulse-series-five-hour")).toHaveClass("is-unknown");
+    expect(partialDay.querySelector(".pulse-series-long-window")).toHaveAttribute("data-zero", "true");
+    await user.click(partialDay);
+    const readings = within(screen.getByTestId("trend-inspector").querySelector<HTMLElement>(":scope > dl")!);
+    expect(readings.getByText("No samples")).toBeVisible();
+    expect(readings.getByText("0 pp")).toBeVisible();
+  });
   it("fits a complete long period through declared groups and restores all daily records on demand",async()=>{
     const user=userEvent.setup();const days=Array.from({length:365},(_,index)=>({...daily[0],date:new Date(Date.UTC(2025,0,index+1)).toISOString().slice(0,10)}));
     const {container}=render(<UsageTrendsCard daily={days} metrics={[]} cacheHitRate={.2}/>);

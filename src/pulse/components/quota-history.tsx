@@ -1,5 +1,6 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState, type Ref } from "react";
 import { useTranslation } from "react-i18next";
+import { FileSpreadsheet, FileText } from "lucide-react";
 import { save } from "@tauri-apps/plugin-dialog";
 import { listen } from "@tauri-apps/api/event";
 import { isTauri } from "@tauri-apps/api/core";
@@ -9,6 +10,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "./ui/
 import { getPulsePaths, type ExportFormat } from "@/lib/api";
 import { getExportDialogOptions } from "@/lib/usage-dashboard";
 import { getLanguage, languages } from "@/lib/languages";
+import { niceScale } from "@/lib/trend-buckets";
 import { quotaHistoryCopy, quotaHistorySummaryCopy, type QuotaHistoryCopyKey } from "@/lib/quota-history-copy";
 import {
   exportQuotaHistory, fetchQuotaHistoryDay, getQuotaRecordingPreferences, quotaHistoryDays, quotaHistoryReadError,
@@ -21,7 +23,8 @@ function useCopy() {
   const { t, i18n } = useTranslation();
   const language = i18n.resolvedLanguage ?? i18n.language;
   const copy = (key: QuotaHistoryCopyKey, values?: Record<string, string | number>) => quotaHistoryCopy(language, key, values);
-  const number = (value: number) => new Intl.NumberFormat(languages[getLanguage(language)].intlLocale, { maximumFractionDigits: 4 }).format(value);
+  const numberFormat = new Intl.NumberFormat(languages[getLanguage(language)].intlLocale, { maximumFractionDigits: 4 });
+  const number = (value: number) => numberFormat.format(value);
   const points = (value: number | null) => value === null ? "—" : copy("points", { points: number(value) });
   const windowName = (kind: QuotaKind, minutes?: number) => !minutes ? copy(kind) : minutes % 1440 === 0 ? copy("days", { days: number(minutes / 1440) }) : minutes % 60 === 0 ? copy("hours", { hours: number(minutes / 60) }) : copy("duration", { minutes: number(minutes) });
   const time = (value: string, timezone: string) => {
@@ -138,7 +141,65 @@ function QuotaDayDetail({ date, kind, minutes, identityRevision, timezone, onClo
   </section>;
 }
 
-function DailyChart({ rows }: { rows: QuotaHistoryDaily[] }) {
+function PaperDailyChart({ rows, width, container, scrollable }: {
+  rows: QuotaHistoryDaily[];
+  width: number;
+  container: Ref<HTMLDivElement>;
+  scrollable: boolean;
+}) {
+  const { copy, number, points } = useCopy();
+  const titleId = useId();
+  const descriptionId = useId();
+  const height = 174;
+  const top = 10;
+  const baseline = 142;
+  const inset = 20;
+  const lastIndex = rows.length - 1;
+  const step = (width - inset * 2) / rows.length;
+  const dateStride = Math.max(1, Math.ceil(58 / step));
+  const scale = niceScale(rows.reduce((max, row) => Math.max(max, row.consumedPercentPoints ?? 0), 0));
+  const ordinate = (value: number) => baseline - value / scale * (baseline - top);
+  const guides = [scale, scale / 2, 0];
+  const barWidth = Math.max(2, Math.min(26, step * .62));
+  const hasZero = rows.some(row => row.consumedPercentPoints === 0);
+
+  return <figure className="pulse-quota-chart--paper">
+    <figcaption id={titleId}>{copy("chart")}</figcaption>
+    <div className="pulse-quota-chart-plot">
+      <div className="pulse-quota-chart-axis" aria-hidden="true" style={{ height, paddingTop: top, paddingBottom: height - baseline }}>
+        {guides.map(value => <span key={value}>{number(value)}</span>)}
+      </div>
+      <div className="pulse-quota-chart-scroll pulse-quota-chart-scroll--paper" ref={container} tabIndex={scrollable ? 0 : undefined} aria-label={scrollable ? copy("chartScroll") : undefined}>
+        <svg role="img" aria-labelledby={titleId} aria-describedby={descriptionId} data-scale-max={scale} viewBox={`0 0 ${width} ${height}`} width={width} height={height}>
+          <desc id={descriptionId}>{copy("sumNote")} {copy("table")}</desc>
+          {guides.map(value => <line key={value} className="pulse-quota-chart-guide" x1="0" x2={width} y1={ordinate(value)} y2={ordinate(value)} data-baseline={value === 0 || undefined}/>)}
+          {rows.map((row, index) => {
+            const x = inset + (index + .5) * step;
+            const value = row.consumedPercentPoints;
+            const observation = value === null ? "missing" : value === 0 ? "zero" : "positive";
+            const y = ordinate(value ?? 0);
+            const barX = x - barWidth / 2;
+            const radius = Math.min(3, barWidth / 2, baseline - y);
+            const right = barX + barWidth;
+            return <g key={row.date} data-chart-date={row.date} data-observation={observation}>
+              <title>{row.date}: {points(value)} · {copy(statusKey(row))}</title>
+              <rect className="pulse-quota-chart-hit" x={x - step / 2} y={top} width={step} height={baseline - top + 4}/>
+              {observation === "positive" ? <path className="pulse-quota-chart-bar" d={`M${barX} ${baseline}V${y + radius}Q${barX} ${y} ${barX + radius} ${y}H${right - radius}Q${right} ${y} ${right} ${y + radius}V${baseline}Z`}/> : null}
+              {observation === "zero" ? <circle className="pulse-quota-chart-zero-dot" cx={x} cy={baseline} r="2.5"/> : null}
+              {(lastIndex - index) % dateStride === 0 ? <text x={x} y={height - 10} textAnchor="middle">{row.date.slice(5)}</text> : null}
+            </g>;
+          })}
+        </svg>
+      </div>
+    </div>
+    {hasZero || scrollable ? <div className="pulse-quota-chart-footer">
+      {hasZero ? <span className="pulse-quota-chart-zero-key">{copy("unchanged")}</span> : null}
+      {scrollable ? <span>{copy("chartScroll")}</span> : null}
+    </div> : null}
+  </figure>;
+}
+
+function DailyChart({ rows, paper }: { rows: QuotaHistoryDaily[]; paper: boolean }) {
   const { copy, points } = useCopy();
   const container = useRef<HTMLDivElement>(null);
   const [viewportWidth, setViewportWidth] = useState(0);
@@ -148,12 +209,22 @@ function DailyChart({ rows }: { rows: QuotaHistoryDaily[] }) {
     const update = () => setViewportWidth(Math.floor(element.clientWidth));
     update(); const observer = new ResizeObserver(update); observer.observe(element);
     return () => observer.disconnect();
-  }, []);
+  }, [paper]);
   const max = Math.max(1, ...rows.map(row => row.consumedPercentPoints ?? 0));
-  const width = Math.max(rows.length <= 31 ? 300 : rows.length * 16, viewportWidth), height = 180, top = 12, bottom = 145;
+  const width = Math.max(paper ? rows.length * 14 + 40 : rows.length <= 31 ? 300 : rows.length * 16, viewportWidth);
+  const height = 180, top = 12, bottom = 145;
   const step = (width - 48) / Math.max(1, rows.length);
   const latestDate = rows.at(-1)?.date;
-  useEffect(() => { if (container.current) container.current.scrollLeft = container.current.scrollWidth; }, [width, viewportWidth, latestDate]);
+  useEffect(() => {
+    const element = container.current;
+    if (!element) return;
+    const showLatest = () => { element.scrollLeft = element.scrollWidth; };
+    showLatest();
+    if (!paper) return;
+    const frame = requestAnimationFrame(showLatest);
+    return () => cancelAnimationFrame(frame);
+  }, [width, viewportWidth, latestDate, paper]);
+  if (paper) return <PaperDailyChart rows={rows} width={width} container={container} scrollable={viewportWidth > 0 && width > viewportWidth}/>;
   return <div>{rows.length > 31 ? <p className="pulse-quota-chart-hint">{copy("chartScroll")}</p> : null}<div className="pulse-quota-chart-scroll" ref={container} tabIndex={rows.length > 31 ? 0 : undefined} aria-label={rows.length > 31 ? copy("chartScroll") : undefined}><svg role="img" aria-label={copy("chart")} aria-describedby="quota-chart-description" data-scale-max={max} viewBox={`0 0 ${width} ${height}`} width={width} height={height}>
     <desc id="quota-chart-description">{copy("sumNote")} {copy("table")}</desc>
     <text x="0" y="12">{max}</text><text x="0" y={bottom}>0</text><line x1="38" x2={width} y1={bottom} y2={bottom}/>
@@ -168,7 +239,7 @@ function DailyChart({ rows }: { rows: QuotaHistoryDaily[] }) {
   </svg></div></div>;
 }
 
-export function QuotaHistoryView() {
+export function QuotaHistoryView({ paper = false }: { paper?: boolean }) {
   const { copy, points, windowName, number, t } = useCopy();
   const [range, setRange] = useState("30d");
   const [rangeChoice, setRangeChoice] = useState("30d");
@@ -214,7 +285,10 @@ export function QuotaHistoryView() {
     </select></label>
     {rangeChoice === "custom" ? <fieldset className="pulse-quota-custom"><legend>{t("range_switcher.custom_range")}</legend><input type="date" aria-label={copy("rangeStart")} value={start} onChange={event => setStart(event.target.value)}/><span aria-hidden="true">—</span><input type="date" aria-label={copy("rangeEnd")} value={end} onChange={event => setEnd(event.target.value)}/><Button variant="secondary" size="sm" onClick={applyCustom}>{t("range_switcher.btn_apply")}</Button></fieldset> : null}
     {windows.length ? <label>{copy("window")}<select value={selected?.[0]} onChange={event => setSelection(event.target.value)}>{windows.map(([key, window]) => <option value={key} key={key}>{copy(window.kind)} · {windowName(window.kind, window.minutes)}</option>)}</select></label> : null}
-    <div className="pulse-quota-export"><Button variant="secondary" size="sm" disabled={!data || loading || exporting} onClick={() => void exportHistory("xlsx")}>{copy("exportXlsx")}</Button><Button variant="ghost" size="sm" disabled={!data || loading || exporting} onClick={() => void exportHistory("markdown")}>{copy("exportMarkdown")}</Button></div></div>
+    <div className="pulse-quota-export">
+      <Button type="button" variant="secondary" size="sm" disabled={!data || loading || exporting} onClick={() => void exportHistory("xlsx")}>{paper ? <FileSpreadsheet size={14} aria-hidden="true"/> : null}{copy("exportXlsx")}</Button>
+      <Button type="button" variant="secondary" size="sm" disabled={!data || loading || exporting} onClick={() => void exportHistory("markdown")}>{paper ? <FileText size={14} aria-hidden="true"/> : null}{copy("exportMarkdown")}</Button>
+    </div></div>
     {rangeError ? <p role="alert">{copy("rangeLimit")}</p> : null}
     {exportFailed ? <p role="alert">{copy(exportFailed === "desktop" ? "exportDesktopOnly" : "exportFailed")}</p> : null}{exportMessage ? <p role="status" className="pulse-quota-export-message">{exportMessage}</p> : null}
     <HistoryStatus data={data} error={error} loading={loading} onRetry={refresh}/>
@@ -227,7 +301,7 @@ export function QuotaHistoryView() {
     </> : null}
     </div>
     {data ? <div className="pulse-book-official-records">
-      {rows.length ? <><DailyChart rows={rows}/><div className="pulse-quota-table-scroll"><table aria-label={copy("table")}><thead><tr><th>{copy("date")}</th><th>{copy("consumption")}</th><th>{copy("state")}</th><th>{copy("partial")}</th></tr></thead><tbody>{[...rows].reverse().map(row => <tr key={row.date}>
+      {rows.length ? <><DailyChart rows={rows} paper={paper}/><div className="pulse-quota-table-scroll"><table aria-label={copy("table")}><thead><tr><th>{copy("date")}</th><th>{copy("consumption")}</th><th>{copy("state")}</th><th>{copy("partial")}</th></tr></thead><tbody>{[...rows].reverse().map(row => <tr key={row.date}>
         <th scope="row"><button type="button" className="pulse-text-button" onClick={event => { dayTrigger.current = event.currentTarget; setSelectedDate(row.date); }}>{row.date}</button></th><td>{points(row.consumedPercentPoints)}</td><td>{copy(statusKey(row))}{row.gapCount > 0 ? <small>{copy("gaps", { count: row.gapCount })}</small> : null}{row.unallocatedCount > 0 ? <small>{copy("unallocated", { count: row.unallocatedCount })}</small> : null}{row.source !== "official" ? <small>{copy(row.source === "mixed" ? "mixed" : "migrated")}</small> : null}</td><td>{copy("coverage", { minutes: number(row.coveredMinutes) })}<small>{copy("samples", { count: row.sampleCount })} · {copy("cycles", { count: row.cycleCount })}</small></td>
       </tr>)}</tbody></table></div></> : <p className="pulse-empty">{copy("noWindows")}</p>}
       {selectedDate ? <QuotaDayDetail key={`${selectedDate}:${kind}:${minutes}:${data.identityRevision}`} date={selectedDate} kind={kind} minutes={minutes} identityRevision={data.identityRevision} timezone={data.timezone} onClose={() => { setSelectedDate(null); dayTrigger.current?.focus(); }}/>: null}

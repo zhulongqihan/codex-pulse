@@ -176,10 +176,6 @@
     margin-inline-start: 0;
   }
 
-  :root[data-skin="paper"] .pulse-quota-history .pulse-quota-chart-scroll {
-    background-color: rgb(var(--surface) / .58);
-  }
-
   :root[data-skin="paper"] .pulse-session-list > :is(.pulse-book-session-controls, .pulse-book-session-records) {
     min-width: 0;
   }

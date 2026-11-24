@@ -16,6 +16,7 @@ export function quotaHistorySummaryCopy(language: string, key: SummaryCopyKey): 
 
 const en = {
   localEstimate: "Local quota estimate",
+  localEstimateMethod: "How local quota is estimated",
   localEstimateCoverage: "Days observed ({observed}/{total})",
   localEstimatePeaks: "Groups show the highest observed day for each window. Groups without readings stay unknown.",
   localEstimateGroupDays: "{count}-day group",
@@ -44,6 +45,7 @@ const messages: Record<Language, Record<QuotaHistoryCopyKey, string>> = {
   en,
   zh: {
     localEstimate: "本机日志额度估算",
+    localEstimateMethod: "额度估算说明",
     localEstimateCoverage: "所选 {total} 天中有 {observed} 天可估算",
     localEstimatePeaks: "每组显示各窗口已观测的最高单日值。无读数的组保持未知。",
     localEstimateGroupDays: "{count} 天一组",
@@ -63,6 +65,7 @@ const messages: Record<Language, Record<QuotaHistoryCopyKey, string>> = {
   },
   "zh-Hant": {
     localEstimate: "本機日誌額度估算",
+    localEstimateMethod: "額度估算說明",
     localEstimateCoverage: "所選 {total} 天中有 {observed} 天可估算",
     localEstimatePeaks: "每組顯示各視窗已觀測的最高單日值。無讀數的組維持未知。",
     localEstimateGroupDays: "{count} 天一組",
@@ -80,6 +83,7 @@ const messages: Record<Language, Record<QuotaHistoryCopyKey, string>> = {
   },
   ja: {
     localEstimate: "ローカルログからの上限推計",
+    localEstimateMethod: "上限推計の計算方法",
     localEstimateCoverage: "選択した{total}日中{observed}日を観測",
     localEstimatePeaks: "グループごとに各期間の観測日最高値を表示します。測定値がないグループは不明です。",
     localEstimateGroupDays: "{count}日間のグループ",
@@ -94,6 +98,7 @@ const messages: Record<Language, Record<QuotaHistoryCopyKey, string>> = {
   },
   ko: {
     localEstimate: "로컬 로그 한도 추정",
+    localEstimateMethod: "한도 추정 방법",
     localEstimateCoverage: "선택한 {total}일 중 {observed}일 관측",
     localEstimatePeaks: "그룹별로 각 기간의 관측 일일 최댓값을 표시합니다. 측정값이 없는 그룹은 알 수 없음으로 표시합니다.",
     localEstimateGroupDays: "{count}일 그룹",
@@ -107,6 +112,7 @@ const messages: Record<Language, Record<QuotaHistoryCopyKey, string>> = {
   },
   de: {
     localEstimate: "Lokale Kontingentschätzung",
+    localEstimateMethod: "Berechnung der Kontingentschätzung",
     localEstimateCoverage: "Erfasste Tage ({observed}/{total})",
     localEstimatePeaks: "Gruppen zeigen den höchsten beobachteten Tageswert je Fenster. Gruppen ohne Messwerte bleiben unbekannt.",
     localEstimateGroupDays: "Gruppe mit {count} Tagen",

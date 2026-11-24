@@ -188,6 +188,35 @@ describe("official quota history", () => {
     expect(chart).toHaveAttribute("data-scale-max", "125");
   });
 
+  it("renders Paper observations as bars and zero dots, with a gap for an unknown day", async () => {
+    native.invoke.mockResolvedValue(history({
+      startDate: "2026-11-13",
+      daily: [daily("session", 300, 0, "2026-11-14"), daily("session", 300, 125)],
+    }));
+    render(<QuotaHistoryView paper/>);
+    const chart = await screen.findByRole("img", { name: "Daily observed consumption in percentage points" });
+    expect(chart).toHaveAttribute("data-scale-max", "200");
+    expect(chart.querySelectorAll(".pulse-quota-chart-guide")).toHaveLength(3);
+    expect(chart.querySelector('[data-observation="positive"] .pulse-quota-chart-bar')).toBeInTheDocument();
+    expect(chart.querySelector('[data-observation="zero"] .pulse-quota-chart-zero-dot')).toBeInTheDocument();
+    const missing = chart.querySelector('[data-observation="missing"]');
+    expect(missing).toHaveAttribute("data-chart-date", "2026-11-13");
+    expect(missing?.querySelector("title")).toHaveTextContent("Not observed");
+    expect(missing?.querySelector(".pulse-quota-chart-bar, .pulse-quota-chart-zero-dot")).toBeNull();
+    expect(chart.querySelector('[data-chart-date="2026-11-15"] text')).toHaveTextContent("11-15");
+  });
+
+  it("gives both Paper export formats the same button treatment", async () => {
+    render(<QuotaHistoryView paper/>);
+    await screen.findByRole("table");
+    const excel = screen.getByRole("button", { name: "Export Excel" });
+    const markdown = screen.getByRole("button", { name: "Export Markdown" });
+    expect(excel).toHaveClass("border", "bg-surface", "h-8");
+    expect(markdown.className).toBe(excel.className);
+    expect(markdown).toBeEnabled();
+    expect(excel).toBeEnabled();
+  });
+
   it("loads paginated day details and retains the first page", async () => {
     native.invoke.mockImplementation(async (command: string, args: any) => command === "fetch_quota_history" ? history() : command === "fetch_quota_history_day" ? detail({ segments: [{ ...segment, id: args.before ? 8 : 9, reason: args.before ? "cross_day" : "continuous", date: args.before ? null : segment.date }], nextBefore: args.before ? null : 9 }) : null);
     render(<QuotaHistoryView/>);
