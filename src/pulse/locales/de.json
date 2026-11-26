@@ -753,6 +753,8 @@
     }
   },
   "settings": {
+    "update_check_offline": "Im Offline-Modus sind keine Update-Prüfungen möglich. Deaktivieren Sie den Offline-Modus und starten Sie Pulse neu.",
+    "update_check_failed": "Updates konnten nicht geprüft werden. Prüfen Sie die Verbindung und versuchen Sie es erneut.",
     "title": "Einstellungen",
     "subtitle": "Darstellung, Konto, Desktop-Steuerung, Datenquellen und Wartung verwalten.",
     "nav_aria": "Einstellungsbereiche",
@@ -1011,6 +1013,14 @@
     "update_step_download": "Schritt 1: Update-Paket herunterladen und prüfen. Anschließend mit Neustarten und Update abschließen anwenden.",
     "update_step_restart": "Schritt 2: Mit Neustarten und Update abschließen anwenden. Die aktuelle App läuft noch.",
     "no_short_window": "Für dieses Konto wurde kein 5-Stunden-Fenster gemeldet. Kontingentabfragen sind möglich; es wird kein Fenster gestartet."
+  },
+  "analysis_review": {
+    "range_failed": "Daten für {{range}} konnten nicht geladen werden.",
+    "range_unavailable": "Daten für {{range}} sind noch nicht verfügbar.",
+    "previous_range": "Zuletzt verfügbare Daten für {{start}} bis {{end}} werden angezeigt.",
+    "retry_range": "Zeitraum erneut laden",
+    "coverage_unavailable": "Für diesen Zeitraum sind keine lokalen Aufzeichnungen vorhanden.",
+    "coverage_partial": "Teilweise erfasst. Lokale Aufzeichnungen beginnen am {{date}}."
   },
   "reading_context": {
     "statistics_short": "Statistik-Zeitzone: {{zone}}",

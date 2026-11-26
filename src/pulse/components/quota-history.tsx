@@ -1,4 +1,4 @@
-import { useEffect, useId, useLayoutEffect, useRef, useState, type RefObject } from "react";
+import { Fragment, useEffect, useId, useLayoutEffect, useRef, useState, type RefObject } from "react";
 import { useTranslation } from "react-i18next";
 import { FileSpreadsheet, FileText } from "lucide-react";
 import { save } from "@tauri-apps/plugin-dialog";
@@ -103,7 +103,7 @@ export function QuotaHistorySummary({ onOpenHistory }: { onOpenHistory: () => vo
 
 const reasonKeys: Record<string, QuotaHistoryCopyKey> = { baseline: "baseline", continuous: "continuous", unchanged: "unchanged", same_day_gap: "gap", cross_day: "crossDay", counter_decreased: "decreased", cycle_changed: "changed", recording_resumed: "resumed", conflict: "conflict", historical_partial: "historical" };
 
-function QuotaDayDetail({ date, kind, minutes, identityRevision, timezone, onClose }: { date: string; kind: QuotaKind; minutes: number; identityRevision: number; timezone: string; onClose: () => void }) {
+function QuotaDayDetail({ id, date, kind, minutes, identityRevision, timezone, onClose }: { id: string; date: string; kind: QuotaKind; minutes: number; identityRevision: number; timezone: string; onClose: () => void }) {
   const { copy, points, number, time } = useCopy();
   const [segments, setSegments] = useState<QuotaHistorySegment[]>([]);
   const [nextBefore, setNextBefore] = useState<number | null>(null);
@@ -113,7 +113,10 @@ function QuotaDayDetail({ date, kind, minutes, identityRevision, timezone, onClo
   const [before, setBefore] = useState<number | null>(null);
   const [retry, setRetry] = useState(0);
   const heading = useRef<HTMLHeadingElement>(null);
-  useEffect(() => { heading.current?.focus(); }, []);
+  useLayoutEffect(() => {
+    heading.current?.focus({ preventScroll: true });
+    heading.current?.scrollIntoView?.({ block: "nearest", inline: "nearest" });
+  }, []);
   useEffect(() => {
     let active = true; setLoading(true); setError(null);
     void fetchQuotaHistoryDay(date, kind, minutes, before).then(value => {
@@ -125,8 +128,12 @@ function QuotaDayDetail({ date, kind, minutes, identityRevision, timezone, onClo
     }).catch(failure => { if (active) setError(quotaHistoryReadError(failure)); }).finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
   }, [date, kind, minutes, before, identityRevision, retry]);
-  return <section className="pulse-quota-day" data-testid="quota-day-detail" aria-labelledby="quota-day-heading" aria-busy={loading}>
-    <header><h3 id="quota-day-heading" ref={heading} tabIndex={-1}>{copy("details")} · {date}</h3><Button variant="ghost" size="sm" onClick={onClose}>{copy("close")}</Button></header>
+  return <section id={id} className="pulse-quota-day" data-testid="quota-day-detail" aria-labelledby={`${id}-title`} aria-busy={loading} onKeyDown={event => {
+    if (event.key !== "Escape" || event.defaultPrevented) return;
+    event.preventDefault();
+    onClose();
+  }}>
+    <header><h3 id={`${id}-title`} ref={heading} tabIndex={-1}>{copy("details")} · {date}</h3><Button variant="ghost" size="sm" onClick={onClose}>{copy("close")}</Button></header>
     <HistoryStatus data={status} error={error} loading={false} onRetry={() => setRetry(value => value + 1)}/>
     <p>{copy("pageNote")}</p>
     <ol id="quota-day-segments" data-testid="quota-day-segments">{segments.map(segment => <li key={segment.id}>
@@ -292,7 +299,10 @@ export function QuotaHistoryView({ paper = false }: { paper?: boolean }) {
   const { data, error, loading, refresh } = useQuotaHistory(range);
   const [selection, setSelection] = useState<string | null>(null);
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
-  const dayTrigger = useRef<HTMLButtonElement | null>(null);
+  const dayDetailId = useId();
+  const exportScopeId = useId();
+  const restoreDayPosition = useRef<(() => void) | null>(null);
+  const closingDay = useRef(false);
   const [exporting, setExporting] = useState(false);
   const [exportMessage, setExportMessage] = useState<string | null>(null);
   const [exportFailed, setExportFailed] = useState<"desktop" | "failed" | null>(null);
@@ -303,20 +313,48 @@ export function QuotaHistoryView({ paper = false }: { paper?: boolean }) {
   const known = rows.filter(row => row.consumedPercentPoints !== null);
   const total = known.length ? known.reduce((sum, row) => sum + row.consumedPercentPoints!, 0) : null;
   useEffect(() => { setSelectedDate(null); }, [range, selection, data?.identityRevision]);
+  useLayoutEffect(() => {
+    if (selectedDate !== null || !closingDay.current) return;
+    closingDay.current = false;
+    restoreDayPosition.current?.();
+    restoreDayPosition.current = null;
+  }, [selectedDate]);
+  const closeDay = () => {
+    closingDay.current = true;
+    setSelectedDate(null);
+  };
+  const openDay = (date: string, trigger: HTMLButtonElement) => {
+    if (selectedDate === date) {
+      closeDay();
+      return;
+    }
+    const workspace = trigger.closest<HTMLElement>(".pulse-main-scroll");
+    const tableScroll = trigger.closest<HTMLElement>(".pulse-quota-table-scroll");
+    const top = workspace?.scrollTop ?? 0;
+    const left = tableScroll?.scrollLeft ?? 0;
+    restoreDayPosition.current = () => {
+      if (workspace) workspace.scrollTop = top;
+      if (tableScroll) tableScroll.scrollLeft = left;
+      trigger.focus({ preventScroll: true });
+    };
+    setSelectedDate(date);
+  };
   const applyCustom = () => {
     const days = (Date.parse(`${end}T00:00:00Z`) - Date.parse(`${start}T00:00:00Z`)) / 86_400_000 + 1;
     if (!Number.isFinite(days) || days < 1 || days > 366) { setRangeError(true); return; }
     setRangeError(false); setRange(`custom:${start}_${end}`);
   };
   const exportHistory = async (format: ExportFormat) => {
-    if (!data || exporting) return;
+    if (!data?.scopeAvailable || loading || exporting) return;
     setExportFailed(null); setExportMessage(null);
     if (format === "xlsx" && !isTauri()) { setExportFailed("desktop"); return; }
     setExporting(true);
     try {
       const paths = await getPulsePaths();
       const name = `Pulse-quota-${data.startDate}-${data.endDate}.${format === "xlsx" ? "xlsx" : "md"}`;
-      const path = await save(getExportDialogOptions(format, `${paths.exports.replace(/[\\/]$/, "")}/${name}`, t));
+      const fileOptions = getExportDialogOptions(format, `${paths.exports.replace(/[\\/]$/, "")}/${name}`, t);
+      const title = copy(format === "xlsx" ? "exportTitleXlsx" : "exportTitleMarkdown");
+      const path = await save({ ...fileOptions, title });
       if (path) { const result = await exportQuotaHistory(range, format, path); setExportMessage(copy("exported", { path: result.path })); }
     } catch { setExportFailed("failed"); }
     finally { setExporting(false); }
@@ -330,8 +368,9 @@ export function QuotaHistoryView({ paper = false }: { paper?: boolean }) {
     {rangeChoice === "custom" ? <fieldset className="pulse-quota-custom"><legend>{t("range_switcher.custom_range")}</legend><input type="date" aria-label={copy("rangeStart")} value={start} onChange={event => setStart(event.target.value)}/><span aria-hidden="true">—</span><input type="date" aria-label={copy("rangeEnd")} value={end} onChange={event => setEnd(event.target.value)}/><Button variant="secondary" size="sm" onClick={applyCustom}>{t("range_switcher.btn_apply")}</Button></fieldset> : null}
     {windows.length ? <label>{copy("window")}<select value={selected?.[0]} onChange={event => setSelection(event.target.value)}>{windows.map(([key, window]) => <option value={key} key={key}>{copy(window.kind)} · {windowName(window.kind, window.minutes)}</option>)}</select></label> : null}
     <div className="pulse-quota-export">
-      <Button type="button" variant="secondary" size="sm" disabled={!data || loading || exporting} onClick={() => void exportHistory("xlsx")}>{paper ? <FileSpreadsheet size={14} aria-hidden="true"/> : null}{copy("exportXlsx")}</Button>
-      <Button type="button" variant="secondary" size="sm" disabled={!data || loading || exporting} onClick={() => void exportHistory("markdown")}>{paper ? <FileText size={14} aria-hidden="true"/> : null}{copy("exportMarkdown")}</Button>
+      <p id={exportScopeId} className="pulse-quota-export-scope">{copy("exportScope")}</p>
+      <Button type="button" variant="secondary" size="sm" aria-describedby={exportScopeId} disabled={!data?.scopeAvailable || loading || exporting} onClick={() => void exportHistory("xlsx")}>{paper ? <FileSpreadsheet size={14} aria-hidden="true"/> : null}{copy("exportXlsx")}</Button>
+      <Button type="button" variant="secondary" size="sm" aria-describedby={exportScopeId} disabled={!data?.scopeAvailable || loading || exporting} onClick={() => void exportHistory("markdown")}>{paper ? <FileText size={14} aria-hidden="true"/> : null}{copy("exportMarkdown")}</Button>
     </div></div>
     {rangeError ? <p role="alert">{copy("rangeLimit")}</p> : null}
     {exportFailed ? <p role="alert">{copy(exportFailed === "desktop" ? "exportDesktopOnly" : "exportFailed")}</p> : null}{exportMessage ? <p role="status" className="pulse-quota-export-message">{exportMessage}</p> : null}
@@ -345,10 +384,20 @@ export function QuotaHistoryView({ paper = false }: { paper?: boolean }) {
     </> : null}
     </div>
     {data ? <div className="pulse-book-official-records">
-      {rows.length ? <><DailyChart rows={rows} paper={paper}/><div className="pulse-quota-table-scroll"><table aria-label={copy("table")}><thead><tr><th>{copy("date")}</th><th>{copy("consumption")}</th><th>{copy("state")}</th><th>{copy("partial")}</th></tr></thead><tbody>{[...rows].reverse().map(row => <tr key={row.date}>
-        <th scope="row"><button type="button" className="pulse-text-button" onClick={event => { dayTrigger.current = event.currentTarget; setSelectedDate(row.date); }}>{row.date}</button></th><td>{points(row.consumedPercentPoints)}</td><td>{copy(statusKey(row))}{row.gapCount > 0 ? <small>{copy("gaps", { count: row.gapCount })}</small> : null}{row.unallocatedCount > 0 ? <small>{copy("unallocated", { count: row.unallocatedCount })}</small> : null}{row.source !== "official" ? <small>{copy(row.source === "mixed" ? "mixed" : "migrated")}</small> : null}</td><td>{copy("coverage", { minutes: number(row.coveredMinutes) })}<small>{copy("samples", { count: row.sampleCount })} · {copy("cycles", { count: row.cycleCount })}</small></td>
-      </tr>)}</tbody></table></div></> : <p className="pulse-empty">{copy("noWindows")}</p>}
-      {selectedDate ? <QuotaDayDetail key={`${selectedDate}:${kind}:${minutes}:${data.identityRevision}`} date={selectedDate} kind={kind} minutes={minutes} identityRevision={data.identityRevision} timezone={data.timezone} onClose={() => { setSelectedDate(null); dayTrigger.current?.focus(); }}/>: null}
+      {rows.length ? <><DailyChart rows={rows} paper={paper}/><div className="pulse-quota-table-scroll"><table aria-label={copy("table")}><thead><tr><th>{copy("date")}</th><th>{copy("consumption")}</th><th>{copy("state")}</th><th>{copy("partial")}</th></tr></thead><tbody>{[...rows].reverse().map(row => {
+        const expanded = row.date === selectedDate;
+        return <Fragment key={row.date}>
+          <tr>
+            <th scope="row"><button type="button" className="pulse-text-button" aria-expanded={expanded} aria-controls={expanded ? dayDetailId : undefined} onClick={event => openDay(row.date, event.currentTarget)}>{row.date}</button></th>
+            <td>{points(row.consumedPercentPoints)}</td>
+            <td>{copy(statusKey(row))}{row.gapCount > 0 ? <small>{copy("gaps", { count: row.gapCount })}</small> : null}{row.unallocatedCount > 0 ? <small>{copy("unallocated", { count: row.unallocatedCount })}</small> : null}{row.source !== "official" ? <small>{copy(row.source === "mixed" ? "mixed" : "migrated")}</small> : null}</td>
+            <td>{copy("coverage", { minutes: number(row.coveredMinutes) })}<small>{copy("samples", { count: row.sampleCount })} · {copy("cycles", { count: row.cycleCount })}</small></td>
+          </tr>
+          {expanded ? <tr><td colSpan={4} className="pulse-quota-detail-cell">
+            <QuotaDayDetail key={`${kind}:${minutes}:${data.identityRevision}`} id={dayDetailId} date={row.date} kind={kind} minutes={minutes} identityRevision={data.identityRevision} timezone={data.timezone} onClose={closeDay}/>
+          </td></tr> : null}
+        </Fragment>;
+      })}</tbody></table></div></> : <p className="pulse-empty">{copy("noWindows")}</p>}
     </div> : null}
   </section>;
 }

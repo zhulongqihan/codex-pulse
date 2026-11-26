@@ -7,6 +7,12 @@
   line-height: 1.5;
 }
 
+@media (max-height: 599px) {
+  [data-app-sidebar] > .pulse-sidebar-header:nth-child(2) { height: 36px; }
+  #app-navigation { padding-block: 4px; }
+  #app-navigation [role="tab"] { min-height: 36px; padding-block: 6px; }
+}
+
 :root[data-skin="paper"] .pulse-paper-navigation [data-nav-group="primary"] + [data-nav-group="detail"] {
   margin-inline-start: 10px;
 }

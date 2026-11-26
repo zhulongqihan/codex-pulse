@@ -13,6 +13,7 @@ import { distinctProjectLabels } from "@/lib/project-reference";
 import { usePulseCopy } from "@/lib/pulse-copy";
 import { useHomeCopy } from "@/lib/home-copy";
 import { useDashboardCopy } from "@/lib/dashboard-copy";
+import { quotaHistoryCopy } from "@/lib/quota-history-copy";
 import { currentDateInTimezone } from "@/lib/trend-buckets";
 import { getLanguage, languages } from "@/lib/languages";
 import { timeZoneLabel } from "@/lib/time-context";
@@ -32,6 +33,8 @@ type DashboardHeroCardProps = {
 export type UsageAnalysisViewProps = {
   overview: OverviewResponse; range: RangeKey; isBusy: boolean; isExporting: ExportFormat | null;
   exportError?: string | null;
+  exportRequiresDesktop?: boolean;
+  rangeNotice?: ReactNode;
   onRangeChange: (value: RangeKey) => void; onExport: (format: ExportFormat) => void;
   metrics: MetricCardData[];
   onOpenDay?: (date: string) => void;
@@ -102,12 +105,14 @@ export function DashboardHeroCard({ timezone, todayOverview = null, todayLoading
 
   return <section data-testid="dashboard-hero" className={`pulse-overview pulse-home-overview pulse-dashboard-home${paperSpread ? " pulse-paper-dashboard-spread" : ""}`}>
     {paperSpread ? <>
+      <div className="pulse-paper-dashboard-page pulse-paper-dashboard-page--today">
+        {today}
+      </div>
       <div className="pulse-paper-dashboard-page pulse-paper-dashboard-page--quota">
         <div className="pulse-paper-quotas">{quotaLimits}</div>
         <div className="pulse-paper-dashboard-page--pacing">{coach}</div>
       </div>
-      <div className="pulse-paper-dashboard-page pulse-paper-dashboard-page--today">
-        {today}
+      <div className="pulse-paper-dashboard-page pulse-paper-dashboard-page--history">
         {localRecovery}
         {quotaHistory}
         {analysis}
@@ -123,7 +128,7 @@ export function DashboardHeroCard({ timezone, todayOverview = null, todayLoading
 }
 
 /** Historical exploration has one range shared by totals, trends, distribution and export. */
-export function UsageAnalysisView({ overview, range, isBusy, isExporting, exportError, onRangeChange, onExport, metrics, onOpenDay }: UsageAnalysisViewProps) {
+export function UsageAnalysisView({ overview, range, isBusy, isExporting, exportError, exportRequiresDesktop, rangeNotice, onRangeChange, onExport, metrics, onOpenDay }: UsageAnalysisViewProps) {
   const { t, i18n } = useTranslation();
   const copy = usePulseCopy();
   const home = useHomeCopy();
@@ -132,10 +137,14 @@ export function UsageAnalysisView({ overview, range, isBusy, isExporting, export
   const [metric, setMetric] = useState<"tokens" | "cost">("tokens");
   const [showAll, setShowAll] = useState(false);
   const totals = overview.totals;
+  const retainedFrom = overview.retainedFrom;
+  const hasRetainedUsage = retainedFrom !== null && (retainedFrom === undefined || retainedFrom <= overview.endDate);
+  const hasPartialCoverage = hasRetainedUsage && retainedFrom !== undefined && retainedFrom > overview.startDate;
   const projectLabels = useMemo(() => distinctProjectLabels(overview.projects ?? []), [overview.projects]);
   const items = activeTab === "models" ? (overview.models ?? []).map(item => ({ label: item.model, tokens: item.totalTokens, cost: item.costUSD }))
     : activeTab === "projects" ? (overview.projects ?? []).map(item => ({ label: projectLabels.get(item.project)!, detail: item.project, tokens: item.totalTokens, cost: item.costUSD }))
-      : overview.daily.map(item => ({ label: item.date, tokens: item.totalTokens, cost: item.costUSD }));
+      : overview.daily.filter(item => retainedFrom === undefined || (retainedFrom !== null && item.date >= retainedFrom))
+          .map(item => ({ label: item.date, tokens: item.totalTokens, cost: item.costUSD }));
   const ranked = [...items].sort((a, b) => metric === "tokens" ? b.tokens - a.tokens : a.cost == null ? b.cost == null ? 0 : 1 : b.cost == null ? -1 : b.cost - a.cost);
   const visible = showAll ? ranked : ranked.slice(0, 5);
   const denominator = metric === "tokens" ? totals.totalTokens : totals.costUSD;
@@ -153,24 +162,29 @@ export function UsageAnalysisView({ overview, range, isBusy, isExporting, export
           </DropdownMenuContent></DropdownMenu>
         </div>
       </header>
+      {rangeNotice}
+      {exportRequiresDesktop ? <p role="status" className="pulse-analysis-note">{quotaHistoryCopy(i18n.resolvedLanguage ?? i18n.language, "exportDesktopOnly")}</p> : null}
       {exportError ? <p role="alert" data-testid="export-error" className="pulse-analysis-export-error"><strong>{t("export.failed")}</strong><span>{exportError}</span></p> : null}
+      {!hasRetainedUsage || hasPartialCoverage ? <p className="pulse-analysis-note" data-testid="analysis-retention-coverage">{hasPartialCoverage
+        ? t("analysis_review.coverage_partial", { date: retainedFrom })
+        : t("analysis_review.coverage_unavailable")}</p> : null}
       <div className="pulse-analysis-totals">
         <dl>
-          <div><dt>{home("periodTokens")}</dt><dd>{formatCompactNumber(totals.totalTokens)}</dd></div>
+          <div><dt>{home("periodTokens")}</dt><dd>{hasRetainedUsage ? formatCompactNumber(totals.totalTokens) : "—"}</dd></div>
           <div>
             <dt className="pulse-reading-context-label">{dashboard("periodCost")}<ReadingInfo label={dashboard("periodCost")}>{dashboard("estimateNote")}</ReadingInfo></dt>
-            <dd>{formatCurrencyShort(totals.costUSD)}</dd>
+            <dd>{hasRetainedUsage ? formatCurrencyShort(totals.costUSD) : "—"}</dd>
           </div>
         </dl>
         <p className="pulse-time-context" data-testid="analysis-timezone">{t("reading_context.statistics_short", { zone: timeZoneLabel(overview.timezone, i18n.resolvedLanguage ?? i18n.language) })}</p>
       </div>
       {unknownPricing > 0 ? <p className="pulse-analysis-pricing" data-testid="analysis-pricing-coverage">{copy("pricingCoverage")} {formatPercent(totals.totalTokens > 0 ? (totals.totalTokens - unknownPricing) / totals.totalTokens : 0)} · {copy("partial")}</p> : null}
-      <details className="pulse-period-details"><summary>{home("periodDetails")}</summary><dl className="pulse-period-breakdown">
+      {hasRetainedUsage ? <details className="pulse-period-details"><summary>{home("periodDetails")}</summary><dl className="pulse-period-breakdown">
         <div><dt>{copy("input")}</dt><dd>{formatNumber(totals.inputTokens)}</dd></div>
         <div><dt>{copy("cached")}</dt><dd>{formatNumber(totals.cachedInputTokens)}</dd></div>
         <div><dt>{copy("output")}</dt><dd>{formatNumber(totals.outputTokens)}</dd></div>
         {metrics.filter(item => item.kind !== "tokens").map(item => <div key={item.kind} title={item.detail}><dt>{item.label}</dt><dd>{item.value}</dd></div>)}
-      </dl></details>
+      </dl></details> : null}
     </section>
     <div className="pulse-analysis-trend">
       <UsageTrendsCard daily={overview.daily} retainedFrom={overview.retainedFrom} metrics={[]} cacheHitRate={totals.cacheHitRate} onOpenDay={onOpenDay} todayDate={currentDateInTimezone(overview.timezone)} deferInspection localQuotaRangeDays={overview.days}/>

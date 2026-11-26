@@ -280,7 +280,13 @@ export function SettingsPage({
 
             {updateCheckError ? (
               <div className="rounded-lg bg-red-500/5 dark:bg-red-500/10 border border-red-500/20 p-4 text-sm text-error dark:text-red-400">
-                {updateCheckError}
+                <p role="alert">{t(updateCheckError === "Updates unavailable in offline mode"
+                  ? "settings.update_check_offline"
+                  : "settings.update_check_failed")}</p>
+                <details className="mt-2 break-words">
+                  <summary className="cursor-pointer">{t("recovery.details")}</summary>
+                  <p>{updateCheckError}</p>
+                </details>
               </div>
             ) : null}
 

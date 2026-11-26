@@ -1,6 +1,6 @@
 import { CalendarDays, ChartColumn, ChartNoAxesCombined, Folder, LayoutDashboard, Logs, PanelLeftClose, PanelLeftOpen, Settings, Terminal, Wallet } from "lucide-react";
 import { useTranslation } from "react-i18next";
-import { Fragment, useEffect, useRef, useState, type ReactNode } from "react";
+import { Fragment, useEffect, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
 import type { DashboardView } from "@/components/dashboard-header";
 import { useShellCopy } from "@/lib/shell-copy";
 import "./app-sidebar.css";
@@ -47,6 +47,19 @@ export function AppSidebar({ view, onViewChange, collapsed, onToggleCollapsed, w
   const drag = useRef<{ startX: number; startWidth: number; width: number } | null>(null);
   const isResizing = resizingWidth !== null;
 
+  const moveTab = (event: KeyboardEvent<HTMLButtonElement>, index: number, tabs: readonly { view: DashboardView }[], orientation: "vertical" | "horizontal") => {
+    const previous = orientation === "vertical" ? "ArrowUp" : "ArrowLeft";
+    const following = orientation === "vertical" ? "ArrowDown" : "ArrowRight";
+    const next = event.key === "Home" ? 0 : event.key === "End" ? tabs.length - 1
+      : event.key === following ? (index + 1) % tabs.length
+      : event.key === previous ? (index + tabs.length - 1) % tabs.length : null;
+    if (next === null) return;
+    event.preventDefault();
+    const nextView = tabs[next].view;
+    onViewChange(nextView);
+    event.currentTarget.parentElement?.querySelector<HTMLButtonElement>(`[data-testid="${nextView}-nav-tab"]`)?.focus();
+  };
+
   useEffect(() => {
     if (!isResizing) return;
     const resize = (event: MouseEvent) => {
@@ -74,15 +87,7 @@ export function AppSidebar({ view, onViewChange, collapsed, onToggleCollapsed, w
     const tabs = [...pages, {view: "settings", label: "settings", icon: Settings}] as const;
     return <nav className="pulse-paper-navigation" aria-label={t("header.navigation")}>
       <div role="tablist" aria-orientation="horizontal" aria-label={t("header.navigation")}>
-        {tabs.map(({view: page, label, icon: Icon}, index) => <button key={page} type="button" role="tab" aria-selected={view === page} tabIndex={view === page ? 0 : -1} data-nav-group={index < primaryPages.length ? "primary" : "detail"} data-testid={`${page}-nav-tab`} onClick={() => onViewChange(page)} onKeyDown={event => {
-          const next = event.key === "Home" ? 0 : event.key === "End" ? tabs.length - 1
-            : event.key === "ArrowRight" ? (index + 1) % tabs.length
-            : event.key === "ArrowLeft" ? (index + tabs.length - 1) % tabs.length : null;
-          if (next === null) return;
-          event.preventDefault();
-          onViewChange(tabs[next].view);
-          event.currentTarget.parentElement?.querySelector<HTMLButtonElement>(`[data-testid="${tabs[next].view}-nav-tab"]`)?.focus();
-        }}><Icon size={16} aria-hidden="true"/><span>{pageLabel(label)}</span></button>)}
+        {tabs.map(({view: page, label, icon: Icon}, index) => <button key={page} type="button" role="tab" aria-selected={view === page} tabIndex={view === page ? 0 : -1} data-nav-group={index < primaryPages.length ? "primary" : "detail"} data-testid={`${page}-nav-tab`} onClick={() => onViewChange(page)} onKeyDown={event => moveTab(event, index, tabs, "horizontal")}><Icon size={16} aria-hidden="true"/><span>{pageLabel(label)}</span></button>)}
       </div>
     </nav>;
   }
@@ -90,7 +95,7 @@ export function AppSidebar({ view, onViewChange, collapsed, onToggleCollapsed, w
   return (
     <aside data-app-sidebar style={{ width: collapsed ? COLLAPSED_WIDTH : resizingWidth ?? width }} className="relative flex h-full shrink-0 flex-col border-r border-border/80 bg-[rgb(var(--sidebar))]">
       <div aria-hidden="true" className="h-[var(--window-drag-height)] shrink-0" />
-      <div className={`flex h-16 shrink-0 items-center gap-2 px-3 ${collapsed ? "justify-center" : "justify-between"}`}>
+      <div className={`pulse-sidebar-header flex h-16 shrink-0 items-center gap-2 px-3 ${collapsed ? "justify-center" : "justify-between"}`}>
         {!collapsed ? <span className="pulse-sidebar-caption">{t("header.navigation")}</span> : null}
         <button type="button" onClick={onToggleCollapsed} aria-label={toggleLabel} title={toggleLabel} aria-expanded={!collapsed} aria-controls="app-navigation" className="relative z-20 flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring">
           {collapsed ? <PanelLeftOpen className="h-4 w-4" aria-hidden="true" /> : <PanelLeftClose className="h-4 w-4" aria-hidden="true" />}
@@ -105,7 +110,7 @@ export function AppSidebar({ view, onViewChange, collapsed, onToggleCollapsed, w
               {index === primaryPages.length ? <div className="pulse-sidebar-detail-divider" aria-hidden="true">
                 {!collapsed ? <span>{t("header.detail_views")}</span> : null}
               </div> : null}
-              <button type="button" role="tab" aria-selected={view === page} aria-label={name} title={name} data-testid={`${page}-nav-tab`} onClick={() => onViewChange(page)} className={`flex min-h-10 w-full items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors focus-visible:ring-2 focus-visible:ring-ring ${collapsed ? "justify-center" : "text-left"} ${view === page ? "bg-primary/10 font-semibold text-primary" : primary ? "font-medium text-foreground hover:bg-muted" : "text-muted-foreground hover:bg-muted hover:text-foreground"}`}>
+              <button type="button" role="tab" aria-selected={view === page} aria-label={name} title={name} data-testid={`${page}-nav-tab`} onClick={() => onViewChange(page)} onKeyDown={event => moveTab(event, index, pages, "vertical")} className={`flex min-h-10 w-full items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors focus-visible:ring-2 focus-visible:ring-ring ${collapsed ? "justify-center" : "text-left"} ${view === page ? "bg-primary/10 font-semibold text-primary" : primary ? "font-medium text-foreground hover:bg-muted" : "text-muted-foreground hover:bg-muted hover:text-foreground"}`}>
                 <Icon className="h-4 w-4 shrink-0" aria-hidden="true" />
                 {!collapsed ? <span className="truncate">{name}</span> : null}
               </button>

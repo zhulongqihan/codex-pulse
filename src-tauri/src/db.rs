@@ -4,11 +4,12 @@ use crate::types::{
     SessionQuotaUsage, SessionQuotaWindowUsage,
 };
 use chrono::DateTime;
-use rusqlite::{params, Connection};
+use rusqlite::{params, Connection, OptionalExtension, Transaction};
 use serde::{Deserialize, Serialize};
 use std::{collections::BTreeMap, path::Path, sync::Mutex, time::Duration};
 
 const QUOTA_PARSER_VERSION: i64 = 6;
+const DAY_PARTITION_VERSION: i64 = 1;
 static DATABASE_INITIALIZATION: Mutex<()> = Mutex::new(());
 
 pub fn open_database(database_path: &Path) -> Result<Connection, String> {
@@ -44,7 +45,8 @@ pub fn open_database(database_path: &Path) -> Result<Connection, String> {
           id INTEGER PRIMARY KEY AUTOINCREMENT,
           scanned_at TEXT NOT NULL,
           timezone TEXT NOT NULL,
-          imported_days INTEGER NOT NULL
+          imported_days INTEGER NOT NULL,
+          day_partition_version INTEGER NOT NULL DEFAULT 0
         );
 
         CREATE TABLE IF NOT EXISTS session_file_rollups (
@@ -90,6 +92,12 @@ pub fn open_database(database_path: &Path) -> Result<Connection, String> {
         "session_file_rollups",
         "turn_count",
         "ALTER TABLE session_file_rollups ADD COLUMN turn_count INTEGER NOT NULL DEFAULT 0",
+    )?;
+    ensure_column(
+        &db,
+        "scan_runs",
+        "day_partition_version",
+        "ALTER TABLE scan_runs ADD COLUMN day_partition_version INTEGER NOT NULL DEFAULT 0",
     )?;
     crate::project_sessions::create_tables(&db)?;
     crate::session_credits::create_tables(&db)?;
@@ -319,11 +327,78 @@ pub fn record_scan_run(
     imported_days: usize,
 ) -> Result<(), String> {
     db.execute(
-        "INSERT INTO scan_runs (scanned_at, timezone, imported_days) VALUES (?, ?, ?)",
-        params![scanned_at, timezone, imported_days as i64],
+        "INSERT INTO scan_runs (scanned_at, timezone, imported_days, day_partition_version)
+         VALUES (?, ?, ?, ?)",
+        params![
+            scanned_at,
+            timezone,
+            imported_days as i64,
+            DAY_PARTITION_VERSION
+        ],
     )
     .map_err(|error| error.to_string())?;
     Ok(())
+}
+
+fn latest_scan_partition(db: &Connection) -> Result<Option<(String, i64)>, String> {
+    db.query_row(
+        "SELECT timezone, day_partition_version FROM scan_runs ORDER BY id DESC LIMIT 1",
+        [],
+        |row| Ok((row.get(0)?, row.get(1)?)),
+    )
+    .optional()
+    .map_err(|error| error.to_string())
+}
+
+pub(crate) fn rollups_match_timezone(db: &Connection, timezone: &str) -> Result<bool, String> {
+    let Some((cached, version)) = latest_scan_partition(db)? else {
+        return Ok(false);
+    };
+    if crate::date::canonical_app_timezone(&cached) != timezone {
+        return Ok(false);
+    }
+    match version {
+        DAY_PARTITION_VERSION => Ok(true),
+        0 => legacy_has_single_timezone(db, timezone),
+        _ => Ok(false),
+    }
+}
+
+pub(crate) fn usage_read_timezone(db: &Connection, requested: String) -> Result<String, String> {
+    let Some((cached, version)) = latest_scan_partition(db)? else {
+        return Ok(requested);
+    };
+    let cached = crate::date::canonical_app_timezone(&cached);
+    if version == 0 && !legacy_has_single_timezone(db, &cached)? {
+        return Err("Cached usage needs a local log rescan after a time zone change.".into());
+    }
+    // Until the next scan commits, the requested zone does not describe these rows.
+    Ok(cached)
+}
+
+fn legacy_has_single_timezone(db: &Connection, timezone: &str) -> Result<bool, String> {
+    // A legacy cache can be reused only if every recorded scan used the same zone.
+    let mut zones = db
+        .prepare("SELECT DISTINCT timezone FROM scan_runs")
+        .map_err(|error| error.to_string())?;
+    let mut rows = zones.query([]).map_err(|error| error.to_string())?;
+    while let Some(row) = rows.next().map_err(|error| error.to_string())? {
+        let zone: String = row.get(0).map_err(|error| error.to_string())?;
+        if crate::date::canonical_app_timezone(&zone) != timezone {
+            return Ok(false);
+        }
+    }
+    Ok(true)
+}
+
+pub(crate) fn usage_read_snapshot(db: &Connection) -> Result<Option<Transaction<'_>>, String> {
+    if db.is_autocommit() {
+        return db
+            .unchecked_transaction()
+            .map(Some)
+            .map_err(|error| error.to_string());
+    }
+    Ok(None)
 }
 
 pub fn reset_usage_state(db: &Connection) -> Result<(), String> {

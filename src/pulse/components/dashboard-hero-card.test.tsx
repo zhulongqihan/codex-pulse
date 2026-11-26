@@ -38,7 +38,7 @@ function breakdownOverview(rows: Array<{ name: string; tokens: number; cost: num
 beforeEach(async () => { await i18n.changeLanguage("en"); });
 
 describe("focused dashboard", () => {
-  it("keeps quota and pacing on the left Paper page and local activity on the right", async () => {
+  it("reads today's local usage first in the Paper source order and retains both page groups", async () => {
     const user = userEvent.setup();
     const onOpenAnalysis = vi.fn(), onOpenToday = vi.fn(), onOpenHistory = vi.fn();
     render(<DashboardHeroCard timezone={overview.timezone} paperSpread
@@ -46,12 +46,12 @@ describe("focused dashboard", () => {
       quotaLimits={<h2>Account quota</h2>} coach={<h2>Account pace</h2>}
       quotaHistory={<button onClick={onOpenHistory}>Open quota records</button>}
       onOpenAnalysis={onOpenAnalysis} onOpenToday={onOpenToday}/>);
-    const [quotaPage, todayPage] = screen.getByTestId("dashboard-hero").children;
+    const [todayPage, quotaPage, historyPage] = screen.getByTestId("dashboard-hero").children;
     expect(quotaPage).toContainElement(screen.getByRole("heading", { name: "Account quota" }));
     expect(quotaPage).toContainElement(screen.getByRole("heading", { name: "Account pace" }));
     const todaysSessions = within(todayPage as HTMLElement).getByRole("button", { name: "Today's sessions" });
-    const quotaRecords = within(todayPage as HTMLElement).getByRole("button", { name: "Open quota records" });
-    const usageAnalysis = within(todayPage as HTMLElement).getByRole("button", { name: "Open usage analysis" });
+    const quotaRecords = within(historyPage as HTMLElement).getByRole("button", { name: "Open quota records" });
+    const usageAnalysis = within(historyPage as HTMLElement).getByRole("button", { name: "Open usage analysis" });
     expect(screen.queryByRole("heading", { name: dashboardCopy("en", "history") })).not.toBeInTheDocument();
     expect(screen.queryByText(dashboardCopy("en", "historyDescription"))).not.toBeInTheDocument();
     expect(screen.queryByText(/Local logs · Updated/)).not.toBeInTheDocument();

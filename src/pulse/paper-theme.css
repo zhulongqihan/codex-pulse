@@ -2,12 +2,11 @@
 @import "./paper-ledgers.css";
 
 /* Paper is additive. The original Clear/Meter selectors and business tree stay intact. */
-.pulse-preview-paper{background:#79846a url('./assets/paper/desk-book.png') center/cover;grid-template-columns:1fr 1fr;grid-template-rows:16px 58px;gap:7px;padding:15px 9px 13px;border:1px solid #acb290}
+.pulse-preview-paper{background:#79846a url('./assets/paper/desk-book.png') center/cover;grid-template-columns:repeat(2,minmax(0,1fr));grid-template-rows:16px 58px;gap:7px;padding:15px 9px 13px;border:1px solid #acb290}
 .pulse-preview-paper .pulse-preview-nav{grid-column:1/-1;grid-row:1;height:12px;background:repeating-linear-gradient(90deg,#e3c5a4 0 16%,#bfcfa5 16% 32%,#c2d6de 32% 48%);border-radius:4px 4px 0 0}
 .pulse-preview-paper .pulse-preview-stat{grid-column:1;grid-row:2;background:#e8e4cecc;border-radius:2px}
 .pulse-preview-paper .pulse-preview-chart{grid-column:2;grid-row:2;background:#edd0b4bd;border-radius:2px}
 .pulse-preview-paper .pulse-preview-list{display:none}
-@container app-content (max-width:560px){.pulse-skin-options{grid-template-columns:repeat(2,minmax(0,1fr))}}
 :root[data-skin="paper"] .pulse-paper-navigation button{flex-basis:max-content;max-width:none;white-space:nowrap}
 @media(max-width:680px){:root[data-skin="paper"] .pulse-settings-tabs{display:flex;flex-direction:row;overflow-x:auto;gap:6px;scrollbar-width:thin;overscroll-behavior-x:contain}:root[data-skin="paper"] .pulse-settings-tabs>button{flex:0 0 auto;min-width:120px;max-width:220px;word-break:normal;overflow-wrap:normal;line-height:1.5}}
 :root[data-skin="paper"]{--background:240 235 226;--foreground:54 65 57;--surface:247 241 231;--sidebar:118 128 101;--primary:86 113 66;--primary-foreground:255 253 246;--secondary:109 133 85;--muted:226 226 204;--muted-foreground:101 109 91;--border:191 192 167;--ring:153 104 57;--success:89 123 70;--warning:165 108 50;--error:163 76 51;--paper-ink:#364139;--paper-muted:#646d5b;--paper-accent:#58724e;--paper-line:#bfc0a7;--paper-surface:#f7f1e7;--paper-note:#edc9b0;--paper-texture:url('./assets/paper/paper-texture.png')}
@@ -276,7 +275,6 @@
 
 @media (max-width: 900px) {
   .pulse-paper-dashboard-spread { row-gap: 12px; }
-  .pulse-paper-dashboard-page--today { padding-top: 10px; border-top: 1px solid rgb(var(--border)); }
   .pulse-paper-quotas .pulse-limit-value { font-size: 34px; }
   .pulse-paper-quotas .pulse-limit-row { padding-block: 6px; }
 }

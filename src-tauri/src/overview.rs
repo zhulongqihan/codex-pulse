@@ -1,8 +1,11 @@
 use crate::{
-    date::{date_key_in_timezone, list_date_keys, resolve_app_timezone, shift_date_key},
+    date::{
+        canonical_app_timezone, date_key_in_timezone, list_date_keys, resolve_app_timezone,
+        shift_date_key,
+    },
     db::{
         query_daily_quota_percents, query_daily_rows, query_latest_update_at,
-        query_model_quota_samples, ModelQuotaAggregate,
+        query_model_quota_samples, usage_read_snapshot, usage_read_timezone, ModelQuotaAggregate,
     },
     pricing::{calculate_cost_usd, PricingSource},
     types::{
@@ -20,6 +23,16 @@ fn query_retained_from(db: &Connection) -> Result<Option<String>, String> {
         row.get(0)
     })
     .map_err(|error| error.to_string())
+}
+
+fn resolve_read_timezone(db: &Connection, requested: Option<String>) -> Result<String, String> {
+    usage_read_timezone(
+        db,
+        requested
+            .as_deref()
+            .map(canonical_app_timezone)
+            .unwrap_or_else(resolve_app_timezone),
+    )
 }
 
 fn range_days(range: &str) -> Option<i64> {
@@ -102,7 +115,9 @@ pub fn get_overview(
     timezone: Option<String>,
     pricing_source: &PricingSource,
 ) -> Result<OverviewResponse, String> {
-    let timezone = timezone.unwrap_or_else(resolve_app_timezone);
+    let snapshot = usage_read_snapshot(db)?;
+    let db = snapshot.as_deref().unwrap_or(db);
+    let timezone = resolve_read_timezone(db, timezone)?;
 
     let (start_date, end_date, days) = resolve_range_for_database(db, range, &timezone)?;
 
@@ -274,7 +289,9 @@ pub fn get_project_analytics(
     timezone: Option<String>,
     pricing_source: &PricingSource,
 ) -> Result<ProjectAnalyticsResponse, String> {
-    let timezone = timezone.unwrap_or_else(resolve_app_timezone);
+    let snapshot = usage_read_snapshot(db)?;
+    let db = snapshot.as_deref().unwrap_or(db);
+    let timezone = resolve_read_timezone(db, timezone)?;
     let (start_date, end_date, _) = resolve_range_for_database(db, range, &timezone)?;
     let rows = query_daily_rows(db, &start_date, &end_date)?;
     let mut usage_by_date = BTreeMap::<String, ProjectUsage>::new();
@@ -473,7 +490,9 @@ pub fn get_monthly_usage(
     db: &Connection,
     timezone: Option<String>,
 ) -> Result<MonthlyUsageResponse, String> {
-    let timezone = timezone.unwrap_or_else(resolve_app_timezone);
+    let snapshot = usage_read_snapshot(db)?;
+    let db = snapshot.as_deref().unwrap_or(db);
+    let timezone = resolve_read_timezone(db, timezone)?;
     let end_date = date_key_in_timezone(Utc::now(), &timezone);
     let end_month = month_key_from_date_key(&end_date)?;
     get_monthly_usage_for_end_month(db, &timezone, &end_month, 12)

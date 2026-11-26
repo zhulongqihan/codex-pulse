@@ -5,6 +5,7 @@ import { disable as disableAutostart, enable as enableAutostart, isEnabled as is
 import { buildPulseIntegration } from "@/lib/pulse-integration";
 import { buildLocalUsageSummary } from "@/lib/local-usage-summary";
 import { listen } from "@tauri-apps/api/event";
+import { isTauri } from "@tauri-apps/api/core";
 import { useCallback, useEffect, useEffectEvent, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
@@ -52,6 +53,7 @@ import { quotaWindowKind, quotaWindowLabel } from "@/lib/quota-windows";
 import { REFRESH_MINUTES } from "@/lib/legacy-preferences";
 import type { DashboardView } from "@/components/dashboard-header";
 import { getExportDialogOptions, getExportFileName, getRangeLabel } from "@/lib/usage-dashboard";
+import { currentDateInTimezone } from "@/lib/trend-buckets";
 import tauriConfig from "../../../src-tauri/tauri.conf.json";
 import { formatResetTime, RECENT_RESET_OVERVIEW_DAYS } from "@/components/codex-limits-card";
 import {
@@ -141,6 +143,8 @@ export function useUsageDashboard({ accountVisible = false }: { accountVisible?:
   const [view, setView] = useState<DashboardView>("dashboard");
   const [range, setRange] = useState<RangeKey>("30d");
   const [overview, setOverview] = useState<OverviewResponse | null>(null);
+  const [isOverviewReading, setIsOverviewReading] = useState(false);
+  const [rangeError, setRangeError] = useState<string | null>(null);
   // The tray/widget always describe today, even while the workspace reads a historical range.
   const [todayOverview, setTodayOverview] = useState<OverviewResponse | null>(null);
   const [isTodayStale, setIsTodayStale] = useState(false);
@@ -172,6 +176,7 @@ export function useUsageDashboard({ accountVisible = false }: { accountVisible?:
   const [isResetting, setIsResetting] = useState(false);
   const [isExporting, setIsExporting] = useState<ExportFormat | null>(null);
   const [exportError, setExportError] = useState<string | null>(null);
+  const [exportRequiresDesktop, setExportRequiresDesktop] = useState(false);
   const [lastRescanDurationMs, setLastRescanDurationMs] = useState<number | null>(null);
   const [launchAtLogin, setLaunchAtLogin] = useState(false);
   const [launchAtLoginKnown, setLaunchAtLoginKnown] = useState(false);
@@ -363,24 +368,34 @@ export function useUsageDashboard({ accountVisible = false }: { accountVisible?:
   const sessionsGeneration = useRef(0);
   const localReloadGeneration = useRef(0);
   const currentRange = useRef(range);
-  currentRange.current = range;
 
   const loadOverview = useEffectEvent(async (nextRange: RangeKey) => {
+    if (nextRange !== currentRange.current) return;
     const generation = ++overviewGeneration.current;
-    const [requested, today] = await Promise.allSettled([
-      fetchOverview(nextRange),
-      nextRange === "1d" ? Promise.resolve(null) : fetchOverview("1d"),
-    ]);
-    if (generation !== overviewGeneration.current || nextRange !== currentRange.current) return;
-    if (nextRange === "1d") setIsTodayStale(requested.status === "rejected");
-    else setIsTodayStale(today.status === "rejected");
-    if (today.status === "fulfilled" && today.value) setTodayOverview(today.value);
-    if (requested.status === "rejected") throw requested.reason;
-    const data = requested.value;
-    if (nextRange === "1d") setTodayOverview(data);
-    setOverview(data);
-    setError(null);
-    return data;
+    const isCurrent = () => generation === overviewGeneration.current && nextRange === currentRange.current;
+    setIsOverviewReading(true);
+    setRangeError(null);
+    try {
+      const [requested, today] = await Promise.allSettled([
+        fetchOverview(nextRange),
+        nextRange === "1d" ? Promise.resolve(null) : fetchOverview("1d"),
+      ]);
+      if (!isCurrent()) return;
+      setIsTodayStale(nextRange === "1d" ? requested.status === "rejected" : today.status === "rejected");
+      if (today.status === "fulfilled" && today.value) setTodayOverview(today.value);
+      if (requested.status === "rejected") throw requested.reason;
+      const data = requested.value;
+      if (nextRange === "1d") setTodayOverview(data);
+      setOverview(data);
+      setError(null);
+      return data;
+    } catch (cause) {
+      if (!isCurrent()) return;
+      setRangeError(errorMessage(cause, "Failed to load usage range."));
+      throw cause;
+    } finally {
+      if (isCurrent()) setIsOverviewReading(false);
+    }
   });
 
   const loadMonthlyUsage = useEffectEvent(async () => {
@@ -678,7 +693,7 @@ export function useUsageDashboard({ accountVisible = false }: { accountVisible?:
       // Do not block initial render on limits fetch
       void loadCodexLimits();
       void handleResetHistoryRefresh();
-      await loadOverview(range);
+      await loadOverview(currentRange.current);
     } catch (loadError) {
       setError(errorMessage(loadError, "Failed to load overview."));
     } finally {
@@ -711,7 +726,7 @@ export function useUsageDashboard({ accountVisible = false }: { accountVisible?:
     const filesParsed = refresh.scan?.metrics?.filesParsed ?? 0;
     const isForeground = document.visibilityState === "visible";
     if (isForeground || filesParsed > 0) {
-      const data = await loadOverview(range);
+      const data = await loadOverview(currentRange.current);
       if (data?.totals.totalTokens === 0) await loadDiagnostics();
       if (view === "monthly" || monthlyUsage) {
         await loadMonthlyUsage();
@@ -1052,20 +1067,14 @@ export function useUsageDashboard({ accountVisible = false }: { accountVisible?:
   async function handleRangeChange(nextRange: RangeKey) {
     currentRange.current = nextRange;
     setRange(nextRange);
-
-    if (!bootstrapped) {
-      return;
-    }
-
-    setIsLoading(true);
+    setExportError(null);
+    setExportRequiresDesktop(false);
 
     try {
       const data = await loadOverview(nextRange);
       if (data?.totals.totalTokens === 0) await loadDiagnostics();
-    } catch (rangeError) {
-      setError(rangeError instanceof Error ? rangeError.message : "Failed to switch range.");
-    } finally {
-      setIsLoading(false);
+    } catch {
+      // The latest overview read owns the scoped range error.
     }
   }
 
@@ -1073,7 +1082,7 @@ export function useUsageDashboard({ accountVisible = false }: { accountVisible?:
     if (updatedSession) setSessions((current) => current.map((session) => session.path === previousPath ? updatedSession : session));
     const generation = ++localReloadGeneration.current;
     const sessionsRequest = ++sessionsGeneration.current;
-    const nextRange = range;
+    const nextRange = currentRange.current;
     const [, nextSessions, nextMonthly] = await Promise.all([
       loadOverview(nextRange),
       hasLoadedSessions ? fetchSessionDetails() : Promise.resolve(null),
@@ -1088,7 +1097,7 @@ export function useUsageDashboard({ accountVisible = false }: { accountVisible?:
 
   async function handlePricingRefreshed() {
     await Promise.all([
-      loadOverview(range),
+      loadOverview(currentRange.current),
       monthlyUsage ? loadMonthlyUsage() : Promise.resolve(),
       hasLoadedSessions ? loadSessions() : Promise.resolve(),
     ]);
@@ -1120,6 +1129,8 @@ export function useUsageDashboard({ accountVisible = false }: { accountVisible?:
       await configureCodexHome(typeof home === "string" ? home : null);
       limitsGeneration.current++;
       overviewGeneration.current++;
+      setIsOverviewReading(false);
+      setRangeError(null);
       monthlyGeneration.current++;
       sessionsGeneration.current++;
       localReloadGeneration.current++;
@@ -1209,22 +1220,31 @@ export function useUsageDashboard({ accountVisible = false }: { accountVisible?:
   }
 
   async function handleExport(format: ExportFormat) {
-    if (!overview || isLoading || isResetting) {
+    if (!overview || overview.range !== currentRange.current || rangeError || isOverviewReading || isLoading || isResetting || isRefreshing || isExporting !== null) {
       return;
     }
 
-    setIsExporting(format);
     setExportError(null);
+    setExportRequiresDesktop(false);
+    if (format === "xlsx" && !isTauri() && document.documentElement.dataset.demo === "true") {
+      setExportRequiresDesktop(true);
+      return;
+    }
+    setIsExporting(format);
 
     try {
       const paths = await getPulsePaths();
-      const defaultPath = `${paths.exports.replace(/[\\/]$/, "")}/${getExportFileName(range, overview, format)}`;
+      const defaultPath = `${paths.exports.replace(/[\\/]$/, "")}/${getExportFileName(overview.range, overview, format)}`;
       const selectedPath = await save(getExportDialogOptions(format, defaultPath, t));
       if (!selectedPath) return;
-      const exported = await exportUsage(range, format, selectedPath);
+      // A relative preset must not advance by a day while the save dialog is open.
+      const exportRange = !overview.range.startsWith("custom:") && currentDateInTimezone(overview.timezone) !== overview.endDate
+        ? `custom:${overview.startDate}_${overview.endDate}`
+        : overview.range;
+      const exported = await exportUsage(exportRange, format, selectedPath);
       setScanMessage({
         key: "hero.exported_message",
-        values: { range: getRangeLabel(range, t), path: exported.path },
+        values: { range: getRangeLabel(exportRange, t), path: exported.path },
       });
     } catch (exportError) {
       setExportError(errorMessage(exportError, t("export.failed")));
@@ -1363,11 +1383,14 @@ export function useUsageDashboard({ accountVisible = false }: { accountVisible?:
     scanMessage: t(scanMessage.key, scanMessage.values),
     error,
     isLoading,
+    isOverviewReading,
+    rangeError,
     isMonthlyLoading,
     isRefreshing,
     isResetting,
     isExporting,
     exportError,
+    exportRequiresDesktop,
     lastRescanDurationMs,
     updateInfo,
     isUpdateChecking,

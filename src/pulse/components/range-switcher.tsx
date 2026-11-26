@@ -11,7 +11,7 @@ import {
 import { Calendar } from "@/components/ui/calendar";
 import { cn } from "@/lib/utils";
 import type { RangeKey } from "@/lib/api";
-import { useEffect, useRef, useState } from "react";
+import { useLayoutEffect, useRef, useState, type KeyboardEvent } from "react";
 import { createPortal } from "react-dom";
 import { getRangeLabel } from "@/lib/usage-dashboard";
 import dayjs from "dayjs";
@@ -20,6 +20,7 @@ import { useTranslation } from "react-i18next";
 import { getLanguage, languages } from "@/lib/languages";
 import { currentDateInTimezone } from "@/lib/trend-buckets";
 import { timeZoneLabel } from "@/lib/time-context";
+import "./range-switcher.css";
 
 type RangeSwitcherProps = {
   value: RangeKey;
@@ -51,24 +52,30 @@ export function RangeSwitcher({ value, onChange, timezone }: RangeSwitcherProps)
   const displayLabel = selectedRange ? t(`ranges.${selectedRange.value}`, { defaultValue: selectedRange.label }) : getRangeLabel(value, t);
 
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const dialogRef = useRef<HTMLDivElement>(null);
+  const dialogRef = useRef<HTMLDialogElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const closeRef = useRef<HTMLButtonElement>(null);
-  useEffect(() => {
-    if (!isModalOpen) return;
-    const focus = requestAnimationFrame(() => closeRef.current?.focus());
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") { event.preventDefault(); setIsModalOpen(false); return; }
-      if (event.key !== "Tab") return;
-      const controls = Array.from(dialogRef.current?.querySelectorAll<HTMLElement>('button:not([disabled]), [href], input, [tabindex="0"]') ?? []);
-      const first = controls[0];
-      const last = controls.at(-1);
-      if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last?.focus(); }
-      if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first?.focus(); }
+  const applyRef = useRef<HTMLButtonElement>(null);
+  const openingDialog = useRef(false);
+  useLayoutEffect(() => {
+    const dialog = dialogRef.current;
+    if (!isModalOpen || !dialog) return;
+    const trigger = triggerRef.current;
+    dialog.showModal();
+    closeRef.current?.focus({ preventScroll: true });
+    return () => {
+      dialog.close();
+      trigger?.focus({ preventScroll: true });
     };
-    window.addEventListener("keydown", onKeyDown);
-    return () => { cancelAnimationFrame(focus); window.removeEventListener("keydown", onKeyDown); triggerRef.current?.focus(); };
   }, [isModalOpen]);
+  const wrapDialogTab = (event: KeyboardEvent<HTMLDialogElement>) => {
+    if (event.key !== "Tab") return;
+    const from = event.shiftKey ? closeRef.current : applyRef.current;
+    const to = event.shiftKey ? applyRef.current : closeRef.current;
+    if (event.target !== from) return;
+    event.preventDefault();
+    to?.focus();
+  };
   const [dateRange, setDateRange] = useState<DateRange | undefined>(() => {
     if (value.startsWith("custom:")) {
       const [start, end] = value.slice("custom:".length).split("_");
@@ -131,7 +138,12 @@ export function RangeSwitcher({ value, onChange, timezone }: RangeSwitcherProps)
             <ChevronDown className="h-4 w-4 text-muted-foreground" />
           </button>
         </DropdownMenuTrigger>
-        <DropdownMenuContent align="end" className="min-w-[11rem] max-h-[var(--radix-dropdown-menu-content-available-height)] overflow-y-auto">
+        <DropdownMenuContent align="end" className="min-w-[11rem] max-h-[var(--radix-dropdown-menu-content-available-height)] overflow-y-auto" onCloseAutoFocus={(event) => {
+          if (!openingDialog.current) return;
+          openingDialog.current = false;
+          event.preventDefault();
+          setIsModalOpen(true);
+        }}>
           {timezoneText ? <p className="max-w-72 break-words px-2 py-2 text-xs leading-normal text-muted-foreground">{timezoneText}</p> : null}
           <DropdownMenuRadioGroup value={value} onValueChange={(nextValue) => onChange(nextValue as RangeKey)}>
             {ranges.map((range) => (
@@ -147,7 +159,7 @@ export function RangeSwitcher({ value, onChange, timezone }: RangeSwitcherProps)
           </DropdownMenuRadioGroup>
           <div className="h-px bg-border my-1" />
           <DropdownMenuItem
-            onSelect={() => setIsModalOpen(true)}
+            onSelect={() => { openingDialog.current = true; }}
             className="text-primary font-medium focus:text-primary cursor-pointer justify-center"
           >
             {t("range_switcher.custom_range")}
@@ -157,31 +169,33 @@ export function RangeSwitcher({ value, onChange, timezone }: RangeSwitcherProps)
 
       {isModalOpen &&
         createPortal(
-          <div
-            className="absolute inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 transition-all duration-300"
-            onClick={() => setIsModalOpen(false)}
+          <dialog
+            ref={dialogRef}
+            aria-modal="true"
+            aria-labelledby="pulse-range-title"
+            className="pulse-range-dialog bg-surface border border-border rounded-2xl text-foreground shadow-2xl"
+            onCancel={(event) => { event.preventDefault(); setIsModalOpen(false); }}
+            onKeyDown={wrapDialogTab}
+            onClick={(event) => {
+              if (event.target !== event.currentTarget) return;
+              const { left, top, right, bottom } = event.currentTarget.getBoundingClientRect();
+              if (event.clientX < left || event.clientX >= right || event.clientY < top || event.clientY >= bottom) setIsModalOpen(false);
+            }}
           >
-            <div
-              ref={dialogRef}
-              role="dialog"
-              aria-modal="true"
-              aria-labelledby="pulse-range-title"
-              className="bg-surface border border-border rounded-2xl w-full max-w-sm max-h-full overflow-y-auto p-6 shadow-2xl flex flex-col space-y-4 animate-in fade-in zoom-in-95 duration-200"
-              onClick={(e) => e.stopPropagation()}
-            >
-              <div className="flex items-center justify-between border-b border-border/60 pb-3">
-                <h3 id="pulse-range-title" className="text-lg font-bold text-foreground">{t("range_switcher.modal_title")}</h3>
-                <button
-                  ref={closeRef}
-                  type="button"
-                  onClick={() => setIsModalOpen(false)}
-                  className="rounded-lg p-1 text-muted-foreground hover:bg-white/5 hover:text-foreground transition cursor-pointer"
-                  aria-label={t("range_switcher.modal_close_aria")}
-                >
-                  <X className="h-5 w-5" />
-                </button>
-              </div>
+            <header className="pulse-range-dialog-header flex items-center justify-between gap-3 border-b border-border/60">
+              <h3 id="pulse-range-title" className="text-lg font-bold text-foreground">{t("range_switcher.modal_title")}</h3>
+              <button
+                ref={closeRef}
+                type="button"
+                onClick={() => setIsModalOpen(false)}
+                className="rounded-lg p-1 text-muted-foreground hover:bg-white/5 hover:text-foreground transition cursor-pointer"
+                aria-label={t("range_switcher.modal_close_aria")}
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </header>
 
+            <div className="pulse-range-dialog-body space-y-4">
               {timezoneText ? <p className="break-words text-xs leading-normal text-muted-foreground">{timezoneText}</p> : null}
 
               <div className="flex flex-col items-center py-2 space-y-3">
@@ -216,35 +230,36 @@ export function RangeSwitcher({ value, onChange, timezone }: RangeSwitcherProps)
               </div>
 
               {error && (
-                <p className="text-xs text-error font-medium text-center">{error}</p>
+                <p role="alert" className="text-xs text-error font-medium text-center">{error}</p>
               )}
-
-              <div className="flex gap-2 pt-2">
-                <button
-                  type="button"
-                  onClick={() => setDateRange(undefined)}
-                  className="flex-1 rounded-lg border border-border py-2 text-xs font-medium hover:bg-muted transition cursor-pointer text-muted-foreground"
-                >
-                  {t("range_switcher.btn_clear")}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setIsModalOpen(false)}
-                  className="flex-1 rounded-lg border border-border py-2 text-xs font-medium hover:bg-muted transition cursor-pointer"
-                >
-                  {t("range_switcher.btn_cancel")}
-                </button>
-                <button
-                  type="button"
-                  onClick={handleApply}
-                  className="flex-1 rounded-lg bg-primary py-2 text-xs font-medium text-primary-foreground hover:opacity-90 transition shadow-glow cursor-pointer"
-                >
-                  {t("range_switcher.btn_apply")}
-                </button>
-              </div>
             </div>
-          </div>,
-          document.querySelector("[data-app-content]") ?? document.body
+
+            <footer className="pulse-range-dialog-footer flex flex-wrap gap-2 border-t border-border/60">
+              <button
+                type="button"
+                onClick={() => setDateRange(undefined)}
+                className="flex-1 rounded-lg border border-border py-2 text-xs font-medium hover:bg-muted transition cursor-pointer text-muted-foreground"
+              >
+                {t("range_switcher.btn_clear")}
+              </button>
+              <button
+                type="button"
+                onClick={() => setIsModalOpen(false)}
+                className="flex-1 rounded-lg border border-border py-2 text-xs font-medium hover:bg-muted transition cursor-pointer"
+              >
+                {t("range_switcher.btn_cancel")}
+              </button>
+              <button
+                ref={applyRef}
+                type="button"
+                onClick={handleApply}
+                className="flex-1 rounded-lg bg-primary py-2 text-xs font-medium text-primary-foreground hover:opacity-90 transition shadow-glow cursor-pointer"
+              >
+                {t("range_switcher.btn_apply")}
+              </button>
+            </footer>
+          </dialog>,
+          document.body
         )}
     </>
   );

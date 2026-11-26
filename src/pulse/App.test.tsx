@@ -340,7 +340,9 @@ describe("App", () => {
     await waitFor(() => expect(document.activeElement).toBe(document.getElementById("pulse-pace-details")));
     const details = document.getElementById("pulse-pace-details")!;
     if (skinId === "paper") {
-      expect(screen.getByTestId("dashboard-hero").firstElementChild).toContainElement(details);
+      const hero = screen.getByTestId("dashboard-hero");
+      expect(hero.firstElementChild).toContainElement(screen.getByTestId("today-summary"));
+      expect(hero.querySelector(".pulse-paper-dashboard-page--quota")).toContainElement(details);
       expect(within(details).getByTestId("pulse-pace-summary")).toBeVisible();
       expect(within(details).queryByTestId("coach-window-details")).not.toBeInTheDocument();
       expect(within(details).getByText(quotaCoachCopy("en", "notice"), { selector: "summary" }).parentElement).not.toHaveAttribute("open");
@@ -776,11 +778,11 @@ describe("App", () => {
     render(<App />);
     await screen.findByTestId("dashboard-hero");
     await userEvent.click(screen.getByTestId("open-widget"));
-    expect(await screen.findByText("This action is available in the desktop app. The browser demo does not create windows or files.")).toBeVisible();
+    expect(await screen.findByText("Open the desktop app to show the floating widget.")).toBeVisible();
     await userEvent.click(screen.getByTestId("help"));
     const guide = screen.getByTestId("getting-started");
     await userEvent.click(within(guide).getByTestId("create-shortcuts"));
-    expect(within(guide).getByText("This action is available in the desktop app. The browser demo does not create windows or files.")).toBeVisible();
+    expect(within(guide).getByText("Open the desktop app to create shortcuts.")).toBeVisible();
     expect(invokeMock).not.toHaveBeenCalledWith("create_pulse_shortcuts");
     expect(invokeMock).not.toHaveBeenCalledWith("widget_action", { action: "show" });
     expect(screen.queryByText("Desktop and Start menu shortcuts are ready.")).not.toBeInTheDocument();
@@ -1677,7 +1679,8 @@ describe("App", () => {
     await userEvent.click(screen.getByRole("menuitemradio", { name: "Last 90 Days" }));
 
     expect(screen.getByRole("status", { name: "Loading Last 90 Days" })).toBeInTheDocument();
-    expect(screen.getByText("Loading usage and cost data for the selected window.")).toBeInTheDocument();
+    expect(screen.getByTestId("local-range-notice")).toHaveTextContent("Showing the last available data for 2026-03-28 – 2026-04-26.");
+    expect(screen.getByRole("button", { name: "Export" })).toBeDisabled();
 
     resolve90DayOverview({
       range: "90d",
@@ -3352,7 +3355,8 @@ describe("App", () => {
     expect(invokeMock).not.toHaveBeenCalledWith("reset_usage_state");
   });
 
-  it("exports the selected range to Excel", async () => {
+  it("exports the displayed dates to Excel even if the preset has moved to the next day", async () => {
+    vi.setSystemTime(new Date("2026-04-27T01:00:00Z"));
     saveMock.mockResolvedValue("/tmp/codex-usage-30d.xlsx");
     invokeMock.mockImplementation(async (command: string, args?: { range?: string }) => {
       if (command === "check_for_updates") return { hasUpdate: false };
@@ -3428,11 +3432,97 @@ describe("App", () => {
         filters: [{ name: "Excel Workbook", extensions: ["xlsx"] }],
       });
       expect(invokeMock).toHaveBeenLastCalledWith("export_usage", {
-        range: "30d",
+        range: "custom:2026-03-28_2026-04-26",
         format: "xlsx",
         path: "/tmp/codex-usage-30d.xlsx",
       });
     });
+  });
+
+  it("ignores an earlier range rejection, labels the retained range and disables exports until retry succeeds", async () => {
+    mockLoadedDashboard();
+    const loaded = invokeMock.getMockImplementation()!;
+    let reject7: (cause: Error) => void = () => {};
+    let reject90: (cause: Error) => void = () => {};
+    let requests90 = 0;
+    invokeMock.mockImplementation(async (command: string, args?: { range?: string }) => {
+      if (command === "fetch_overview" && args?.range === "7d") {
+        return new Promise((_, reject) => { reject7 = reject; });
+      }
+      if (command === "fetch_overview" && args?.range === "90d") {
+        if (++requests90 === 1) return new Promise((_, reject) => { reject90 = reject; });
+        return { ...overview(4700), range: "90d", days: 90 };
+      }
+      return loaded(command, args);
+    });
+    const user = userEvent.setup();
+    render(<App />);
+    await user.click(screen.getByTestId("analysis-nav-tab"));
+    const exportButton = await screen.findByRole("button", { name: "Export" });
+    await waitFor(() => expect(exportButton).toBeEnabled());
+    for (const label of ["Last 7 Days", "Last 90 Days"]) {
+      await user.click(screen.getByRole("button", { name: "Select time range" }));
+      await user.click(screen.getByRole("menuitemradio", { name: label }));
+    }
+    await act(async () => reject7(new Error("earlier request failed")));
+    expect(screen.getByTestId("local-range-notice")).toHaveTextContent("Loading Last 90 Days");
+    expect(exportButton).toBeDisabled();
+    await act(async () => reject90(new Error("latest request failed")));
+    const notice = screen.getByTestId("local-range-notice");
+    expect(notice).toHaveTextContent("Could not load Last 90 Days.");
+    expect(notice).toHaveTextContent("Showing the last available data");
+    expect(notice).not.toHaveTextContent("earlier request failed");
+    expect(exportButton).toBeDisabled();
+    await user.click(within(notice).getByRole("button", { name: "Retry range" }));
+    await waitFor(() => expect(exportButton).toBeEnabled());
+    expect(screen.queryByTestId("local-range-notice")).not.toBeInTheDocument();
+  });
+
+  it("distinguishes dates with no retained records from retained zero use", async () => {
+    mockLoadedDashboard();
+    const loaded = invokeMock.getMockImplementation()!;
+    const zero = overview(0);
+    const base = { ...zero, totals: { ...zero.totals, costUSD: 0 } };
+    invokeMock.mockImplementation(async (command: string, args?: { range?: string }) => {
+      if (command === "fetch_overview" && args?.range === "30d") {
+        return { ...base, retainedFrom: "2026-06-12" };
+      }
+      if (command === "fetch_overview" && args?.range === "7d") {
+        return { ...base, range: "7d", startDate: "2026-06-05", retainedFrom: "2026-06-05" };
+      }
+      return loaded(command, args);
+    });
+    const user = userEvent.setup();
+    render(<App />);
+    await user.click(screen.getByTestId("analysis-nav-tab"));
+    const coverage = await screen.findByTestId("analysis-retention-coverage");
+    const summary = screen.getByTestId("range-summary");
+    expect(coverage).toHaveTextContent("No retained local records for this range.");
+    expect(summary.querySelector(".pulse-analysis-totals dd")).toHaveTextContent("—");
+    await user.click(screen.getByRole("button", { name: "Select time range" }));
+    await user.click(screen.getByRole("menuitemradio", { name: "Last 7 Days" }));
+    await waitFor(() => expect(coverage).not.toBeInTheDocument());
+    expect(summary.querySelector(".pulse-analysis-totals dd")).toHaveTextContent(/^0$/);
+  });
+
+  it("localizes the offline update failure and keeps its technical detail collapsed", async () => {
+    mockLoadedDashboard();
+    const loaded = invokeMock.getMockImplementation()!;
+    invokeMock.mockImplementation(async (command: string, args?: { range?: string }) => {
+      if (command === "check_for_updates") throw "Updates unavailable in offline mode";
+      return loaded(command, args);
+    });
+    await i18n.changeLanguage("zh");
+    const user = userEvent.setup();
+    render(<App />);
+    await user.click(screen.getByTestId("settings-nav-tab"));
+    await user.click(screen.getByRole("tab", { name: "通用" }));
+    await user.click(screen.getByRole("button", { name: "检查更新" }));
+    expect(await screen.findByText("离线模式下无法检查更新。关闭离线模式并重启 Pulse 后重试。")).toBeVisible();
+    const reason = screen.getByText("Updates unavailable in offline mode");
+    expect(reason.closest("details")).not.toHaveAttribute("open");
+    await user.click(within(reason.closest("details")!).getByText("技术详情"));
+    expect(reason.closest("details")).toHaveAttribute("open");
   });
 
   it.each(["save", "write"] as const)("keeps %s export failures separate from scan errors and recovers on retry", async (failure) => {

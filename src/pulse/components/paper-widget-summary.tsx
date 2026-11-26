@@ -13,12 +13,12 @@ import { ReadingInfo } from "@/components/reading-info";
 import "./paper-widget-summary.css";
 
 const companion = {
-  en: { today: "Today · local", official: "Today's observed quota", observed: "Observed window", note: "Partial observations. Each quota window is measured separately." },
-  zh: { today: "今日 · 本机", official: "今日官方观测", observed: "观测窗口", note: "仅为部分观测，各额度窗口分别计算。" },
-  "zh-Hant": { today: "今日 · 本機", official: "今日官方觀測", observed: "觀測視窗", note: "僅為部分觀測，各額度視窗分別計算。" },
-  ja: { today: "今日 · ローカル", official: "今日の公式クォータ観測", observed: "観測ウィンドウ", note: "部分的な観測です。各ウィンドウは個別に計測されます。" },
-  ko: { today: "오늘 · 로컬", official: "오늘의 공식 한도 관측", observed: "관측 기간", note: "부분 관측입니다. 각 한도 기간은 별도로 측정됩니다." },
-  de: { today: "Heute · lokal", official: "Heute beobachtetes Kontingent", observed: "Beobachtetes Fenster", note: "Teilbeobachtungen. Jedes Kontingentfenster wird separat gemessen." },
+  en: { today: "Today · local", cycleToday: "Observed today in this cycle", observed: "Observed window", note: "Partial observations from today's portion of this quota cycle. Official quota history can include other cycles on the same day." },
+  zh: { today: "今日 · 本机", cycleToday: "本轮今日观测", observed: "观测窗口", note: "仅显示本轮额度周期内的今日部分观测。官方额度记录可能包含今天的其他周期。" },
+  "zh-Hant": { today: "今日 · 本機", cycleToday: "本輪今日觀測", observed: "觀測視窗", note: "僅顯示本輪額度週期內的今日部分觀測。官方額度記錄可能包含今天的其他週期。" },
+  ja: { today: "今日 · ローカル", cycleToday: "現在の周期の今日の観測", observed: "観測ウィンドウ", note: "現在の上限周期で今日観測できた分を表示します。公式クォータ履歴には同日の別の周期も含まれる場合があります。" },
+  ko: { today: "오늘 · 로컬", cycleToday: "이번 주기의 오늘 관측", observed: "관측 기간", note: "현재 한도 주기에서 오늘 관측한 일부 기록을 표시합니다. 공식 한도 기록에는 같은 날의 다른 주기가 포함될 수 있습니다." },
+  de: { today: "Heute · lokal", cycleToday: "Heute im laufenden Zyklus", observed: "Beobachtetes Fenster", note: "Teilbeobachtungen für heute im laufenden Kontingentzyklus. Der offizielle Kontingentverlauf kann weitere Zyklen desselben Tages enthalten." },
 };
 function localCopy(language: string) {
   const value=language.toLowerCase();
@@ -116,7 +116,7 @@ export function PaperWidgetSummary({data,snapshot,failed,localFailed=false,langu
     <div className="paper-widget-observed-row">
       <button className="paper-widget-observed" type="button" onClick={onDetails}>
         <BarChart3 size={21}/>
-        <span><strong>{labels.official}</strong><span>{coach.window ? formatCoachWindow(coach.window, language) : labels.observed} · {observed?.consumedPercentPoints == null ? copy('unknown') : quotaCoachFeedback(language, 'points', { points: formatCoachNumber(observed.consumedPercentPoints, language, 2) })}</span></span>
+        <span><strong>{labels.cycleToday}</strong><span>{coach.window ? formatCoachWindow(coach.window, language) : labels.observed} · {observed?.consumedPercentPoints == null ? copy('unknown') : quotaCoachFeedback(language, 'points', { points: formatCoachNumber(observed.consumedPercentPoints, language, 2) })}</span></span>
       </button>
       <ReadingInfo label={labels.observed}>{labels.note}</ReadingInfo>
     </div>

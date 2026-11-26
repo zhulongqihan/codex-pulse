@@ -379,13 +379,21 @@ pub fn query_day_sessions(
     Ok(sessions)
 }
 
-pub fn prepare_index(db: &Connection) -> Result<String, String> {
+pub fn with_current_index<T>(
+    db: &Connection,
+    query: impl FnOnce(&Connection, &str) -> Result<T, String>,
+) -> Result<T, String> {
     let _guard = crate::scanner::SCAN_MUTEX
         .lock()
         .map_err(|error| error.to_string())?;
-    let timezone = resolve_app_timezone();
-    sync_index(db, &crate::scanner::default_codex_home(), &timezone)?;
-    Ok(timezone)
+    let tx = db
+        .unchecked_transaction()
+        .map_err(|error| error.to_string())?;
+    let timezone = db::usage_read_timezone(&tx, resolve_app_timezone())?;
+    sync_index(&tx, &crate::scanner::default_codex_home(), &timezone)?;
+    let result = query(&tx, &timezone)?;
+    tx.commit().map_err(|error| error.to_string())?;
+    Ok(result)
 }
 
 #[cfg(test)]

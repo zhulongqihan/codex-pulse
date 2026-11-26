@@ -31,7 +31,7 @@ A quiet quota-pacing companion for Codex on Windows: view remaining quota and re
 - **Exports and updates:** XLSX/Markdown contain range summary, daily, model and project statistics. Pulse updates verify the release signature, product, platform and package digest, preserving data and restoring the previous executable if startup fails.
 - **Help and feedback:** find usage guidance, experience discussions and bug reporting in settings. Preview a minimal summary of visible environment and selected options before copying it; account data, logs and conversations are not uploaded automatically.
 
-Paper tabs follow the left and right pages and switch to one sheet in narrow or short windows. Version 0.14.10 fixes clipped dates and resize jumps in the official quota chart, aligns dates in short local usage ranges, and corrects keyboard focus in the fullscreen chart. [Release notes](docs/releases/v0.14.10.md#english).
+Paper tabs follow the left and right pages and switch to one sheet in narrow or short windows. Version 0.14.11 brings today's local tokens forward on that sheet and fixes local usage ranges, time zone grouping, date dialog keyboard navigation, and quota export wording. [Release notes](docs/releases/v0.14.11.md#english).
 
 Paper companion views with synthetic data: [pacing details](docs/screenshots/paper-0.14.6-pace-panel.png) · [system tray](docs/screenshots/paper-0.13.2-tray.png) · [Codex panel styling](docs/screenshots/paper-0.14.3-mcp.png).
 

@@ -1,10 +1,10 @@
 use crate::{
     codex_environment::selected_codex_environment,
-    date::{date_key_in_timezone, resolve_app_timezone},
+    date::{canonical_app_timezone, date_key_in_timezone, resolve_app_timezone},
     db::{
         delete_missing_daily_rows, delete_missing_session_file_rollups, query_session_file_rollup,
-        record_scan_run, upsert_daily_rows, upsert_session_file_rollups, ModelQuotaSample,
-        SessionFileRollup, SessionQuotaRollup,
+        record_scan_run, rollups_match_timezone, upsert_daily_rows, upsert_session_file_rollups,
+        ModelQuotaSample, SessionFileRollup, SessionQuotaRollup,
     },
     pricing::{calculate_cost_usd, PricingSource},
     session_file::{is_session_file, open_session_file, read_session_file},
@@ -70,15 +70,45 @@ pub fn scan_codex_usage(
     timezone: Option<String>,
 ) -> Result<ScanResponse, String> {
     let _guard = SCAN_MUTEX.lock().map_err(|error| error.to_string())?;
+    let started = Instant::now();
+    let home = codex_home.unwrap_or_else(default_codex_home);
+    let timezone = scan_timezone(timezone);
+    let scanned_at = Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Nanos, true);
     let tx = db
         .unchecked_transaction()
         .map_err(|error| error.to_string())?;
-    let db = &tx;
-    let total_started = Instant::now();
-    let timezone = timezone.unwrap_or_else(resolve_app_timezone);
-    let scanned_at = Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Nanos, true);
-    let index_home = codex_home.clone().unwrap_or_else(default_codex_home);
-    let scan = load_daily_rows(db, codex_home, &timezone, &scanned_at, pricing_source)?;
+    let files = find_session_files(&home)?;
+    let mut scan = refresh_all_rollups(
+        &tx,
+        &home,
+        &files,
+        &timezone,
+        &scanned_at,
+        pricing_source,
+        started,
+    )?;
+    tx.commit().map_err(|error| error.to_string())?;
+    scan.metrics.total_ms = started.elapsed().as_millis();
+    Ok(scan)
+}
+
+fn scan_timezone(timezone: Option<String>) -> String {
+    timezone
+        .as_deref()
+        .map(canonical_app_timezone)
+        .unwrap_or_else(resolve_app_timezone)
+}
+
+fn refresh_all_rollups(
+    db: &Connection,
+    home: &Path,
+    files: &[SessionFile],
+    timezone: &str,
+    scanned_at: &str,
+    pricing: &PricingSource,
+    started: Instant,
+) -> Result<ScanResponse, String> {
+    let scan = load_daily_rows(db, files, timezone, scanned_at, pricing)?;
     let db_started = Instant::now();
 
     upsert_daily_rows(db, &scan.rows)?;
@@ -88,20 +118,19 @@ pub fn scan_codex_usage(
         .map(|row| row.date.clone())
         .collect::<Vec<_>>();
     delete_missing_daily_rows(db, &active_dates)?;
-    upsert_session_file_rollups(db, &scan.changed_rollups, &scanned_at)?;
+    upsert_session_file_rollups(db, &scan.changed_rollups, scanned_at)?;
     delete_missing_session_file_rollups(db, &scan.active_paths)?;
-    crate::project_sessions::sync_index(db, &index_home, &timezone)?;
-    record_scan_run(db, &scanned_at, &timezone, scan.rows.len())?;
+    crate::project_sessions::sync_index(db, home, timezone)?;
+    record_scan_run(db, scanned_at, timezone, scan.rows.len())?;
 
-    tx.commit().map_err(|error| error.to_string())?;
     let mut metrics = scan.metrics;
     metrics.db_ms = db_started.elapsed().as_millis();
-    metrics.total_ms = total_started.elapsed().as_millis();
+    metrics.total_ms = started.elapsed().as_millis();
 
     Ok(ScanResponse {
         imported_days: scan.rows.len(),
-        scanned_at,
-        timezone,
+        scanned_at: scanned_at.into(),
+        timezone: timezone.into(),
         metrics,
     })
 }
@@ -117,7 +146,7 @@ pub fn rescan_session(
     let _guard = SCAN_MUTEX.lock().map_err(|error| error.to_string())?;
     let started = Instant::now();
     let home = codex_home.unwrap_or_else(default_codex_home);
-    let timezone = timezone.unwrap_or_else(resolve_app_timezone);
+    let timezone = scan_timezone(timezone);
     let scanned_at = Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Nanos, true);
     let tx = db
         .unchecked_transaction()
@@ -132,7 +161,7 @@ pub fn rescan_session(
     }) {
         return Err("Session file is not indexed".into());
     }
-    let files = find_session_files(Some(home.clone()))?;
+    let files = find_session_files(&home)?;
     let file = files
         .iter()
         .find(|file| file.cache_key == path)
@@ -145,24 +174,28 @@ pub fn rescan_session(
         })
         .ok_or_else(|| "Session file no longer exists".to_string())?;
     let raw = read_session_file(&file.path)?;
-    let rollup = parse_rollup(file, &raw, &timezone, &scanned_at, pricing)?;
-    remove_duplicate_rollups(&tx, file, &cached)?;
-    upsert_session_file_rollups(&tx, &[rollup], &scanned_at)?;
-    let scan = finish_scoped_scan(
-        &tx,
-        &home,
-        &timezone,
-        &scanned_at,
-        pricing,
-        started,
-        ScanMetrics {
-            files_scanned: files.len(),
-            files_parsed: 1,
-            bytes_read: file.size_bytes as u64,
-            parse_ms: started.elapsed().as_millis(),
-            ..ScanMetrics::default()
-        },
-    )?;
+    let scan = if rollups_match_timezone(&tx, &timezone)? {
+        let rollup = parse_rollup(file, &raw, &timezone, &scanned_at, pricing)?;
+        remove_duplicate_rollups(&tx, file, &cached)?;
+        upsert_session_file_rollups(&tx, &[rollup], &scanned_at)?;
+        finish_scoped_scan(
+            &tx,
+            &home,
+            &timezone,
+            &scanned_at,
+            pricing,
+            started,
+            ScanMetrics {
+                files_scanned: files.len(),
+                files_parsed: 1,
+                bytes_read: file.size_bytes as u64,
+                parse_ms: started.elapsed().as_millis(),
+                ..ScanMetrics::default()
+            },
+        )?
+    } else {
+        refresh_all_rollups(&tx, &home, &files, &timezone, &scanned_at, pricing, started)?
+    };
     let mut detail =
         crate::session_replay::fetch_session_detail_with_raw(&tx, &file.cache_key, raw)?;
     let mut session = crate::db::query_session_detail(&tx, &file.cache_key)?;
@@ -202,13 +235,19 @@ pub fn rescan_project(
     let _guard = SCAN_MUTEX.lock().map_err(|error| error.to_string())?;
     let started = Instant::now();
     let home = codex_home.unwrap_or_else(default_codex_home);
-    let timezone = timezone.unwrap_or_else(resolve_app_timezone);
+    let timezone = scan_timezone(timezone);
     let scanned_at = Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Nanos, true);
     let tx = db
         .unchecked_transaction()
         .map_err(|error| error.to_string())?;
+    let files = find_session_files(&home)?;
+    if !rollups_match_timezone(&tx, &timezone)? {
+        let scan =
+            refresh_all_rollups(&tx, &home, &files, &timezone, &scanned_at, pricing, started)?;
+        tx.commit().map_err(|error| error.to_string())?;
+        return Ok(scan);
+    }
     let cached = crate::db::query_all_session_file_rollups(&tx)?;
-    let files = find_session_files(Some(home.clone()))?;
     let mut metrics = ScanMetrics {
         files_scanned: files.len(),
         ..ScanMetrics::default()
@@ -394,7 +433,8 @@ pub(crate) fn default_codex_home() -> PathBuf {
 #[cfg(test)]
 fn load_token_usage_events(codex_home: Option<PathBuf>) -> Result<Vec<UsageEvent>, String> {
     let mut events = Vec::new();
-    for file in find_session_files(codex_home)? {
+    let home = codex_home.unwrap_or_else(default_codex_home);
+    for file in find_session_files(&home)? {
         load_session_file(&file.path, &mut events)?;
     }
 
@@ -411,13 +451,13 @@ struct DailyRowsScan {
 
 fn load_daily_rows(
     db: &Connection,
-    codex_home: Option<PathBuf>,
+    files: &[SessionFile],
     timezone: &str,
     updated_at: &str,
     pricing_source: &PricingSource,
 ) -> Result<DailyRowsScan, String> {
     let parse_started = Instant::now();
-    let files = find_session_files(codex_home)?;
+    let reuse_rollups = rollups_match_timezone(db, timezone)?;
     let mut metrics = ScanMetrics {
         files_scanned: files.len(),
         ..ScanMetrics::default()
@@ -428,9 +468,12 @@ fn load_daily_rows(
 
     for file in files {
         active_paths.push(file.cache_key.clone());
-        if let Some(mut rollup) =
+        let cached = if reuse_rollups {
             query_session_file_rollup(db, &file.cache_key, file.modified_at_ms, file.size_bytes)?
-        {
+        } else {
+            None
+        };
+        if let Some(mut rollup) = cached {
             metrics.files_reused += 1;
             if rollup
                 .prompt_title
@@ -454,7 +497,7 @@ fn load_daily_rows(
         metrics.files_parsed += 1;
         metrics.bytes_read += file.size_bytes as u64;
         changed_rollups.push(SessionFileRollup {
-            path: file.cache_key,
+            path: file.cache_key.clone(),
             modified_at_ms: file.modified_at_ms,
             size_bytes: file.size_bytes,
             rows: rows.clone(),
@@ -477,9 +520,8 @@ fn load_daily_rows(
     })
 }
 
-fn find_session_files(codex_home: Option<PathBuf>) -> Result<Vec<SessionFile>, String> {
-    let codex_home = codex_home.unwrap_or_else(default_codex_home);
-    let metadata = fs::metadata(&codex_home).map_err(|error| {
+fn find_session_files(codex_home: &Path) -> Result<Vec<SessionFile>, String> {
+    let metadata = fs::metadata(codex_home).map_err(|error| {
         format!("Cannot access Codex directory {}: {error}", codex_home.display())
     })?;
     if !metadata.is_dir() {
@@ -538,7 +580,7 @@ fn find_session_files(codex_home: Option<PathBuf>) -> Result<Vec<SessionFile>, S
 }
 
 pub(crate) fn count_session_files(home: &Path) -> Result<usize, String> {
-    find_session_files(Some(home.to_path_buf())).map(|files| files.len())
+    find_session_files(home).map(|files| files.len())
 }
 
 fn session_file_id(path: &Path) -> Option<String> {
@@ -1967,7 +2009,7 @@ mod tests {
 
         let unchanged = load_daily_rows(
             &db,
-            Some(codex_home.clone()),
+            &find_session_files(&codex_home).unwrap(),
             "UTC",
             "2026-05-08T00:00:00.000Z",
             &pricing_source,
@@ -2054,6 +2096,10 @@ mod tests {
             "legacy",
         )
         .unwrap();
+        db.execute(
+            "INSERT INTO scan_runs (scanned_at, timezone, imported_days) VALUES ('legacy', 'UTC', 1)",
+            [],
+        ).unwrap();
 
         let scan = scan_codex_usage(
             &mut db,
@@ -2610,6 +2656,123 @@ mod tests {
                 .unwrap()
         })
         .collect()
+    }
+
+    #[test]
+    fn timezone_change_repartitions_all_files_even_when_requested_from_a_scoped_scan() {
+        let (directory, home, mut db) = scoped_fixture();
+        let first_path = home.join("sessions").join("a.jsonl");
+        fs::write(
+            &first_path,
+            scoped_log("/repo/a", 100, "first").replace("2026-09-01T09:", "2026-08-31T23:"),
+        )
+        .unwrap();
+        fs::write(
+            home.join("sessions/b.jsonl"),
+            scoped_log("/repo/b", 200, "second").replace("2026-09-01T09:", "2026-08-31T23:"),
+        )
+        .unwrap();
+        let pricing = PricingSource::embedded();
+        let range = "custom:2026-08-31_2026-09-01";
+        let utc = || Some("UTC".into());
+        let shanghai = || Some("Asia/Shanghai".into());
+
+        let cold = scan_codex_usage(&mut db, &pricing, Some(home.clone()), utc()).unwrap();
+        assert_eq!(cold.metrics.files_parsed, 2);
+        let before = crate::overview::get_overview(&db, range, shanghai(), &pricing).unwrap();
+        assert_eq!(before.timezone, "UTC");
+        assert_eq!(before.daily[0].total_tokens, 320);
+        assert_eq!(before.daily[1].total_tokens, 0);
+        assert_eq!(
+            crate::overview::get_monthly_usage(&db, shanghai())
+                .unwrap()
+                .timezone,
+            "UTC"
+        );
+
+        let changed =
+            rescan_project(&mut db, &pricing, Some(home.clone()), shanghai(), "/repo/a").unwrap();
+        assert_eq!(changed.metrics.files_reused, 0);
+        assert_eq!(changed.metrics.files_parsed, 2);
+        let after = crate::overview::get_overview(&db, range, shanghai(), &pricing).unwrap();
+        assert_eq!(after.timezone, "Asia/Shanghai");
+        assert_eq!(after.daily[0].total_tokens, 0);
+        assert_eq!(after.daily[1].total_tokens, 320);
+        assert_eq!(after.retained_from.as_deref(), Some("2026-09-01"));
+        let project_sessions =
+            crate::project_sessions::query_days(&db, "/repo/b", range, "", None, &after.timezone)
+                .unwrap();
+        assert_eq!(project_sessions.days[0].date, "2026-09-01");
+        assert_eq!(project_sessions.days[0].total_tokens, 210);
+
+        let warm = scan_codex_usage(&mut db, &pricing, Some(home.clone()), shanghai()).unwrap();
+        assert_eq!(warm.metrics.files_reused, 2);
+        assert_eq!(warm.metrics.files_parsed, 0);
+        let returned = rescan_session(
+            &mut db,
+            &pricing,
+            Some(home),
+            utc(),
+            first_path.to_str().unwrap(),
+        )
+        .unwrap();
+        assert_eq!(returned.scan.metrics.files_parsed, 2);
+        assert_eq!(returned.session.daily_usage[0].date, "2026-08-31");
+        let final_rows = crate::db::query_all_daily_rows(&db).unwrap();
+        assert_eq!(final_rows[0].date, "2026-08-31");
+        assert_eq!(final_rows[0].total_tokens, 320);
+        drop(db);
+        fs::remove_dir_all(directory).unwrap();
+    }
+
+    #[test]
+    fn legacy_mixed_timezone_cache_rebuilds_and_rolls_back_on_a_late_failure() {
+        let (directory, home, mut db) = scoped_fixture();
+        fs::write(
+            home.join("sessions/a.jsonl"),
+            scoped_log("/repo/a", 100, "original").replace("2026-09-01T09:", "2026-08-31T23:"),
+        )
+        .unwrap();
+        let pricing = PricingSource::embedded();
+        scan_codex_usage(&mut db, &pricing, Some(home.clone()), Some("UTC".into())).unwrap();
+        db.execute_batch(
+            "UPDATE scan_runs SET day_partition_version = 0;
+             INSERT INTO scan_runs (scanned_at, timezone, imported_days)
+                 VALUES ('legacy', 'Asia/Shanghai', 1);
+             CREATE TEMP TRIGGER reject_partition BEFORE INSERT ON scan_runs
+             BEGIN SELECT RAISE(ABORT, 'synthetic write failure'); END;",
+        )
+        .unwrap();
+        assert!(
+            crate::overview::get_overview(&db, "30d", Some("Asia/Shanghai".into()), &pricing)
+                .unwrap_err()
+                .contains("needs a local log rescan")
+        );
+        let before = scoped_snapshot(&db);
+        let result = scan_codex_usage(
+            &mut db,
+            &pricing,
+            Some(home.clone()),
+            Some("Asia/Shanghai".into()),
+        );
+        assert!(result.unwrap_err().contains("synthetic write failure"));
+        assert_eq!(scoped_snapshot(&db), before);
+        assert_eq!(
+            crate::db::query_all_daily_rows(&db).unwrap()[0].date,
+            "2026-08-31"
+        );
+        assert!(!rollups_match_timezone(&db, "Asia/Shanghai").unwrap());
+
+        db.execute_batch("DROP TRIGGER reject_partition;").unwrap();
+        let repaired =
+            scan_codex_usage(&mut db, &pricing, Some(home), Some("Asia/Shanghai".into())).unwrap();
+        assert_eq!(repaired.metrics.files_parsed, 1);
+        let final_rows = crate::db::query_all_daily_rows(&db).unwrap();
+        assert_eq!(final_rows[0].date, "2026-09-01");
+        assert_eq!(final_rows[0].total_tokens, 110);
+        assert!(rollups_match_timezone(&db, "Asia/Shanghai").unwrap());
+        drop(db);
+        fs::remove_dir_all(directory).unwrap();
     }
 
     #[test]

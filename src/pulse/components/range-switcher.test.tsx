@@ -5,7 +5,16 @@ import { beforeAll, describe, expect, it, vi } from "vitest";
 import { RangeSwitcher } from "./range-switcher";
 import i18n from "@/i18n";
 
-beforeAll(async () => { await i18n.changeLanguage("en"); });
+beforeAll(async () => {
+  await i18n.changeLanguage("en");
+  // jsdom exposes the element but leaves the browser's modal methods unimplemented.
+  if (typeof HTMLDialogElement.prototype.showModal !== "function") {
+    Object.defineProperties(HTMLDialogElement.prototype, {
+      showModal: { configurable: true, value(this: HTMLDialogElement) { this.open = true; } },
+      close: { configurable: true, value(this: HTMLDialogElement) { this.open = false; } },
+    });
+  }
+});
 
 describe("range selection", () => {
   it("exposes every retained date through an explicit all-history option", async () => {
@@ -38,8 +47,16 @@ describe("range selection", () => {
     const trigger = screen.getByRole("button", { name: "Select time range" });
     await user.click(trigger);
     await user.click(screen.getByRole("menuitem", { name: "Select Custom Range..." }));
-    expect(screen.getByRole("dialog")).toBeInTheDocument();
-    fireEvent.keyDown(window, { key: "Escape" });
+    const dialog = await screen.findByRole("dialog");
+    const close = within(dialog).getByRole("button", { name: i18n.t("range_switcher.modal_close_aria") });
+    const apply = within(dialog).getByRole("button", { name: i18n.t("range_switcher.btn_apply") });
+    expect(dialog).toHaveAttribute("open");
+    expect(close).toHaveFocus();
+    await user.tab({ shift: true });
+    expect(apply).toHaveFocus();
+    await user.tab();
+    expect(close).toHaveFocus();
+    fireEvent(dialog, new Event("cancel", { cancelable: true }));
     await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
     expect(trigger).toHaveFocus();
     expect(onChange).not.toHaveBeenCalled();
@@ -55,7 +72,7 @@ describe("range selection", () => {
       await user.click(screen.getByRole("button", { name: "Select time range" }));
       expect(screen.getByText(/Usage time zone: America\/Los_Angeles/)).toBeInTheDocument();
       await user.click(screen.getByRole("menuitem", { name: "Select Custom Range..." }));
-      const dialog = screen.getByRole("dialog");
+      const dialog = await screen.findByRole("dialog");
       expect(dialog).toHaveTextContent("America/Los_Angeles");
       expect(dialog.querySelector('[role="gridcell"][data-day="2026-11-07"]')).toHaveAttribute("data-disabled", "true");
       await user.click(within(dialog).getByRole("button", { name: i18n.t("range_switcher.btn_apply") }));
@@ -73,7 +90,7 @@ describe("range selection", () => {
     try {
       await user.click(screen.getByRole("button", { name: "Select time range" }));
       await user.click(screen.getByRole("menuitem", { name: "Select Custom Range..." }));
-      const dialog = screen.getByRole("dialog");
+      const dialog = await screen.findByRole("dialog");
       expect(dialog).toHaveTextContent("2026-11-07");
       expect(dialog.querySelector('[role="gridcell"][data-day="2026-11-07"]')).not.toHaveAttribute("data-disabled");
       await user.click(within(dialog).getByRole("button", { name: i18n.t("range_switcher.btn_apply") }));

@@ -760,6 +760,8 @@
     }
   },
   "settings": {
+    "update_check_offline": "離線模式無法檢查更新。關閉離線模式並重新啟動 Pulse 後再試。",
+    "update_check_failed": "無法檢查更新。請確認網路連線後重試。",
     "title": "設定",
     "subtitle": "管理外觀、帳號、桌面操作、資料來源與維護。",
     "nav_aria": "設定分類",
@@ -1017,6 +1019,14 @@
     "update_step_download": "第 1 步：下載並驗證更新套件。完成後仍需按「重新啟動以完成更新」。",
     "update_step_restart": "第 2 步：按「重新啟動以完成更新」後才會套用更新，目前程式仍在執行。",
     "no_short_window": "此帳號未傳回5小時視窗；此處僅查詢額度，不啟動視窗。"
+  },
+  "analysis_review": {
+    "range_failed": "無法讀取{{range}}。",
+    "range_unavailable": "{{range}}的資料尚未就緒。",
+    "previous_range": "目前顯示上次可用的資料（{{start}} 至 {{end}}）。",
+    "retry_range": "重試此範圍",
+    "coverage_unavailable": "此範圍內沒有本機保留記錄。",
+    "coverage_partial": "僅涵蓋部分日期。本機記錄從 {{date}} 開始。"
   },
   "reading_context": {
     "statistics_short": "統計時區：{{zone}}",

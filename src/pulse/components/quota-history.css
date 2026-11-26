@@ -23,7 +23,8 @@
 .pulse-quota-controls select { min-width:145px; }
 .pulse-quota-custom { display:flex; align-items:center; flex-wrap:wrap; gap:8px; }
 .pulse-quota-custom legend { font-size:12px; color:rgb(var(--muted-foreground)); margin-bottom:6px; }
-.pulse-quota-export { display:flex; flex-wrap:wrap; gap:6px; margin-inline-start:auto; }
+.pulse-quota-export { display:flex; align-items:center; flex-wrap:wrap; gap:6px; margin-inline-start:auto; }
+.pulse-quota-export-scope { color:rgb(var(--muted-foreground)); font-size:12px; line-height:1.5; margin-inline-end:4px; }
 .pulse-quota-context { display:flex; flex-wrap:wrap; gap:6px 20px; }
 .pulse-quota-total { padding-top:12px; border-top:1px solid rgb(var(--border)); }
 .pulse-quota-total dt { font-size:13px; color:rgb(var(--muted-foreground)); }
@@ -124,16 +125,18 @@ html[data-skin="paper"] .pulse-quota-export > button {
 html[data-skin="paper"] .pulse-quota-export > button > svg {
   flex: 0 0 auto;
 }
-.pulse-quota-table-scroll { overflow-x:auto; }
+.pulse-quota-table-scroll { overflow-x:auto; container-type:inline-size; }
 .pulse-quota-table-scroll table { width:100%; border-collapse:collapse; text-align:start; font-size:13px; }
 .pulse-quota-table-scroll th,.pulse-quota-table-scroll td { border-bottom:1px solid rgb(var(--border)); padding:12px; text-align:start; vertical-align:top; }
 .pulse-quota-table-scroll th { font-weight:500; }
 .pulse-quota-table-scroll thead { color:rgb(var(--muted-foreground)); font-size:12px; }
 .pulse-quota-table-scroll td { font-variant-numeric:tabular-nums; }
 .pulse-quota-table-scroll td small { display:block; color:rgb(var(--muted-foreground)); font-size:11px; margin-top:4px; }
+.pulse-quota-table-scroll td.pulse-quota-detail-cell { padding:8px 0; }
+.pulse-quota-detail-cell .pulse-quota-day { position:sticky; inset-inline-start:0; max-inline-size:100cqi; }
 .pulse-quota-day { border:1px solid rgb(var(--border)); border-radius:8px; padding:20px; scroll-margin:20px; }
 .pulse-quota-day header { display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:8px; margin-bottom:12px; }
-.pulse-quota-day h3 { font-size:16px; font-weight:600; }
+.pulse-quota-day h3 { font-size:16px; font-weight:600; scroll-margin-block:16px 96px; }
 .pulse-quota-day ol { list-style:none; padding:0; }
 .pulse-quota-day li { border-top:1px solid rgb(var(--border)); padding:14px 0; font-size:13px; }
 .pulse-quota-day li > div { display:flex; flex-wrap:wrap; justify-content:space-between; gap:8px; }

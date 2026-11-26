@@ -753,6 +753,8 @@
     }
   },
   "settings": {
+    "update_check_offline": "Update checks are unavailable in offline mode. Restart Pulse with offline mode disabled to retry.",
+    "update_check_failed": "Could not check for updates. Check your connection and try again.",
     "title": "Settings",
     "subtitle": "Appearance, account, desktop controls, data sources and maintenance.",
     "nav_aria": "Settings sections",
@@ -1011,6 +1013,14 @@
     "update_step_download": "Step 1: download and verify the update package. Then choose Restart to finish update to apply it.",
     "update_step_restart": "Step 2: choose Restart to finish update to apply the package. The current app is still running.",
     "no_short_window": "No 5-hour window was returned for this account. Quota checks remain available; no window will be started."
+  },
+  "analysis_review": {
+    "range_failed": "Could not load {{range}}.",
+    "range_unavailable": "{{range}} is not ready yet.",
+    "previous_range": "Showing the last available data for {{start}} – {{end}}.",
+    "retry_range": "Retry range",
+    "coverage_unavailable": "No retained local records for this range.",
+    "coverage_partial": "Partial coverage. Local records begin on {{date}}."
   },
   "reading_context": {
     "statistics_short": "Usage time zone: {{zone}}",

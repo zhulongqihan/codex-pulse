@@ -4,6 +4,19 @@ User-facing changes are grouped by release, following [Keep a Changelog](https:/
 
 ## [Unreleased]
 
+## [0.14.11] - 2026-11-26
+
+### Fixed / 修复
+
+- Keep local usage, calendar dates and exports aligned during range failures and statistics time zone changes. Identify missing retention and API reference estimates in exported reports.
+- 修复本机用量切换范围及统计时区后的日期与归档，并在摘要及导出中标明留存和 API 估价口径。
+- Keep keyboard focus in the custom date dialog and show official quota details beside the selected row. Explain which quota windows the export includes.
+- 修复自定义日期焦点，在官方额度的日期行旁显示明细，并说明报表包含的额度窗口。
+- Improve compact Paper and Meter layouts, sidebar keyboard navigation, widget labels and action feedback.
+- 调整纸册与刻度的窄窗布局、侧栏键盘导航、悬浮窗标签和操作反馈。
+
+[完整中英说明 / Full release notes](docs/releases/v0.14.11.md)
+
 ## [0.14.10] - 2026-11-26
 
 ### Fixed / 修复
@@ -457,7 +470,8 @@ User-facing changes are grouped by release, following [Keep a Changelog](https:/
 
 Earlier releases remain available in [GitHub Releases](https://github.com/zhulongqihan/codex-pulse/releases). / 更早版本保留在 GitHub Releases。
 
-[Unreleased]: https://github.com/zhulongqihan/codex-pulse/compare/v0.14.10...HEAD
+[Unreleased]: https://github.com/zhulongqihan/codex-pulse/compare/v0.14.11...HEAD
+[0.14.11]: https://github.com/zhulongqihan/codex-pulse/compare/v0.14.10...v0.14.11
 [0.14.10]: https://github.com/zhulongqihan/codex-pulse/compare/v0.14.9...v0.14.10
 [0.14.9]: https://github.com/zhulongqihan/codex-pulse/compare/v0.14.8...v0.14.9
 [0.14.8]: https://github.com/zhulongqihan/codex-pulse/compare/v0.14.7...v0.14.8

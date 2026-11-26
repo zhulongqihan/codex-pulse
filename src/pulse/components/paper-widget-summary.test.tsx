@@ -19,12 +19,12 @@ describe('paper widget live data scopes',()=>{
     const today=screen.getByTestId('paper-widget-today');
     expect(within(today).getByText('0')).toBeVisible();
     expect(within(today).getByText('$0.00')).toBeVisible();
-    const official=screen.getByRole('button',{name:/^Today's observed quota/});
+    const official=screen.getByRole('button',{name:/^Observed today in this cycle/});
     expect(official).toHaveTextContent('Not provided');
     expect(screen.getByTestId('paper-widget-quotas').querySelectorAll('[data-reading-state=ready]')).toHaveLength(2);
-    expect(screen.queryByText(/Each quota window is measured separately/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Official quota history can include other cycles/)).not.toBeInTheDocument();
     await user.hover(screen.getByRole('button',{name:'Observed window'}));
-    expect(screen.getByRole('tooltip')).toHaveTextContent('Each quota window is measured separately.');
+    expect(screen.getByRole('tooltip')).toHaveTextContent('Official quota history can include other cycles on the same day.');
     expect(onDetails).not.toHaveBeenCalled();
     await user.click(official);
     expect(onDetails).toHaveBeenCalledOnce();

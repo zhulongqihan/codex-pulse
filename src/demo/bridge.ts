@@ -58,8 +58,14 @@ function initialSnapshot(): TrayPopoverData {
 function downloadMarkdown(range: string, path: string) {
   const data = overview(range);
   const lines = ["# Codex Pulse — 合成演示 / Synthetic demo", "", "This export contains synthetic examples only.", "",
-    `Range: ${data.startDate} — ${data.endDate}`, "", "| Date | Input | Cached input | Output | Total | API estimate USD |", "|---|---:|---:|---:|---:|---:|"];
-  for (const row of data.daily) lines.push(`| ${row.date} | ${row.inputTokens} | ${row.cachedInputTokens} | ${row.outputTokens} | ${row.totalTokens} | ${row.costUSD === null ? "unknown" : row.costUSD.toFixed(6)} |`);
+    `Range: ${data.startDate} — ${data.endDate}`, "",
+    "Source: local session logs (synthetic). API reference estimates in USD use model prices.",
+    "", "| Date | Input | Cached input | Output | Total | API estimate USD | Local coverage |", "|---|---:|---:|---:|---:|---:|---|"];
+  for (const row of data.daily) {
+    lines.push(row.date < retainedFrom
+      ? `| ${row.date} |  |  |  |  |  | No retained records |`
+      : `| ${row.date} | ${row.inputTokens} | ${row.cachedInputTokens} | ${row.outputTokens} | ${row.totalTokens} | ${row.costUSD === null ? "unknown" : row.costUSD.toFixed(6)} | Within retention |`);
+  }
   const link = document.createElement("a"); const objectUrl = URL.createObjectURL(new Blob([lines.join("\n")], { type: "text/markdown;charset=utf-8" }));
   link.href = objectUrl; link.download = path.split(/[\\/]/).at(-1) || "CodexPulse-demo.md"; link.click();
   setTimeout(() => URL.revokeObjectURL(objectUrl), 1000);

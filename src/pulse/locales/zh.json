@@ -760,6 +760,8 @@
     }
   },
   "settings": {
+    "update_check_offline": "离线模式下无法检查更新。关闭离线模式并重启 Pulse 后重试。",
+    "update_check_failed": "检查更新失败。请检查网络连接后重试。",
     "title": "设置",
     "subtitle": "管理外观、账号、桌面操作、数据来源与维护。",
     "nav_aria": "设置分类",
@@ -1017,6 +1019,14 @@
     "update_step_download": "第 1 步：下载并校验更新包。完成后仍需点击“重启完成更新”。",
     "update_step_restart": "第 2 步：点击“重启完成更新”后才会应用更新，当前程序仍保持运行。",
     "no_short_window": "本账号未返回5小时窗口；此处只查询额度，不启动窗口。"
+  },
+  "analysis_review": {
+    "range_failed": "无法读取{{range}}。",
+    "range_unavailable": "{{range}}的数据尚未就绪。",
+    "previous_range": "当前显示上次可用的数据（{{start}} 至 {{end}}）。",
+    "retry_range": "重试此范围",
+    "coverage_unavailable": "此范围无本机留存记录。",
+    "coverage_partial": "仅部分日期有留存。本机记录从 {{date}} 开始。"
   },
   "reading_context": {
     "statistics_short": "统计时区：{{zone}}",

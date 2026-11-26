@@ -14,7 +14,7 @@ fn parse_timezone(timezone: &str) -> Tz {
     timezone.parse::<Tz>().unwrap_or(chrono_tz::UTC)
 }
 
-fn canonical_app_timezone(selected: &str) -> String {
+pub(crate) fn canonical_app_timezone(selected: &str) -> String {
     // Match the zone actually used by date_key_in_timezone, including its UTC
     // fallback. Metadata must not advertise an invalid environment override.
     parse_timezone(selected).name().to_string()

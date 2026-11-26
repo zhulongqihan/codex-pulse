@@ -415,8 +415,9 @@ async fn fetch_project_session_days(
     let database_path = state.database_path.clone();
     tauri::async_runtime::spawn_blocking(move || {
         let db = db::open_database(&database_path)?;
-        let timezone = project_sessions::prepare_index(&db)?;
-        project_sessions::query_days(&db, &project, &range, &query, before.as_deref(), &timezone)
+        project_sessions::with_current_index(&db, |db, timezone| {
+            project_sessions::query_days(db, &project, &range, &query, before.as_deref(), timezone)
+        })
     })
     .await
     .map_err(|error| error.to_string())?
@@ -433,8 +434,9 @@ async fn fetch_project_day_sessions(
     let database_path = state.database_path.clone();
     tauri::async_runtime::spawn_blocking(move || {
         let db = db::open_database(&database_path)?;
-        let timezone = project_sessions::prepare_index(&db)?;
-        project_sessions::query_day_sessions(&db, &project, &range, &date, &query, &timezone)
+        project_sessions::with_current_index(&db, |db, timezone| {
+            project_sessions::query_day_sessions(db, &project, &range, &date, &query, timezone)
+        })
     })
     .await
     .map_err(|error| error.to_string())?

@@ -3,7 +3,13 @@ use chrono::Utc;
 use rust_xlsxwriter::{Format, Workbook, Worksheet};
 use std::{fs, path::Path};
 
-const SUMMARY_ROWS: [(&str, &str); 9] = [
+const API_REFERENCE_ESTIMATE: &str = "API Reference Estimate (USD)";
+const ESTIMATE_BASIS: &str =
+    "Public API reference prices applied to local Token records. Account billing, quota and Credits are separate.";
+const RETENTION_BASIS: &str =
+    "Usage totals include retained local logs. Dates outside the retained period have blank daily values.";
+
+const SUMMARY_ROWS: [(&str, &str); 13] = [
     ("Range", "range"),
     ("Date Range", "date_range"),
     ("Timezone", "timezone"),
@@ -11,8 +17,12 @@ const SUMMARY_ROWS: [(&str, &str); 9] = [
     ("Input Tokens", "input_tokens"),
     ("Cached Input Tokens", "cached_input_tokens"),
     ("Output Tokens", "output_tokens"),
-    ("Total Cost USD", "cost_usd"),
+    ("Total API Reference Estimate (USD)", "cost_usd"),
     ("Updated At", "updated_at"),
+    ("Source", "source"),
+    ("Cost Basis", "estimate_basis"),
+    ("Retained From", "retained_from"),
+    ("Data Coverage", "coverage"),
 ];
 
 pub fn export_overview(
@@ -60,10 +70,10 @@ fn write_summary_sheet(
         .set_name("Summary")
         .map_err(|error| error.to_string())?;
     worksheet
-        .set_column_width(0, 24)
+        .set_column_width(0, 36)
         .map_err(|error| error.to_string())?;
     worksheet
-        .set_column_width(1, 28)
+        .set_column_width(1, 68)
         .map_err(|error| error.to_string())?;
     worksheet
         .write_with_format(0, 0, "Metric", header)
@@ -72,6 +82,7 @@ fn write_summary_sheet(
         .write_with_format(0, 1, "Value", header)
         .map_err(|error| error.to_string())?;
 
+    let notes = Format::new().set_text_wrap();
     for (index, (label, key)) in SUMMARY_ROWS.iter().enumerate() {
         let row = (index + 1) as u32;
         worksheet
@@ -95,6 +106,10 @@ fn write_summary_sheet(
             "updated_at" => {
                 worksheet.write_string(row, 1, overview.updated_at.as_deref().unwrap_or(""))
             }
+            "source" => worksheet.write_string(row, 1, "Local Codex logs"),
+            "estimate_basis" => worksheet.write_with_format(row, 1, ESTIMATE_BASIS, &notes),
+            "retained_from" => worksheet.write_string(row, 1, retained_from(overview)),
+            "coverage" => worksheet.write_with_format(row, 1, RETENTION_BASIS, &notes),
             _ => unreachable!("unknown summary row"),
         }
         .map_err(|error| error.to_string())?;
@@ -121,16 +136,24 @@ fn write_daily_sheet(
             "Input Tokens",
             "Cached Input Tokens",
             "Output Tokens",
-            "Cost USD",
+            API_REFERENCE_ESTIMATE,
+            "Data Status",
         ],
         header,
     )?;
+    worksheet
+        .set_column_width(6, 27)
+        .map_err(|error| error.to_string())?;
 
     for (index, day) in overview.daily.iter().enumerate() {
         let row = (index + 1) as u32;
         worksheet
             .write_string(row, 0, &day.date)
+            .and_then(|sheet| sheet.write_string(row, 6, day_status(overview, &day.date)))
             .map_err(|error| error.to_string())?;
+        if !day_retained(overview, &day.date) {
+            continue;
+        }
         worksheet
             .write_number(row, 1, day.total_tokens as f64)
             .map_err(|error| error.to_string())?;
@@ -167,7 +190,7 @@ fn write_models_sheet(
             "Input Tokens",
             "Cached Input Tokens",
             "Output Tokens",
-            "Cost USD",
+            API_REFERENCE_ESTIMATE,
         ],
         header,
     )?;
@@ -215,7 +238,7 @@ fn write_projects_sheet(
             "Input Tokens",
             "Cached Input Tokens",
             "Output Tokens",
-            "Cost USD",
+            API_REFERENCE_ESTIMATE,
         ],
         header,
     )?;
@@ -258,7 +281,14 @@ fn write_headers(
 ) -> Result<(), String> {
     for (index, label) in labels.iter().enumerate() {
         worksheet
-            .set_column_width(index as u16, if index == 0 { 18 } else { 20 })
+            .set_column_width(
+                index as u16,
+                if index == 0 {
+                    18
+                } else {
+                    (label.len() + 3).max(20) as u16
+                },
+            )
             .map_err(|error| error.to_string())?;
         worksheet
             .write_with_format(0, index as u16, *label, header)
@@ -290,16 +320,41 @@ fn cost_text(value: f64) -> String {
     }
 }
 
+fn retained_from(overview: &OverviewResponse) -> &str {
+    overview
+        .retained_from
+        .as_deref()
+        .unwrap_or("No retained local history")
+}
+
+fn day_retained(overview: &OverviewResponse, date: &str) -> bool {
+    overview
+        .retained_from
+        .as_deref()
+        .is_some_and(|start| date >= start)
+}
+
+fn day_status(overview: &OverviewResponse, date: &str) -> &'static str {
+    if day_retained(overview, date) {
+        "Within retained period"
+    } else if overview.retained_from.is_some() {
+        "Outside retained period"
+    } else {
+        "No retained local history"
+    }
+}
+
 fn render_markdown(overview: &OverviewResponse) -> String {
     let mut output = String::new();
     output.push_str("# Codex Pulse Usage Export\n\n");
     output.push_str(&format!(
-        "- Range: {}\n- Date range: {} to {}\n- Timezone: {}\n- Updated at: {}\n\n",
+        "- Source: Local Codex logs\n- Range: {}\n- Date range: {} to {}\n- Timezone: {}\n- Updated at: {}\n- Retained from: {}\n- Data coverage: {RETENTION_BASIS}\n- Cost basis: {ESTIMATE_BASIS}\n\n",
         overview.range,
         overview.start_date,
         overview.end_date,
         overview.timezone,
-        overview.updated_at.as_deref().unwrap_or("N/A")
+        overview.updated_at.as_deref().unwrap_or("N/A"),
+        retained_from(overview)
     ));
 
     output.push_str("## Summary\n\n");
@@ -321,7 +376,7 @@ fn render_markdown(overview: &OverviewResponse) -> String {
         overview.totals.output_tokens
     ));
     output.push_str(&format!(
-        "| Total Cost USD | {} |\n",
+        "| Total API Reference Estimate (USD) | {} |\n",
         cost_text(overview.totals.cost_usd)
     ));
     output.push_str(&format!(
@@ -329,7 +384,7 @@ fn render_markdown(overview: &OverviewResponse) -> String {
         overview.totals.avg_tokens_per_day
     ));
     output.push_str(&format!(
-        "| Average Cost / Day | {} |\n",
+        "| Average API Reference Estimate (USD) / Day | {} |\n",
         cost_text(overview.totals.avg_cost_per_day)
     ));
     output.push_str(&format!(
@@ -337,16 +392,25 @@ fn render_markdown(overview: &OverviewResponse) -> String {
         overview.totals.cache_hit_rate * 100.0
     ));
     output.push_str(&format!(
-        "| Cost / 1M Tokens | {} |\n\n",
-        cost_text(overview.totals.cost_per_million_tokens)
+        "| API Reference Estimate (USD) / 1M Tokens | {} |\n\n",
+        if overview.totals.total_tokens > 0 {
+            cost_text(overview.totals.cost_per_million_tokens)
+        } else {
+            "Unavailable (no recorded tokens)".into()
+        }
     ));
 
     output.push_str("## Daily Usage\n\n");
-    output.push_str("| Date | Total Tokens | Input | Cached Input | Output | Cost USD |\n");
-    output.push_str("| --- | ---: | ---: | ---: | ---: | ---: |\n");
+    output.push_str(&format!("| Date | Total Tokens | Input | Cached Input | Output | {API_REFERENCE_ESTIMATE} | Data Status |\n"));
+    output.push_str("| --- | ---: | ---: | ---: | ---: | ---: | --- |\n");
     for day in &overview.daily {
+        let status = day_status(overview, &day.date);
+        if !day_retained(overview, &day.date) {
+            output.push_str(&format!("| {} |  |  |  |  |  | {status} |\n", day.date));
+            continue;
+        }
         output.push_str(&format!(
-            "| {} | {} | {} | {} | {} | {} |\n",
+            "| {} | {} | {} | {} | {} | {} | {status} |\n",
             day.date,
             day.total_tokens,
             day.input_tokens,
@@ -357,7 +421,9 @@ fn render_markdown(overview: &OverviewResponse) -> String {
     }
 
     output.push_str("\n## Model Usage\n\n");
-    output.push_str("| Model | Total Tokens | Input | Cached Input | Output | Cost USD |\n");
+    output.push_str(&format!(
+        "| Model | Total Tokens | Input | Cached Input | Output | {API_REFERENCE_ESTIMATE} |\n"
+    ));
     output.push_str("| --- | ---: | ---: | ---: | ---: | ---: |\n");
     for model in &overview.models {
         output.push_str(&format!(
@@ -372,7 +438,7 @@ fn render_markdown(overview: &OverviewResponse) -> String {
     }
 
     output.push_str("\n## Project Usage\n\n");
-    output.push_str("| Project / cwd | Directory Name | Codex Project Name | Total Tokens | Input | Cached Input | Output | Cost USD |\n");
+    output.push_str(&format!("| Project / cwd | Directory Name | Codex Project Name | Total Tokens | Input | Cached Input | Output | {API_REFERENCE_ESTIMATE} |\n"));
     output.push_str("| --- | --- | --- | ---: | ---: | ---: | ---: | ---: |\n");
     for project in &overview.projects {
         output.push_str(&format!(
@@ -490,6 +556,44 @@ mod tests {
         let metadata = fs::metadata(&path).unwrap();
         assert!(metadata.len() > 0);
         let _ = fs::remove_file(path);
+    }
+
+    #[test]
+    fn local_exports_distinguish_retained_zero_from_missing_history() {
+        let mut overview = sample_overview();
+        overview.retained_from = Some("2026-04-29".into());
+        let mut zero = overview.daily[0].clone();
+        zero.date = "2026-04-29".into();
+        zero.input_tokens = 0;
+        zero.cached_input_tokens = 0;
+        zero.output_tokens = 0;
+        zero.total_tokens = 0;
+        zero.cost_usd = 0.0;
+        let mut unretained = zero.clone();
+        unretained.date = "2026-04-28".into();
+        overview.daily.splice(0..0, [unretained, zero]);
+
+        let markdown = render_markdown(&overview);
+        assert!(markdown.contains("Source: Local Codex logs"));
+        assert!(markdown.contains("Public API reference prices"));
+        assert!(markdown.contains("API Reference Estimate (USD)"));
+        assert!(markdown.contains("| 2026-04-28 |  |  |  |  |  | Outside retained period |"));
+        assert!(
+            markdown.contains("| 2026-04-29 | 0 | 0 | 0 | 0 | 0.000000 | Within retained period |")
+        );
+        assert!(markdown.contains(
+            "| 2026-04-30 | 1600 | 1200 | 200 | 400 | 0.005275 | Within retained period |"
+        ));
+
+        let path =
+            std::env::temp_dir().join(format!("pulse-retention-{}.xlsx", uuid::Uuid::new_v4()));
+        export_overview(&overview, "xlsx", &path).unwrap();
+        assert!(fs::metadata(&path).unwrap().len() > 0);
+        fs::remove_file(path).unwrap();
+
+        overview.retained_from = None;
+        assert!(render_markdown(&overview)
+            .contains("| 2026-04-29 |  |  |  |  |  | No retained local history |"));
     }
 
     #[test]

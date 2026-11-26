@@ -753,6 +753,8 @@
     }
   },
   "settings": {
+    "update_check_offline": "오프라인 모드에서는 업데이트를 확인할 수 없습니다. 오프라인 모드를 해제하고 Pulse를 재시작한 뒤 다시 확인하세요.",
+    "update_check_failed": "업데이트를 확인하지 못했습니다. 연결을 확인한 뒤 다시 시도하세요.",
     "title": "설정",
     "subtitle": "외관, 계정, 데스크톱 동작, 데이터 소스 및 유지 관리를 설정합니다.",
     "nav_aria": "설정 항목",
@@ -1011,6 +1013,14 @@
     "update_step_download": "1단계: 업데이트 패키지를 다운로드하고 검증합니다. 완료 후 다시 시작하여 업데이트 완료를 선택하세요.",
     "update_step_restart": "2단계: 다시 시작하여 업데이트 완료를 선택해야 적용됩니다. 현재 앱은 계속 실행 중입니다.",
     "no_short_window": "이 계정은 5시간 창을 반환하지 않았습니다. 한도 조회만 가능하며 창을 시작하지 않습니다."
+  },
+  "analysis_review": {
+    "range_failed": "{{range}} 데이터를 불러오지 못했습니다.",
+    "range_unavailable": "{{range}} 데이터가 아직 준비되지 않았습니다.",
+    "previous_range": "마지막으로 확인한 {{start}}~{{end}} 데이터를 표시합니다.",
+    "retry_range": "이 기간 다시 읽기",
+    "coverage_unavailable": "이 기간에 보관된 로컬 기록이 없습니다.",
+    "coverage_partial": "일부 날짜만 포함됩니다. 로컬 기록은 {{date}}부터 있습니다."
   },
   "reading_context": {
     "statistics_short": "통계 시간대: {{zone}}",

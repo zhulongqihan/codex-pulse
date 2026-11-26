@@ -217,6 +217,51 @@ describe("official quota history", () => {
     expect(excel).toBeEnabled();
   });
 
+  it.each([
+    ["Excel", "xlsx"],
+    ["Markdown", "md"],
+  ])("explains the full date-range scope and uses a quota title for the %s dialog", async (label, extension) => {
+    native.invoke.mockImplementation(async (command: string) => {
+      if (command === "fetch_quota_history") return history();
+      if (command === "get_pulse_paths") return { exports: "F:/Demo/exports" };
+      throw new Error(`Unexpected command ${command}`);
+    });
+    render(<QuotaHistoryView/>);
+    await screen.findByRole("table");
+    await userEvent.selectOptions(screen.getByRole("combobox", { name: "Quota window" }), "weekly:10080");
+    const format = screen.getByRole("button", { name: `Export ${label}` });
+    expect(format).toHaveAccessibleDescription("Exports include all quota windows in the selected date range.");
+    await userEvent.click(format);
+    expect(native.save).toHaveBeenCalledWith(expect.objectContaining({
+      title: `Export official quota history to ${label}`,
+      defaultPath: `F:/Demo/exports/Pulse-quota-2026-11-14-2026-11-15.${extension}`,
+    }));
+    expect(native.invoke).not.toHaveBeenCalledWith("export_quota_history", expect.anything());
+  });
+
+  it("opens day details next to the selected row and restores focus and scroll after Escape", async () => {
+    render(<div className="pulse-main-scroll"><QuotaHistoryView/></div>);
+    const trigger = await screen.findByRole("button", { name: "2026-11-15" });
+    const workspace = trigger.closest<HTMLElement>(".pulse-main-scroll")!;
+    const tableScroll = trigger.closest<HTMLElement>(".pulse-quota-table-scroll")!;
+    workspace.scrollTop = 180;
+    tableScroll.scrollLeft = 40;
+    await userEvent.click(trigger);
+    const panel = await screen.findByTestId("quota-day-detail");
+    expect(trigger).toHaveAttribute("aria-expanded", "true");
+    expect(trigger).toHaveAttribute("aria-controls", panel.id);
+    expect(panel.closest("tr")?.previousElementSibling).toBe(trigger.closest("tr"));
+    expect(within(panel).getByRole("heading")).toHaveFocus();
+    workspace.scrollTop = 280;
+    tableScroll.scrollLeft = 90;
+    await userEvent.keyboard("{Escape}");
+    expect(panel).not.toBeInTheDocument();
+    expect(trigger).toHaveAttribute("aria-expanded", "false");
+    expect(trigger).toHaveFocus();
+    expect(workspace.scrollTop).toBe(180);
+    expect(tableScroll.scrollLeft).toBe(40);
+  });
+
   it("loads paginated day details and retains the first page", async () => {
     native.invoke.mockImplementation(async (command: string, args: any) => command === "fetch_quota_history" ? history() : command === "fetch_quota_history_day" ? detail({ segments: [{ ...segment, id: args.before ? 8 : 9, reason: args.before ? "cross_day" : "continuous", date: args.before ? null : segment.date }], nextBefore: args.before ? null : 9 }) : null);
     render(<QuotaHistoryView/>);

@@ -54,3 +54,24 @@
   .pulse-analysis-totals > dl > div + div { padding-left: 23px; }
   .pulse-usage-analysis .pulse-rank-row { grid-template-columns: minmax(80px, 1fr) minmax(30px, .8fr) minmax(62px, auto) 42px; gap: 8px; }
 }
+.pulse-analysis-note {
+  color: rgb(var(--muted-foreground));
+  font-size: .8125rem;
+  line-height: 1.5;
+  margin-block: 8px;
+}
+
+.pulse-range-notice {
+  display: grid;
+  justify-items: start;
+  gap: 4px;
+  padding: 10px 12px;
+  margin-block: 8px;
+  border-inline-start: 2px solid rgb(var(--primary));
+  font-size: .8125rem;
+  overflow-wrap: anywhere;
+}
+
+.pulse-range-notice[role="alert"] {
+  border-inline-start-color: rgb(var(--error));
+}

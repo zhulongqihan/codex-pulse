@@ -145,11 +145,14 @@ export default function App() {
     scanMessage,
     error,
     isLoading,
+    isOverviewReading,
+    rangeError,
     isMonthlyLoading,
     isRefreshing,
     isResetting,
     isExporting,
     exportError,
+    exportRequiresDesktop,
     lastRescanDurationMs,
     updateInfo,
     isUpdateChecking,
@@ -270,9 +273,23 @@ export default function App() {
     return getReleaseNotes(updateInfo.releaseNotes, i18n.resolvedLanguage ?? i18n.language);
   }, [updateInfo?.releaseNotes, i18n.language, i18n.resolvedLanguage]);
 
-  const metrics = overview ? buildMetricCards(overview, range, t) : [];
+  const displayedRange = overview?.range ?? range;
+  const rangeOutOfDate = overview !== null && displayedRange !== range;
+  const metrics = overview ? buildMetricCards(overview, displayedRange, t) : [];
   const projects = overview?.projects ?? [];
   const loadingTitle = overview ? t("loading.loading_range", { range: getRangeLabel(range, t) }) : t("loading.preparing_cache");
+  const rangeReadNotice = rangeError || rangeOutOfDate ? (
+    <div className="pulse-range-notice" role={rangeError ? "alert" : "status"} aria-label={!rangeError && isOverviewReading ? loadingTitle : undefined} data-testid="local-range-notice">
+      <p>{rangeError
+        ? t("analysis_review.range_failed", { range: getRangeLabel(range, t) })
+        : isOverviewReading ? loadingTitle : t("analysis_review.range_unavailable", { range: getRangeLabel(range, t) })}</p>
+      {overview ? <p>{t("analysis_review.previous_range", { start: overview.startDate, end: overview.endDate })}</p> : null}
+      {rangeError ? <>
+        <button type="button" className="pulse-text-button" onClick={() => void handleRangeChange(range)}>{t("analysis_review.retry_range")}</button>
+        <details><summary>{t("recovery.details")}</summary><p>{rangeError}</p></details>
+      </> : null}
+    </div>
+  ) : null;
   const loadingDescription = overview
     ? t("loading.selected_window_desc")
     : t("loading.cached_snapshot_desc");
@@ -414,7 +431,7 @@ export default function App() {
   async function runDesktopAction(action: "widget" | "shortcuts") {
     if (desktopAction) return;
     setDesktopError(null); setDesktopNotice(null);
-    if (new URLSearchParams(location.search).get("demo") === "1" && import.meta.env.MODE !== "e2e") { setDesktopNotice(shellCopy("previewNote")); return; }
+    if (new URLSearchParams(location.search).get("demo") === "1" && import.meta.env.MODE !== "e2e") { setDesktopNotice(shellCopy(action === "widget" ? "previewWidget" : "previewShortcuts")); return; }
     setDesktopAction(action);
     try {
       if (action === "widget") { await invoke("widget_action", { action: "show" }); setDesktopNotice(shellCopy("widgetVisible")); }
@@ -497,7 +514,7 @@ export default function App() {
         <div className="pulse-brand"><PulseBrandMark size={28}/><strong>{preferences.skinId === "paper" ? "Codex Pulse" : "Pulse"}</strong>{document.documentElement.dataset.demo === "true" ? <span className="pulse-demo-label">{copy("sample")}</span> : null}<span className="pulse-page-label">{view === "analysis" ? shellCopy("analysis") : t(`common.${view === "models" ? "model" : view === "projects" ? "project" : view}`)}</span></div>
         {preferences.skinId === "paper" ? <PaperClock/> : null}
         <div className="pulse-global-actions"><PulseStyleSwitcher/>
-          <button type="button" data-testid="open-widget" className="pulse-shell-action pulse-widget-action" disabled={desktopAction !== null} aria-busy={desktopAction === "widget"} onClick={() => void runDesktopAction("widget")}><MonitorUp size={16}/><span>{shellCopy(desktopAction === "widget" ? "widgetBusy" : preferences.widgetVisible ? "widgetVisible" : "widget")}</span></button>
+          <button type="button" data-testid="open-widget" className="pulse-shell-action pulse-widget-action" aria-label={shellCopy(desktopAction === "widget" ? "widgetBusy" : preferences.widgetVisible ? "widgetVisible" : "widget")} title={shellCopy("widget")} disabled={desktopAction !== null} aria-busy={desktopAction === "widget"} onClick={() => void runDesktopAction("widget")}><MonitorUp size={16} aria-hidden="true"/><span>{shellCopy(desktopAction === "widget" ? "widgetBusy" : preferences.widgetVisible ? "widgetVisible" : "widget")}</span></button>
           <button type="button" data-testid="account-toggle" className="pulse-shell-action" aria-label={shellCopy("account")} aria-expanded={accountUsesDrawer ? accountDrawerOpen : accountExpanded && view !== "settings" && view !== "logs"} aria-controls={accountUsesDrawer ? "pulse-account-drawer" : "pulse-account-rail"} onClick={() => accountUsesDrawer || view === "settings" || view === "logs" ? showAccount() : setAccountExpanded(value => !value)}><UserRound size={17}/><span>{shellCopy("account")}</span>{compactWindow && quotaSummary ? <small className="pulse-account-summary">{quotaSummary} {shellCopy("remaining")}</small> : null}</button>
           <button ref={helpButton} type="button" data-testid="help" className="pulse-shell-action pulse-help-action" onClick={openHelp} aria-label={shellCopy("help")} aria-expanded={view === "dashboard" && helpOpen} aria-controls={helpOpen ? "pulse-workspace-help" : undefined} title={shellCopy("help")}><CircleHelp size={17} aria-hidden="true"/><span>{shellCopy("help")}</span></button>
           <button type="button" className="pulse-icon-button" aria-label={copy("appearance")} title={t("common.settings")} onClick={() => openSettings()}><Settings2 size={18}/></button>
@@ -657,6 +674,7 @@ export default function App() {
           ) : null}
 
           {view !== "dashboard" ? <>{scanWait}{recovery}{isLoading ? <LoadingState title={loadingTitle} description={loadingDescription}/> : null}</> : null}
+          {view === "models" || view === "projects" || view === "daily" ? rangeReadNotice : null}
 
           {view === "monthly" && isMonthlyLoading ? (
             <LoadingState title={t("loading.loading_monthly")} description={t("loading.natural_month_desc")} />
@@ -685,7 +703,9 @@ export default function App() {
                 <button type="button" aria-pressed={analysisSource === "official"} onClick={() => setAnalysisSource("official")}>{quotaCopy("title")}</button>
               </div>
               {officialAnalysisVisited.current ? <Activity mode={analysisSource === "official" ? "visible" : "hidden"}><QuotaHistoryView paper={paperWorkspace}/></Activity> : null}
-              <Activity mode={analysisSource === "local" ? "visible" : "hidden"}>{overview ? <UsageAnalysisView overview={overview} range={range} isBusy={isLoading || isRefreshing || isResetting || isExporting !== null} isExporting={isExporting} exportError={exportError} onRangeChange={handleRangeChange} onExport={(format) => void handleExport(format)} metrics={metrics} onOpenDay={date => { setSelectedProjectFilter(null); setSelectedSessionDate(date); navigate("sessions"); }}/> : <p className="pulse-empty">{t("common.no_data")}</p>}</Activity>
+              <Activity mode={analysisSource === "local" ? "visible" : "hidden"}>{overview
+                ? <UsageAnalysisView overview={overview} range={range} isBusy={isLoading || isOverviewReading || rangeOutOfDate || rangeError !== null || isRefreshing || isResetting} isExporting={isExporting} exportError={exportError} exportRequiresDesktop={exportRequiresDesktop} rangeNotice={rangeReadNotice} onRangeChange={handleRangeChange} onExport={(format) => void handleExport(format)} metrics={metrics} onOpenDay={date => { setSelectedProjectFilter(null); setSelectedSessionDate(date); navigate("sessions"); }}/>
+                : <>{rangeReadNotice}<p className="pulse-empty">{t("common.no_data")}</p></>}</Activity>
               </div>
             </Activity>
           ) : null}
@@ -732,7 +752,7 @@ export default function App() {
               </div>
               <DailyUsageTable
                 paperSpread={paperWorkspace}
-                range={range}
+                range={displayedRange}
                 daily={overview.daily}
                 onRowClick={(date) => {
                   setSelectedProjectFilter(null);
@@ -828,7 +848,7 @@ export default function App() {
         <ProjectSessionsModal
           project={selectedProjectForModal}
           showSessionCredits={showSessionCredits}
-          range={range}
+          range={displayedRange}
           onSessionClick={setSelectedSession}
           isActive={view !== "settings" && !selectedSession && !isResetHistoryOpen && !accountDrawerOpen}
           dataRevision={projectDataRevision}
