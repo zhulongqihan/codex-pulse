@@ -58,7 +58,7 @@ function initialSnapshot(): TrayPopoverData {
 function downloadMarkdown(range: string, path: string) {
   const data = overview(range);
   const lines = ["# Codex Pulse — 合成演示 / Synthetic demo", "", "This export contains synthetic examples only.", "",
-    `Range: ${data.startDate} — ${data.endDate}`, "",
+    `Range: ${data.startDate} — ${data.endDate}`, `Timezone: ${data.timezone}`, "",
     "Source: local session logs (synthetic). API reference estimates in USD use model prices.",
     "", "| Date | Input | Cached input | Output | Total | API estimate USD | Local coverage |", "|---|---:|---:|---:|---:|---:|---|"];
   for (const row of data.daily) {
