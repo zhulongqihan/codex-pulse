@@ -87,12 +87,12 @@ describe("Pulse full-range trends",()=>{
     render(<UsageTrendsCard daily={daily} metrics={[]} cacheHitRate={0} deferInspection/>);
     await user.click(screen.getByRole("button", { name: "Full screen" }));
     const dialog = within(screen.getByRole("dialog", { name: "Daily usage" }));
-    const first = dialog.getByRole("button", { name: "Tokens", exact: true });
+    const first = dialog.getByRole("button", { name: "Tokens" });
     const table = dialog.getByRole("button", { name: "Show data table" });
     await user.click(table);
     first.focus();
     await user.tab({ shift: true });
-    expect(dialog.getByRole("button", { name: "2026-10-27", exact: true })).toHaveFocus();
+    expect(dialog.getByRole("button", { name: "2026-10-27" })).toHaveFocus();
     await user.tab();
     expect(first).toHaveFocus();
 
