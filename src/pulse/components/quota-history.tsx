@@ -190,12 +190,13 @@ function PaperDailyChart({ rows, width, container, viewportWidth }: {
     const root = container.current;
     if (!scrollable || !root) return;
     const dates = root.querySelectorAll(".pulse-quota-chart-date");
-    // Observe the rendered text bounds so only complete dates show at either edge.
+    // WebView2 can round a fully visible SVG label just below 1. The inset still guards both edges.
+    const visibleRatio = 0.999;
     const observer = new IntersectionObserver(entries => {
       for (const entry of entries) {
-        entry.target.toggleAttribute("data-in-view", entry.intersectionRatio >= 1);
+        entry.target.toggleAttribute("data-in-view", entry.intersectionRatio >= visibleRatio);
       }
-    }, { root, rootMargin: "0px -2px", threshold: 1 });
+    }, { root, rootMargin: "0px -2px", threshold: visibleRatio });
     dates.forEach(date => observer.observe(date));
     return () => {
       observer.disconnect();
