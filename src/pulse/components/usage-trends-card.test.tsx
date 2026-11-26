@@ -82,6 +82,26 @@ describe("Pulse full-range trends",()=>{
   it("retains the selected mode in full screen and restores focus on Escape",async()=>{
     const user=userEvent.setup();render(<UsageTrendsCard daily={daily} metrics={[]} cacheHitRate={.2}/>);await user.click(screen.getByRole("button",{name:"Observed quota"}));await user.click(screen.getByRole("button",{name:"Full screen"}));const dialog=within(screen.getByRole("dialog",{name:"Daily usage"}));expect(dialog.getByRole("button",{name:"Observed quota"})).toHaveAttribute("aria-pressed","true");expect(document.body.style.overflow).toBe("hidden");await user.keyboard("{Escape}");expect(screen.queryByRole("dialog")).not.toBeInTheDocument();expect(document.body.style.overflow).toBe("");expect(screen.getByRole("button",{name:"Full screen"})).toHaveFocus();
   });
+  it("wraps full screen focus through table rows and the current chart tab stop", async () => {
+    const user = userEvent.setup();
+    render(<UsageTrendsCard daily={daily} metrics={[]} cacheHitRate={0} deferInspection/>);
+    await user.click(screen.getByRole("button", { name: "Full screen" }));
+    const dialog = within(screen.getByRole("dialog", { name: "Daily usage" }));
+    const first = dialog.getByRole("button", { name: "Tokens", exact: true });
+    const table = dialog.getByRole("button", { name: "Show data table" });
+    await user.click(table);
+    first.focus();
+    await user.tab({ shift: true });
+    expect(dialog.getByRole("button", { name: "2026-10-27", exact: true })).toHaveFocus();
+    await user.tab();
+    expect(first).toHaveFocus();
+
+    await user.click(table);
+    first.focus();
+    await user.tab({ shift: true });
+    expect(dialog.getByRole("button", { name: /2026-10-25 · Tokens/ })).toHaveFocus();
+    expect(dialog.getByRole("button", { name: /2026-10-27 · Tokens/ })).toHaveAttribute("aria-pressed", "false");
+  });
   it("shows a full data table with unknown costs intact",async()=>{
     const user=userEvent.setup();render(<UsageTrendsCard daily={daily} metrics={[]} cacheHitRate={.2}/>);await user.click(screen.getByRole("button",{name:"Show data table"}));const rows=within(screen.getByRole("table")).getAllByRole("row");expect(rows).toHaveLength(4);expect(rows[2]).toHaveTextContent("2026-10-26");expect(rows[2]).toHaveTextContent("—");
   });

@@ -4,6 +4,19 @@ User-facing changes are grouped by release, following [Keep a Changelog](https:/
 
 ## [Unreleased]
 
+## [0.14.10] - 2026-11-26
+
+### Fixed / 修复
+
+- Show full date labels at the edges of the Paper official quota chart and keep the reading position when resizing the window.
+- 纸册官方额度图只显示完整日期，调整窗口大小时保留正在查看的位置。
+- Align date labels with the columns for short ranges in the Paper local usage overview.
+- 纸册本机用量图在短时段把日期对齐到相应柱子。
+- Keep Tab and Shift+Tab on the intended controls in fullscreen charts.
+- 修复全屏图的 Tab 和 Shift+Tab 焦点顺序。
+
+[完整中英说明 / Full release notes](docs/releases/v0.14.10.md)
+
 ## [0.14.9] - 2026-11-24
 
 - Redraw the Paper usage overview and official quota chart with columns and light horizontal rules. Keep the quota scale visible while scrolling.
@@ -444,7 +457,8 @@ User-facing changes are grouped by release, following [Keep a Changelog](https:/
 
 Earlier releases remain available in [GitHub Releases](https://github.com/zhulongqihan/codex-pulse/releases). / 更早版本保留在 GitHub Releases。
 
-[Unreleased]: https://github.com/zhulongqihan/codex-pulse/compare/v0.14.9...HEAD
+[Unreleased]: https://github.com/zhulongqihan/codex-pulse/compare/v0.14.10...HEAD
+[0.14.10]: https://github.com/zhulongqihan/codex-pulse/compare/v0.14.9...v0.14.10
 [0.14.9]: https://github.com/zhulongqihan/codex-pulse/compare/v0.14.8...v0.14.9
 [0.14.8]: https://github.com/zhulongqihan/codex-pulse/compare/v0.14.7...v0.14.8
 [0.14.7]: https://github.com/zhulongqihan/codex-pulse/compare/v0.14.6...v0.14.7

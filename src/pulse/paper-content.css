@@ -193,6 +193,10 @@ html[data-skin="paper"] .pulse-trends-paper .pulse-segments button[aria-pressed=
   font-size: 11px;
 }
 
+.pulse-trends-paper.is-overview .pulse-trend-days:not(:has(> :nth-child(3))) .pulse-trend-day > .pulse-trend-date {
+  inset-inline: auto;
+}
+
 .pulse-trends-paper.is-overview .pulse-fit-plot {
   height: clamp(170px, 25vh, 255px);
 }

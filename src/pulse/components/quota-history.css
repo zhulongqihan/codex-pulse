@@ -76,6 +76,9 @@
   fill: var(--paper-muted);
   font-variant-numeric: tabular-nums;
 }
+.pulse-quota-chart-scroll--paper[data-scrollable] .pulse-quota-chart-date:not([data-in-view]) {
+  visibility: hidden;
+}
 .pulse-quota-chart-scroll--paper .pulse-quota-chart-guide {
   stroke: color-mix(in srgb, var(--paper-line) 65%, transparent);
 }

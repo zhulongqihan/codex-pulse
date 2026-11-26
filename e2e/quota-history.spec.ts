@@ -60,6 +60,53 @@ function syntheticDay(daysAgo: number, timezone: string) {
   return { date: formatter.format(end), start: end - 60_000, end };
 }
 
+async function checkPaperDateLabels() {
+  const scroll = '.pulse-quota-chart-scroll--paper';
+  await browser.execute(() => {
+    const range = document.querySelector<HTMLSelectElement>('.pulse-quota-controls select')!;
+    range.value = '90d';
+    range.dispatchEvent(new Event('change', { bubbles: true }));
+  });
+  await browser.waitUntil(() => browser.execute(selector => {
+    const node = document.querySelector<HTMLElement>(selector);
+    if (!node) return false;
+    const max = node.scrollWidth - node.clientWidth;
+    return node.querySelectorAll('[data-chart-date]').length === 90 && max > 40 && Math.abs(node.scrollLeft - max) <= 2;
+  }, scroll));
+  const date = await browser.execute(selector => {
+    const node = document.querySelector<HTMLElement>(selector)!;
+    node.scrollLeft = 0;
+    const left = node.getBoundingClientRect().left + node.clientLeft;
+    const max = node.scrollWidth - node.clientWidth;
+    for (const text of node.querySelectorAll('[data-chart-date] text')) {
+      const bounds = text.getBoundingClientRect();
+      const center = (bounds.left + bounds.right) / 2 - left;
+      if (center < 40 || center >= max) continue;
+      node.scrollLeft = center;
+      return { day: text.parentElement!.getAttribute('data-chart-date')!, offset: node.scrollLeft };
+    }
+    throw new Error('Expected an interior date in the 90-day quota chart');
+  }, scroll);
+  const getBounds = () => browser.execute((selector, day) => {
+    const node = document.querySelector<HTMLElement>(selector)!;
+    const label = node.querySelector(`[data-chart-date="${day}"] text`) as SVGTextElement;
+    const bounds = label.getBoundingClientRect();
+    const left = node.getBoundingClientRect().left + node.clientLeft;
+    return { left: bounds.left - left, right: bounds.right - left, visible: getComputedStyle(label).visibility === 'visible' };
+  }, scroll, date.day);
+  await browser.waitUntil(async () => !(await getBounds()).visible);
+  const clipped = await getBounds();
+  expect(clipped.left).toBeLessThan(0);
+  expect(clipped.right).toBeGreaterThan(0);
+  await browser.execute((selector, offset) => {
+    document.querySelector<HTMLElement>(selector)!.scrollLeft = offset - 36;
+  }, scroll, date.offset);
+  await browser.waitUntil(async () => (await getBounds()).visible);
+  const restored = await getBounds();
+  expect(restored.left).toBeGreaterThan(2);
+  return { day: date.day, clipped, restored };
+}
+
 async function rejected(command: string, args: Record<string, unknown>, expected: RegExp | string) {
   // Catch within the webview so rejection of a real Rust command cannot be
   // confused with a WebDriver transport failure.
@@ -413,6 +460,7 @@ describe('Official quota history in the real offline Tauri app', () => {
         expect(geometry.documentFits).toBe(true);
         await browser.saveScreenshot(join(output, `quota-history-${skinId}-separate-scope.png`));
         skins.push({ skinId, total, coverage });
+        if (skinId === 'paper') record('paper-date-scroll', await checkPaperDateLabels());
       }
     } finally {
       try {

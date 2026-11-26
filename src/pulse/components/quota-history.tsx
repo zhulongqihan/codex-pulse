@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef, useState, type Ref } from "react";
+import { useEffect, useId, useLayoutEffect, useRef, useState, type RefObject } from "react";
 import { useTranslation } from "react-i18next";
 import { FileSpreadsheet, FileText } from "lucide-react";
 import { save } from "@tauri-apps/plugin-dialog";
@@ -141,15 +141,16 @@ function QuotaDayDetail({ date, kind, minutes, identityRevision, timezone, onClo
   </section>;
 }
 
-function PaperDailyChart({ rows, width, container, scrollable }: {
+function PaperDailyChart({ rows, width, container, viewportWidth }: {
   rows: QuotaHistoryDaily[];
   width: number;
-  container: Ref<HTMLDivElement>;
-  scrollable: boolean;
+  container: RefObject<HTMLDivElement | null>;
+  viewportWidth: number;
 }) {
   const { copy, number, points } = useCopy();
   const titleId = useId();
   const descriptionId = useId();
+  const scrollHintId = useId();
   const height = 174;
   const top = 10;
   const baseline = 142;
@@ -162,6 +163,45 @@ function PaperDailyChart({ rows, width, container, scrollable }: {
   const guides = [scale, scale / 2, 0];
   const barWidth = Math.max(2, Math.min(26, step * .62));
   const hasZero = rows.some(row => row.consumedPercentPoints === 0);
+  const dateRange = `${rows[0].date}:${rows[lastIndex].date}`;
+  const scrollable = viewportWidth > 0 && width > viewportWidth;
+  const scrollPosition = useRef({ range: "", left: 0, atLatest: true });
+
+  useLayoutEffect(() => {
+    const root = container.current;
+    if (!root) return;
+    const position = scrollPosition.current;
+    if (position.range !== dateRange) {
+      position.range = dateRange;
+      position.atLatest = true;
+    }
+    if (!position.atLatest) return;
+    const showLatest = () => {
+      if (!position.atLatest) return;
+      root.scrollLeft = root.scrollWidth;
+      position.left = root.scrollLeft;
+    };
+    showLatest();
+    const frame = requestAnimationFrame(showLatest);
+    return () => cancelAnimationFrame(frame);
+  }, [container, dateRange, viewportWidth, width]);
+
+  useEffect(() => {
+    const root = container.current;
+    if (!scrollable || !root) return;
+    const dates = root.querySelectorAll(".pulse-quota-chart-date");
+    // Observe the rendered text bounds so only complete dates show at either edge.
+    const observer = new IntersectionObserver(entries => {
+      for (const entry of entries) {
+        entry.target.toggleAttribute("data-in-view", entry.intersectionRatio >= 1);
+      }
+    }, { root, rootMargin: "0px -2px", threshold: 1 });
+    dates.forEach(date => observer.observe(date));
+    return () => {
+      observer.disconnect();
+      dates.forEach(date => date.removeAttribute("data-in-view"));
+    };
+  }, [container, dateRange, scrollable, width]);
 
   return <figure className="pulse-quota-chart--paper">
     <figcaption id={titleId}>{copy("chart")}</figcaption>
@@ -169,7 +209,15 @@ function PaperDailyChart({ rows, width, container, scrollable }: {
       <div className="pulse-quota-chart-axis" aria-hidden="true" style={{ height, paddingTop: top, paddingBottom: height - baseline }}>
         {guides.map(value => <span key={value}>{number(value)}</span>)}
       </div>
-      <div className="pulse-quota-chart-scroll pulse-quota-chart-scroll--paper" ref={container} tabIndex={scrollable ? 0 : undefined} aria-label={scrollable ? copy("chartScroll") : undefined}>
+      <div className="pulse-quota-chart-scroll pulse-quota-chart-scroll--paper" ref={container} data-scrollable={scrollable || undefined}
+        role={scrollable ? "region" : undefined} tabIndex={scrollable ? 0 : undefined}
+        aria-labelledby={scrollable ? titleId : undefined} aria-describedby={scrollable ? scrollHintId : undefined} onScroll={event => {
+        const { scrollLeft, scrollWidth, clientWidth } = event.currentTarget;
+        const position = scrollPosition.current;
+        if (scrollLeft === position.left) return;
+        position.left = scrollLeft;
+        position.atLatest = scrollWidth - clientWidth - scrollLeft <= 1;
+      }}>
         <svg role="img" aria-labelledby={titleId} aria-describedby={descriptionId} data-scale-max={scale} viewBox={`0 0 ${width} ${height}`} width={width} height={height}>
           <desc id={descriptionId}>{copy("sumNote")} {copy("table")}</desc>
           {guides.map(value => <line key={value} className="pulse-quota-chart-guide" x1="0" x2={width} y1={ordinate(value)} y2={ordinate(value)} data-baseline={value === 0 || undefined}/>)}
@@ -186,7 +234,7 @@ function PaperDailyChart({ rows, width, container, scrollable }: {
               <rect className="pulse-quota-chart-hit" x={x - step / 2} y={top} width={step} height={baseline - top + 4}/>
               {observation === "positive" ? <path className="pulse-quota-chart-bar" d={`M${barX} ${baseline}V${y + radius}Q${barX} ${y} ${barX + radius} ${y}H${right - radius}Q${right} ${y} ${right} ${y + radius}V${baseline}Z`}/> : null}
               {observation === "zero" ? <circle className="pulse-quota-chart-zero-dot" cx={x} cy={baseline} r="2.5"/> : null}
-              {(lastIndex - index) % dateStride === 0 ? <text x={x} y={height - 10} textAnchor="middle">{row.date.slice(5)}</text> : null}
+              {(lastIndex - index) % dateStride === 0 ? <text className="pulse-quota-chart-date" x={x} y={height - 10} textAnchor="middle">{row.date.slice(5)}</text> : null}
             </g>;
           })}
         </svg>
@@ -194,7 +242,7 @@ function PaperDailyChart({ rows, width, container, scrollable }: {
     </div>
     {hasZero || scrollable ? <div className="pulse-quota-chart-footer">
       {hasZero ? <span className="pulse-quota-chart-zero-key">{copy("unchanged")}</span> : null}
-      {scrollable ? <span>{copy("chartScroll")}</span> : null}
+      {scrollable ? <span id={scrollHintId}>{copy("chartScroll")}</span> : null}
     </div> : null}
   </figure>;
 }
@@ -217,14 +265,9 @@ function DailyChart({ rows, paper }: { rows: QuotaHistoryDaily[]; paper: boolean
   const latestDate = rows.at(-1)?.date;
   useEffect(() => {
     const element = container.current;
-    if (!element) return;
-    const showLatest = () => { element.scrollLeft = element.scrollWidth; };
-    showLatest();
-    if (!paper) return;
-    const frame = requestAnimationFrame(showLatest);
-    return () => cancelAnimationFrame(frame);
+    if (element && !paper) element.scrollLeft = element.scrollWidth;
   }, [width, viewportWidth, latestDate, paper]);
-  if (paper) return <PaperDailyChart rows={rows} width={width} container={container} scrollable={viewportWidth > 0 && width > viewportWidth}/>;
+  if (paper) return <PaperDailyChart rows={rows} width={width} container={container} viewportWidth={viewportWidth}/>;
   return <div>{rows.length > 31 ? <p className="pulse-quota-chart-hint">{copy("chartScroll")}</p> : null}<div className="pulse-quota-chart-scroll" ref={container} tabIndex={rows.length > 31 ? 0 : undefined} aria-label={rows.length > 31 ? copy("chartScroll") : undefined}><svg role="img" aria-label={copy("chart")} aria-describedby="quota-chart-description" data-scale-max={max} viewBox={`0 0 ${width} ${height}`} width={width} height={height}>
     <desc id="quota-chart-description">{copy("sumNote")} {copy("table")}</desc>
     <text x="0" y="12">{max}</text><text x="0" y={bottom}>0</text><line x1="38" x2={width} y1={bottom} y2={bottom}/>

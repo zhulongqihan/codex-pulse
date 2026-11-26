@@ -203,8 +203,9 @@ export function UsageTrendsCard({daily,metrics,cacheHitRate,chartHeight,classNam
   </section>;
   return fullscreen ? createPortal(<div className="pulse-chart-fullscreen" onKeyDown={event => {
     if (event.key !== "Tab") return;
-    const buttons = [...event.currentTarget.querySelectorAll<HTMLButtonElement>("button:not(:disabled),summary")];
-    const first = buttons[0]; const last = buttons.at(-1);
+    const controls = [...event.currentTarget.querySelectorAll<HTMLElement>("button:not(:disabled),summary")]
+      .filter(control => !control.hasAttribute("tabindex") || control.tabIndex >= 0);
+    const first = controls[0]; const last = controls.at(-1);
     if (event.shiftKey && document.activeElement === first) {event.preventDefault(); last?.focus();}
     else if (!event.shiftKey && document.activeElement === last) {event.preventDefault(); first?.focus();}
   }} role="dialog" aria-modal="true" aria-label={title ?? copy("trend")}>{plot}</div>,document.body) : plot;
