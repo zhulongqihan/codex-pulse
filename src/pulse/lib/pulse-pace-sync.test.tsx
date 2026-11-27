@@ -138,3 +138,64 @@ describe("notice read synchronization", () => {
     expect(hook.result.current.noticeError).toBe(false);
   });
 });
+
+describe("queued pace refresh synchronization", () => {
+  it("coalesces pending IPC, keeps repeated intents live, and reads events without sending another refresh command", async () => {
+    const listeners = new Set<() => void>();
+    vi.mocked(listen).mockImplementation(async (_event, handler) => {
+      const callback = handler as () => void;
+      listeners.add(callback);
+      return () => { listeners.delete(callback); };
+    });
+    const initial = syntheticCoachSnapshot("roomy");
+    const manual = deferred<PaceSnapshot>();
+    let state: PaceSnapshot = { ...initial, refreshAfterSeconds: 30 };
+    let requestsScheduled = 0;
+    vi.mocked(invoke).mockImplementation(async command => {
+      if (command !== "refresh_pulse_pace" || state.refreshQueued || state.refreshInFlight) return state;
+      requestsScheduled += 1;
+      return manual.promise;
+    });
+    const left = renderHook(() => usePulsePace());
+    const right = renderHook(() => usePulsePace());
+    await act(async () => {});
+
+    let requests!: Promise<void>[];
+    await act(async () => {
+      requests = [left.result.current.refresh(), left.result.current.refresh(), right.result.current.refresh()];
+    });
+    expect(left.result.current.refreshing).toBe(true);
+    expect(right.result.current.refreshing).toBe(true);
+    const accountCalls = () => vi.mocked(invoke).mock.calls.filter(([command]) => command === "refresh_pulse_pace");
+    expect(accountCalls()).toHaveLength(1);
+
+    state = { ...state, refreshQueued: true };
+    await act(async () => {
+      for (const callback of listeners) callback();
+      manual.resolve(state);
+      await Promise.all(requests);
+    });
+    expect(left.result.current.data?.refreshQueued).toBe(true);
+    expect(right.result.current.data?.refreshQueued).toBe(true);
+    expect(accountCalls()).toHaveLength(1);
+    await act(async () => { await right.result.current.refresh(); });
+    expect(accountCalls()).toHaveLength(2);
+    expect(requestsScheduled).toBe(1);
+
+    state = { ...initial, refreshInFlight: true };
+    await act(async () => { for (const callback of listeners) callback(); });
+    expect(right.result.current.data?.refreshInFlight).toBe(true);
+    expect(accountCalls()).toHaveLength(2);
+    await act(async () => { await left.result.current.refresh(); });
+    expect(accountCalls()).toHaveLength(3);
+    expect(requestsScheduled).toBe(1);
+
+    state = { ...initial, updatedAt: new Date(Date.parse(initial.updatedAt!) + 30_000).toISOString() };
+    await act(async () => { for (const callback of listeners) callback(); });
+    expect(left.result.current.data?.updatedAt).toBe(state.updatedAt);
+    expect(right.result.current.data?.updatedAt).toBe(state.updatedAt);
+    expect(left.result.current.data?.refreshInFlight).toBeUndefined();
+    expect(right.result.current.data?.refreshQueued).toBeUndefined();
+    expect(accountCalls()).toHaveLength(3);
+  });
+});

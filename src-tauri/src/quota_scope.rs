@@ -47,6 +47,16 @@ pub(crate) fn with_live<T>(apply: impl FnOnce(u64) -> T) -> T {
     apply(scope.revision)
 }
 
+pub(crate) fn with_observable<T>(apply: impl FnOnce(u64) -> T) -> Option<T> {
+    let scope = SCOPE.lock().unwrap_or_else(|error| error.into_inner());
+    scope.identity.as_ref().map(|_| apply(scope.revision))
+}
+
+pub(crate) fn matches_identity(revision: u64, identity: &str) -> bool {
+    let scope = SCOPE.lock().unwrap_or_else(|error| error.into_inner());
+    scope.revision == revision && scope.identity.as_deref() == Some(identity)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

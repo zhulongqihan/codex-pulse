@@ -1,8 +1,8 @@
 import { useEffect, useId, useState, type ComponentProps } from "react";
 import { useTranslation } from "react-i18next";
-import { Bell, ChevronDown, RefreshCw } from "lucide-react";
+import { Bell, ChevronDown } from "lucide-react";
 import { NoticeStatusText } from "./notice-status-details";
-import { CoachReference, CoachResetNotice, PulsePaceCard } from "./pulse-pace";
+import { CoachReference, CoachResetNotice, PaceRefreshControl, PulsePaceCard } from "./pulse-pace";
 import { noticeStateCopy } from "@/lib/notice-state-copy";
 import { quotaCoachFromSnapshot } from "@/lib/quota-pace-coach";
 import { formatCoachComparison, formatCoachCountdown, formatCoachNumber, formatCoachReset, formatCoachWindow, quotaCoachClarity, quotaCoachCopy, quotaCoachFeedback, quotaCoachReason } from "@/lib/quota-pace-coach-copy";
@@ -29,8 +29,6 @@ export function PulsePaceSummary({
   const ready = coach.status === "ready" && coach.tone != null;
   const projectedDepletion = ready && coach.remainingAtReset != null && coach.remainingAtReset.upperPercent < 1;
   const recentRisk = projectedDepletion && (coach.tone === "roomy" || coach.tone === "balanced");
-  const generated = Date.parse(data?.generatedAt ?? "");
-  const wait = data?.refreshAfterSeconds && Number.isFinite(generated) ? Math.max(0, Math.ceil(data.refreshAfterSeconds - (now - generated) / 1000)) : 0;
   const reason = !ready ? quotaCoachReason(language, data?.reason) : null;
   const readingLabel = ["stale", "failed", "expired", "unavailable"].includes(coach.status) && coach.remainingPercent != null ? quotaCoachFeedback(language, "last") : copy("remaining");
   const updatedDate = data?.updatedAt && Number.isFinite(Date.parse(data.updatedAt)) ? new Date(data.updatedAt) : null;
@@ -56,7 +54,7 @@ export function PulsePaceSummary({
           {showUpdated ? <p><time dateTime={updatedDate?.toISOString()}>{updated}</time></p> : null}
         </ReadingInfo> : null}
       </div>
-      <div className="pulse-summary-updated">{wait > 0 ? <span role="timer">{quotaCoachFeedback(language, "cooldownShort", { seconds: wait })}</span> : null}<button type="button" onClick={onRefresh} disabled={refreshing || wait > 0} aria-busy={refreshing} aria-label={paceCopy(language, "refresh")} title={paceCopy(language, "refresh")}><RefreshCw size={16}/></button></div>
+      <div className="pulse-summary-updated"><PaceRefreshControl data={data} refreshing={refreshing} language={language} now={now} onRefresh={onRefresh}/></div>
     </header>
     <div className="pulse-summary-readings">
       {!pacingOnly ? <><div>

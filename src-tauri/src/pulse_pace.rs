@@ -228,7 +228,10 @@ pub(crate) fn stable_identity(auth: &CodexAuth, environment: &CodexEnvironment) 
     Some(format!("{:x}", digest.finalize()))
 }
 
-fn transient_scope_identity(auth: &CodexAuth, environment: &CodexEnvironment) -> Option<String> {
+pub(crate) fn transient_scope_identity(
+    auth: &CodexAuth,
+    environment: &CodexEnvironment,
+) -> Option<String> {
     if !auth.is_chatgpt {
         return None;
     }

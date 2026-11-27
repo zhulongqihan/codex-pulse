@@ -51,15 +51,28 @@ fn local_usage(value: Option<&Value>, now: DateTime<Utc>) -> Value {
 
 fn presentation(directory: &Path, widget: Option<Value>) -> Result<Value, String> {
     let now = Utc::now();
-    let pace = crate::pulse_pace::read_snapshot(directory, now);
+    let (pace, (failed, wait, queued, in_flight)) = crate::quota_scope::with_live(|_| {
+        let pace = crate::pulse_pace::read_snapshot(directory, now);
+        let gate = POLL_GATE.lock().unwrap_or_else(|error| error.into_inner());
+        (
+            pace,
+            (
+                gate.failed,
+                gate.wait_seconds(Instant::now()),
+                gate.queued,
+                gate.in_flight(),
+            ),
+        )
+    });
     let extras = crate::pulse_coach::extras(directory, &pace, now);
     let mut value = serde_json::to_value(pace).map_err(|_| "Could not read usage pace")?;
     value["coachExtras"] =
         serde_json::to_value(extras).map_err(|_| "Could not read coach context")?;
     value["localUsage"] = local_usage(widget.as_ref().and_then(|data| data.get("localUsage")), now);
-    let gate = POLL_GATE.lock().unwrap_or_else(|error| error.into_inner());
-    value["refreshFailed"] = json!(gate.failed);
-    value["refreshAfterSeconds"] = json!(gate.wait_seconds(Instant::now()));
+    value["refreshFailed"] = json!(failed);
+    value["refreshAfterSeconds"] = json!(wait);
+    value["refreshQueued"] = json!(queued);
+    value["refreshInFlight"] = json!(in_flight);
     Ok(value)
 }
 
@@ -88,25 +101,43 @@ pub async fn refresh_pulse_pace(
         .map_err(|_| "Local usage is unavailable")?
         .clone();
     let directory = paths.data.clone();
-    let result = tauri::async_runtime::spawn_blocking(move || {
-        let response = guarded_observation();
-        let mut value = presentation(&directory, data)?;
-        // Returning stale/unknown readings retains context without exposing service errors.
-        value["refreshFailed"] = json!(response.failed);
-        value["refreshAfterSeconds"] = json!(response.wait_seconds);
-        Ok(value)
+    tauri::async_runtime::spawn_blocking(move || {
+        let identity_changed = crate::pulse_pace::reconcile_current_identity();
+        let (poll, changed) = crate::quota_scope::with_observable(|_| {
+            POLL_GATE
+                .lock()
+                .unwrap_or_else(|error| error.into_inner())
+                .request(Instant::now())
+        })
+        .unwrap_or((None, false));
+        let result = presentation(&directory, data);
+        if changed || identity_changed {
+            let _ = app.emit("pulse-pace-updated", ());
+        }
+        if let Some(poll) = poll {
+            tauri::async_runtime::spawn_blocking(move || run_observation(&app, poll));
+        }
+        result
     })
     .await
-    .map_err(|_| "Usage pace refresh did not complete".to_string())?;
-    let _ = app.emit("pulse-pace-updated", ());
-    result
+    .map_err(|_| "Usage pace refresh did not complete".to_string())?
+}
+
+#[derive(Clone, Copy, Debug)]
+struct PollLease {
+    scope: u64,
+    started_at: Instant,
+    outcome_before: u64,
 }
 
 #[derive(Debug)]
 struct PollGate {
     next: Instant,
     failures: u32,
-    in_flight: bool,
+    poll_started_at: Option<Instant>,
+    account_generation: Option<u64>,
+    queued: bool,
+    scope: u64,
     failed: bool,
     outcome_revision: u64,
 }
@@ -115,18 +146,70 @@ impl PollGate {
         Self {
             next: now,
             failures: 0,
-            in_flight: false,
+            poll_started_at: None,
+            account_generation: None,
+            queued: false,
+            scope: 0,
             failed: false,
             outcome_revision: 0,
         }
     }
-    fn start(&mut self, now: Instant) -> bool {
-        if self.in_flight || now < self.next {
+    fn in_flight(&self) -> bool {
+        self.poll_started_at.is_some() || self.account_generation.is_some()
+    }
+    fn due(&self, now: Instant) -> bool {
+        !self.in_flight() && now >= self.next
+    }
+    fn start(&mut self, now: Instant) -> Option<PollLease> {
+        if !self.due(now) {
+            return None;
+        }
+        self.queued = false;
+        self.poll_started_at = Some(now);
+        self.next = now + Duration::from_secs(60);
+        Some(PollLease {
+            scope: self.scope,
+            started_at: now,
+            outcome_before: self.outcome_revision,
+        })
+    }
+    fn request(&mut self, now: Instant) -> (Option<PollLease>, bool) {
+        if self.in_flight() || self.queued {
+            return (None, false);
+        }
+        let poll = self.start(now);
+        self.queued = poll.is_none();
+        (poll, true)
+    }
+    fn start_scheduled(
+        &mut self,
+        now: Instant,
+        scope: u64,
+        has_display_or_recording: bool,
+    ) -> Option<PollLease> {
+        if self.scope != scope || !(self.queued || has_display_or_recording) {
+            return None;
+        }
+        self.start(now)
+    }
+    fn start_account(&mut self, scope: u64, generation: u64) -> bool {
+        if self.scope != scope
+            || self
+                .account_generation
+                .is_some_and(|active| active >= generation)
+        {
             return false;
         }
-        self.in_flight = true;
-        self.next = now + Duration::from_secs(60);
+        self.account_generation = Some(generation);
+        self.queued = false;
         true
+    }
+    fn release_account(&mut self, scope: u64, generation: u64) -> bool {
+        if self.scope == scope && self.account_generation == Some(generation) {
+            self.account_generation = None;
+            return true;
+        }
+        false
     }
     /// An accepted account completion updates all entries, but does not own the poll lease.
     fn finish(&mut self, now: Instant, error: Option<&str>) {
@@ -147,36 +230,43 @@ impl PollGate {
         self.next = self.next.max(now + Duration::from_secs(delay));
     }
     fn release(&mut self, now: Instant) {
-        self.in_flight = false;
+        self.poll_started_at = None;
         self.next = self.next.max(now + Duration::from_secs(60));
     }
-    fn complete(&mut self, now: Instant, before: u64, error: Option<&str>) {
+    fn complete(&mut self, now: Instant, lease: PollLease, error: Option<&str>) -> bool {
+        if self.scope != lease.scope || self.poll_started_at != Some(lease.started_at) {
+            return false;
+        }
         // Errors before a flight exists still need a visible outcome. Never
         // count an already-published failure twice or overwrite a newer result.
-        if self.outcome_revision == before {
+        if self.outcome_revision == lease.outcome_before {
             if let Some(error) = error.filter(|error| *error != "identityChanged") {
                 self.finish(now, Some(error));
             }
         }
         self.release(now);
+        true
     }
-    fn invalidate(&mut self) {
+    fn invalidate(&mut self, scope: u64) {
+        self.scope = scope;
+        self.queued = false;
+        self.poll_started_at = None;
+        self.account_generation = None;
         self.failed = false;
         self.failures = 0;
         self.outcome_revision = self.outcome_revision.wrapping_add(1);
     }
     fn wait_seconds(&self, now: Instant) -> u64 {
-        self.next
-            .saturating_duration_since(now)
-            .as_secs()
-            .saturating_add(1)
+        let wait = self.next.saturating_duration_since(now);
+        wait.as_secs()
+            .saturating_add(u64::from(wait.subsec_nanos() > 0))
     }
 }
 static POLL_GATE: LazyLock<Mutex<PollGate>> =
     LazyLock::new(|| Mutex::new(PollGate::new(Instant::now())));
-pub(crate) fn invalidate_scope() {
+pub(crate) fn invalidate_scope(scope: u64) {
     let mut gate = POLL_GATE.lock().unwrap_or_else(|error| error.into_inner());
-    gate.invalidate();
+    gate.invalidate(scope);
 }
 pub(crate) fn refresh_failed() -> bool {
     POLL_GATE.lock().unwrap_or_else(|error| error.into_inner()).failed
@@ -188,33 +278,32 @@ pub(crate) fn account_observation_finished(error: Option<&str>) {
         .unwrap_or_else(|error| error.into_inner())
         .finish(Instant::now(), error);
 }
-struct PollOutcome {
-    failed: bool,
-    wait_seconds: u64,
+pub(crate) fn account_observation_started(scope: u64, generation: u64) -> bool {
+    POLL_GATE
+        .lock()
+        .unwrap_or_else(|error| error.into_inner())
+        .start_account(scope, generation)
 }
-fn guarded_observation() -> PollOutcome {
-    let before = {
-        let mut gate = POLL_GATE.lock().unwrap_or_else(|error| error.into_inner());
-        if !gate.start(Instant::now()) {
-            return PollOutcome {
-                failed: gate.failed,
-                wait_seconds: gate.wait_seconds(Instant::now()),
-            };
-        }
-        gate.outcome_revision
-    };
-    let result = crate::codex_limits::fetch_codex_limits();
-    let mut gate = POLL_GATE.lock().unwrap_or_else(|error| error.into_inner());
+pub(crate) fn account_observation_released(scope: u64, generation: u64) -> bool {
+    POLL_GATE
+        .lock()
+        .unwrap_or_else(|error| error.into_inner())
+        .release_account(scope, generation)
+}
+fn run_observation(app: &tauri::AppHandle, poll: PollLease) {
+    let result = crate::codex_limits::fetch_codex_limits_for_scope(poll.scope);
     // Only the shared owner commits an outcome. A retired or delayed caller must
     // not mark a newer account observation failed when releasing its own lease.
-    gate.complete(
-        Instant::now(),
-        before,
-        result.as_ref().err().map(String::as_str),
-    );
-    PollOutcome {
-        failed: gate.failed,
-        wait_seconds: gate.wait_seconds(Instant::now()),
+    let completed = POLL_GATE
+        .lock()
+        .unwrap_or_else(|error| error.into_inner())
+        .complete(
+            Instant::now(),
+            poll,
+            result.as_ref().err().map(String::as_str),
+        );
+    if completed {
+        let _ = app.emit("pulse-pace-updated", ());
     }
 }
 
@@ -243,11 +332,11 @@ fn needs_observations(titlebar: bool, widget: bool, main: bool, recording: bool)
 
 /// All new pace refreshes share one cooldown. Identity checks never make a network request.
 pub fn start_sampler(app: tauri::AppHandle) {
+    POLL_GATE
+        .lock()
+        .unwrap_or_else(|error| error.into_inner())
+        .next = Instant::now() + Duration::from_secs(60);
     std::thread::spawn(move || {
-        POLL_GATE
-            .lock()
-            .unwrap_or_else(|error| error.into_inner())
-            .next = Instant::now() + Duration::from_secs(60);
         let mut visibility = VisibilityProbe::new(Instant::now());
         loop {
             std::thread::sleep(Duration::from_secs(5));
@@ -261,36 +350,53 @@ pub fn start_sampler(app: tauri::AppHandle) {
             if crate::pulse_pace::reconcile_current_identity() {
                 let _ = app.emit("pulse-pace-updated", ());
             }
-            let due = {
+            let (due, queued, observed_scope) = {
                 let gate = POLL_GATE.lock().unwrap_or_else(|error| error.into_inner());
-                !gate.in_flight && Instant::now() >= gate.next
+                (gate.due(Instant::now()), gate.queued, gate.scope)
             };
             if !due {
                 continue;
             }
-            let (titlebar, widget) = app
-                .state::<crate::pulse_desktop::PreferenceStore>()
-                .value
-                .lock()
-                .map(|preferences| (preferences.titlebar_enabled, preferences.widget_visible))
-                .unwrap_or((false, false));
-            // Query native visibility only when sampling is due and no companion
-            // needs it. Cache for 30s; this is never part of the native follow path.
-            let main = if titlebar || widget {
-                false
-            } else {
-                visibility.visible(Instant::now(), || {
-                    app.get_webview_window("main").is_some_and(|window| {
-                        window.is_visible().unwrap_or(false)
-                            && !window.is_minimized().unwrap_or(true)
+            let has_display_or_recording = !queued && {
+                let (titlebar, widget) = app
+                    .state::<crate::pulse_desktop::PreferenceStore>()
+                    .value
+                    .lock()
+                    .map(|preferences| (preferences.titlebar_enabled, preferences.widget_visible))
+                    .unwrap_or((false, false));
+                // Query native visibility only for routine sampling when no
+                // companion already requires it.
+                let main = if titlebar || widget {
+                    false
+                } else {
+                    visibility.visible(Instant::now(), || {
+                        app.get_webview_window("main").is_some_and(|window| {
+                            window.is_visible().unwrap_or(false)
+                                && !window.is_minimized().unwrap_or(true)
+                        })
                     })
-                })
+                };
+                needs_observations(
+                    titlebar,
+                    widget,
+                    main,
+                    crate::quota_history::recording_enabled(),
+                )
             };
-            if !needs_observations(titlebar, widget, main, crate::quota_history::recording_enabled()) {
-                continue;
+            let poll = crate::quota_scope::with_observable(|scope| {
+                if scope != observed_scope {
+                    return None;
+                }
+                POLL_GATE
+                    .lock()
+                    .unwrap_or_else(|error| error.into_inner())
+                    .start_scheduled(Instant::now(), scope, has_display_or_recording)
+            })
+            .flatten();
+            if let Some(poll) = poll {
+                let _ = app.emit("pulse-pace-updated", ());
+                run_observation(&app, poll);
             }
-            guarded_observation();
-            let _ = app.emit("pulse-pace-updated", ());
         }
     });
 }
@@ -356,12 +462,12 @@ mod tests {
     fn manual_and_scheduled_refreshes_cannot_bypass_cooldown_or_in_flight_request() {
         let now = Instant::now();
         let mut gate = PollGate::new(now);
-        assert!(gate.start(now));
-        assert!(!gate.start(now + Duration::from_secs(120)));
+        assert!(gate.start(now).is_some());
+        assert!(gate.start(now + Duration::from_secs(120)).is_none());
         gate.finish(now, None);
         gate.release(now);
-        assert!(!gate.start(now + Duration::from_secs(59)));
-        assert!(gate.start(now + Duration::from_secs(60)));
+        assert!(gate.start(now + Duration::from_secs(59)).is_none());
+        assert!(gate.start(now + Duration::from_secs(60)).is_some());
     }
     #[test]
     fn rate_limits_keep_the_deadline_then_success_recovers_normal_cadence() {
@@ -369,8 +475,8 @@ mod tests {
         let mut gate = PollGate::new(now);
         gate.finish(now, Some("quota response 429"));
         assert!(gate.failed);
-        assert!(!gate.start(now + Duration::from_secs(299)));
-        assert!(gate.start(now + Duration::from_secs(300)));
+        assert!(gate.start(now + Duration::from_secs(299)).is_none());
+        assert!(gate.start(now + Duration::from_secs(300)).is_some());
         for _ in 0..10 {
             gate.finish(now, Some("service unavailable"));
         }
@@ -381,7 +487,7 @@ mod tests {
         assert_eq!(gate.next.duration_since(now), Duration::from_secs(900));
         gate.release(now);
         let later = now + Duration::from_secs(900);
-        assert!(gate.start(later));
+        assert!(gate.start(later).is_some());
         gate.finish(later, None);
         gate.release(later);
         assert_eq!(gate.next.duration_since(later), Duration::from_secs(60));
@@ -407,39 +513,38 @@ mod tests {
     fn quota_refresh_published_success_does_not_release_a_running_pace_read() {
         let now = Instant::now();
         let mut gate = PollGate::new(now);
-        assert!(gate.start(now));
+        assert!(gate.start(now).is_some());
         gate.finish(now + Duration::from_secs(1), None);
         assert!(
-            gate.in_flight,
+            gate.in_flight(),
             "Publication and poll ownership are separate"
         );
-        assert!(!gate.start(now + Duration::from_secs(300)));
+        assert!(gate.start(now + Duration::from_secs(300)).is_none());
         gate.release(now + Duration::from_secs(1));
-        assert!(!gate.in_flight);
-        assert!(gate.start(now + Duration::from_secs(61)));
+        assert!(!gate.in_flight());
+        assert!(gate.start(now + Duration::from_secs(61)).is_some());
     }
     #[test]
     fn quota_refresh_true_failure_keeps_backoff_after_a_late_poll_release() {
         let now = Instant::now();
         let mut gate = PollGate::new(now);
-        assert!(gate.start(now));
+        assert!(gate.start(now).is_some());
         gate.finish(now + Duration::from_secs(5), Some("synthetic timeout"));
         assert!(gate.failed);
         assert_eq!(gate.next.duration_since(now), Duration::from_secs(125));
         gate.release(now + Duration::from_secs(6));
         assert!(gate.failed);
-        assert!(!gate.start(now + Duration::from_secs(124)));
-        assert!(gate.start(now + Duration::from_secs(125)));
+        assert!(gate.start(now + Duration::from_secs(124)).is_none());
+        assert!(gate.start(now + Duration::from_secs(125)).is_some());
     }
     #[test]
     fn quota_refresh_unpublished_local_error_is_visible_but_cannot_overwrite_recovery() {
         let now = Instant::now();
         let mut gate = PollGate::new(now);
-        assert!(gate.start(now));
-        let before = gate.outcome_revision;
+        let poll = gate.start(now).unwrap();
         gate.complete(
             now + Duration::from_secs(5),
-            before,
+            poll,
             Some("synthetic local lock error"),
         );
         assert!(gate.failed);
@@ -447,7 +552,7 @@ mod tests {
         gate.finish(now + Duration::from_secs(6), None);
         gate.complete(
             now + Duration::from_secs(7),
-            before,
+            poll,
             Some("older local error"),
         );
         assert!(!gate.failed);
@@ -457,13 +562,12 @@ mod tests {
     fn quota_refresh_a_published_failure_is_not_backed_off_twice() {
         let now = Instant::now();
         let mut gate = PollGate::new(now);
-        assert!(gate.start(now));
-        let before = gate.outcome_revision;
+        let poll = gate.start(now).unwrap();
         gate.finish(now + Duration::from_secs(5), Some("synthetic timeout"));
         let deadline = gate.next;
         gate.complete(
             now + Duration::from_secs(6),
-            before,
+            poll,
             Some("synthetic timeout"),
         );
         assert_eq!(gate.failures, 1);
@@ -473,22 +577,97 @@ mod tests {
     fn quota_refresh_old_scope_or_retired_completion_cannot_fail_the_new_scope() {
         let now = Instant::now();
         let mut gate = PollGate::new(now);
-        assert!(gate.start(now));
-        let before = gate.outcome_revision;
-        gate.invalidate();
-        gate.complete(
+        let poll = gate.start(now).unwrap();
+        gate.invalidate(1);
+        assert!(!gate.complete(
             now + Duration::from_secs(1),
-            before,
+            poll,
             Some("old scope local error"),
-        );
+        ));
         assert!(!gate.failed);
-        let before = gate.outcome_revision;
+        let current_time = now + Duration::from_secs(60);
+        let current = gate.start(current_time).unwrap();
+        assert!(!gate.complete(current_time, poll, Some("retired")));
+        assert!(gate.in_flight());
         gate.complete(
-            now + Duration::from_secs(2),
-            before,
+            current_time + Duration::from_secs(2),
+            current,
             Some("identityChanged"),
         );
         assert!(!gate.failed);
         assert_eq!(gate.failures, 0);
+    }
+
+    #[test]
+    fn a_cooldown_click_is_consumed_once_at_the_backoff_deadline() {
+        let now = Instant::now();
+        let mut gate = PollGate::new(now);
+        gate.finish(now, Some("synthetic 429"));
+        let (poll, changed) = gate.request(now + Duration::from_secs(1));
+        assert!(poll.is_none() && changed && gate.queued);
+        assert_eq!(gate.wait_seconds(now + Duration::from_secs(1)), 299);
+        assert!(!gate.request(now + Duration::from_secs(2)).1);
+        assert!(gate.start(now + Duration::from_secs(299)).is_none() && gate.queued);
+
+        let due = now + Duration::from_secs(300);
+        let poll = gate.start(due).unwrap();
+        assert!(!gate.queued && gate.in_flight());
+        assert!(!gate.request(due).1);
+        gate.complete(due, poll, Some("synthetic timeout"));
+        assert!(gate.failed && !gate.queued && !gate.in_flight());
+        assert_eq!(gate.wait_seconds(due), 240);
+        assert!(!gate.due(due + Duration::from_secs(239)));
+    }
+
+    #[test]
+    fn an_existing_account_query_fulfills_pending_intent_and_repeated_clicks_share_it() {
+        let now = Instant::now();
+        let mut gate = PollGate::new(now);
+        gate.invalidate(4);
+        gate.finish(now, None);
+        assert!(gate.request(now).1 && gate.queued);
+        assert!(gate.start_account(4, 11));
+        assert!(gate.in_flight() && !gate.queued);
+        assert!(!gate.request(now + Duration::from_secs(60)).1);
+        assert!(!gate.release_account(4, 10));
+        gate.finish(now + Duration::from_secs(8), None);
+        assert!(gate.release_account(4, 11));
+        assert!(!gate.queued && !gate.in_flight());
+        assert!(!gate.due(now + Duration::from_secs(67)));
+    }
+
+    #[test]
+    fn a_new_scope_drops_the_old_queue_and_rejects_retired_account_leases() {
+        let now = Instant::now();
+        let mut gate = PollGate::new(now);
+        gate.invalidate(7);
+        gate.finish(now, None);
+        assert!(gate.request(now).1 && gate.queued);
+        gate.invalidate(8);
+        assert!(!gate.queued);
+        assert!(!gate.start_account(7, 12));
+        assert!(gate.start_account(8, 13));
+        assert!(!gate.release_account(7, 12));
+        assert!(gate.in_flight());
+        assert!(gate.release_account(8, 13));
+        assert!(!gate.in_flight());
+    }
+
+    #[test]
+    fn automatic_sampling_still_requires_demand_but_an_explicit_queue_can_finish_hidden() {
+        let now = Instant::now();
+        let mut gate = PollGate::new(now);
+        gate.invalidate(1);
+        assert!(gate.start_scheduled(now, 1, false).is_none());
+        gate.finish(now, None);
+        assert!(gate.request(now).1);
+        assert!(gate
+            .start_scheduled(now + Duration::from_secs(60), 2, true)
+            .is_none());
+        assert!(gate.queued);
+        assert!(gate
+            .start_scheduled(now + Duration::from_secs(60), 1, false)
+            .is_some());
+        assert!(!gate.queued);
     }
 }

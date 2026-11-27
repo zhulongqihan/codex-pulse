@@ -44,22 +44,35 @@ describe("shared cycle pace card", () => {
     fireEvent.click(timeInfo());
     expect(screen.getByRole("tooltip")).toHaveTextContent("61% of quota used");
   });
-  it("shows just the title-bar retry timer during cooldown and restores the refresh action", () => {
+  it("keeps the title-bar refresh action and focus through cooldown, queue and active refresh", () => {
     vi.useFakeTimers();
     try {
       vi.setSystemTime(now);
       vi.spyOn(Date, "now").mockImplementation(() => new Date().getTime());
       const data = { ...cycle(), generatedAt: iso(0), refreshAfterSeconds: 3 };
       const handlers = actions();
-      render(<PulsePaceCard data={data} {...handlers}/>);
+      const { rerender } = render(<PulsePaceCard data={data} {...handlers}/>);
       const timer = screen.getByRole("timer");
-      expect(timer).toHaveTextContent("Retry in 3s");
+      const button = screen.getByRole("button", { name: paceCopy("en", "refresh") });
+      expect(timer).toHaveTextContent("Cooldown: 3s");
       expect(timer).not.toHaveAttribute("title");
-      expect(screen.queryByRole("button", { name: paceCopy("en", "refresh") })).not.toBeInTheDocument();
+      expect(button).toBeEnabled();
+      expect(button).toHaveAttribute("title", "Click to queue a refresh in 3s");
+      button.focus();
+      fireEvent.click(button);
+      expect(handlers.onRefresh).toHaveBeenCalledOnce();
+      rerender(<PulsePaceCard data={{ ...data, refreshQueued: true }} {...handlers}/>);
+      expect(timer).toHaveTextContent("Refreshing in 3s");
+      expect(button).toHaveFocus();
+      expect(button).toHaveAttribute("aria-busy", "false");
       act(() => { vi.advanceTimersByTime(3000); });
       expect(screen.queryByRole("timer")).not.toBeInTheDocument();
-      fireEvent.click(screen.getByRole("button", { name: paceCopy("en", "refresh") }));
-      expect(handlers.onRefresh).toHaveBeenCalledOnce();
+      expect(screen.getByTestId("coach-refresh-status")).toHaveTextContent("Waiting to refresh");
+      rerender(<PulsePaceCard data={{ ...data, refreshInFlight: true }} {...handlers}/>);
+      expect(screen.getByTestId("coach-refresh-status")).toHaveTextContent("Refreshing account readings");
+      expect(button).toHaveFocus();
+      expect(button).toHaveAttribute("aria-busy", "true");
+      expect(button).toBeEnabled();
     } finally { vi.useRealTimers(); }
   });
   it.each(["failed", "stale"] as const)("shows the cached quota comparison in the title-bar hint when %s", async state => {
@@ -203,15 +216,17 @@ describe("shared cycle pace card", () => {
     rerender(<PulsePaceCard data={cycle(0)} variant="compact" {...actions()}/>);
     expect(screen.getByTestId("coach-remaining")).toHaveTextContent("0%");
   });
-  it("keeps compact cooldown and reading age together without a separate footer paragraph", () => {
+  it("offers the same queue action during compact cooldown", () => {
     const data = { ...cycle(), generatedAt: iso(0), refreshAfterSeconds: 25 };
-    render(<PulsePaceCard data={data} variant="compact" {...actions()}/>);
+    const handlers = actions();
+    render(<PulsePaceCard data={data} variant="compact" {...handlers}/>);
     const wait = screen.getByTestId("coach-refresh-wait");
     expect(wait.tagName).toBe("SPAN");
-    expect(wait.parentElement).toHaveTextContent("Read just now");
-    expect(wait).toHaveTextContent("Retry in 25s");
-    expect(wait).toHaveAttribute("title", expect.stringContaining("retry in 25s"));
-    expect(screen.getByRole("button", { name: "Refresh account readings" })).toBeDisabled();
+    expect(wait).toHaveTextContent("Cooldown: 25s");
+    const button = screen.getByRole("button", { name: "Refresh account readings" });
+    expect(button).toBeEnabled();
+    fireEvent.click(button);
+    expect(handlers.onRefresh).toHaveBeenCalledOnce();
   });
   it("labels retained compact readings, their age and a direct refresh without hiding the failure", () => {
     const data = cycle(); data.updatedAt = iso(-10);
@@ -222,14 +237,14 @@ describe("shared cycle pace card", () => {
     fireEvent.click(screen.getByRole("button", { name: "Refresh account readings" }));
     expect(handlers.onRefresh).toHaveBeenCalledOnce();
   });
-  it("explains the returned refresh gate and reenables refresh when its actual delay passes", () => {
+  it("explains workspace cooldown while keeping refresh reachable", () => {
     vi.useFakeTimers();
     try {
       vi.setSystemTime(now); vi.spyOn(Date, "now").mockImplementation(() => new Date().getTime());
       const data = { ...cycle(), generatedAt: iso(0), refreshAfterSeconds: 2 };
       render(<PulsePaceCard data={data} variant="workspace" {...actions()}/>);
-      expect(screen.getByRole("button", { name: "Refresh account readings" })).toBeDisabled();
-      expect(screen.getByTestId("coach-refresh-wait")).toHaveTextContent("Retry in 2s");
+      expect(screen.getByRole("button", { name: "Refresh account readings" })).toBeEnabled();
+      expect(screen.getByTestId("coach-refresh-wait")).toHaveTextContent("Cooldown: 2s");
       expect(screen.getByTestId("coach-refresh-wait").tagName).toBe("SPAN");
       expect(screen.queryByText(/^Updated /)).not.toBeInTheDocument();
       fireEvent.click(timeInfo());
@@ -357,7 +372,7 @@ describe("shared cycle pace card", () => {
     const handlers = actions(); render(<PulsePaceCard data={cycle()} refreshing {...handlers}/>);
     expect(screen.getByRole("button", { name: "Close usage rhythm" })).toHaveFocus();
     const refresh = screen.getByRole("button", { name: "Refresh account readings" });
-    expect(refresh).toBeDisabled();
+    expect(refresh).toBeEnabled();
     expect(refresh).toHaveAttribute("aria-busy", "true");
     expect(refresh.querySelector("svg")).not.toHaveClass("is-refreshing");
     fireEvent.keyDown(document, { key: "Escape" }); expect(handlers.onClose).toHaveBeenCalledOnce();

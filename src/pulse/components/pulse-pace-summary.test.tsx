@@ -98,15 +98,19 @@ describe("dashboard quota summary", () => {
     expect(screen.getByRole("status")).toHaveTextContent(quotaCoachCopy("en", "unavailable"));
     expect(screen.getByRole("button", { name: quotaCoachFeedback("en", "recover") })).toBeEnabled();
   });
-  it("does not turn unavailable data into zero or bypass existing cooldown", () => {
+  it("keeps unavailable data distinct from zero and lets a user queue a refresh", () => {
     const handlers = actions();
     const data = syntheticCoachSnapshot("roomy", new Date(now));
     const { rerender } = render(<PulsePaceSummary data={null} {...handlers}/>);
     expect(screen.getByTestId("summary-remaining")).toHaveTextContent("—");
     rerender(<PulsePaceSummary data={{...data,refreshAfterSeconds:300}} {...handlers}/>);
-    expect(screen.getByRole("button", { name: paceCopy("en", "refresh") })).toBeDisabled();
+    const button = screen.getByRole("button", { name: paceCopy("en", "refresh") });
+    expect(button).toBeEnabled();
     expect(screen.getByRole("timer")).toHaveTextContent("300");
-    expect(handlers.onRefresh).not.toHaveBeenCalled();
+    fireEvent.click(button);
+    expect(handlers.onRefresh).toHaveBeenCalledOnce();
+    rerender(<PulsePaceSummary data={{ ...data, refreshAfterSeconds: 300, refreshQueued: true }} {...handlers}/>);
+    expect(screen.getByRole("timer")).toHaveTextContent("Refreshing in 300s");
   });
   it("keeps a valid unread notice visible and preserves the mark-read action in details", () => {
     const mark = vi.fn();

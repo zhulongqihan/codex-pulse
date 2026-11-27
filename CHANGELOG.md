@@ -4,6 +4,15 @@ User-facing changes are grouped by release, following [Keep a Changelog](https:/
 
 ## [Unreleased]
 
+## [0.14.12] - 2026-11-28
+
+### Fixed / 修复
+
+- Accept pace refresh clicks during the cooldown, show when the refresh is scheduled, and combine repeat clicks with the pending check.
+- 配速刷新在冷却期间也能点击。Pulse 会显示等待时间、合并重复点击，并在可以查询时自动执行。
+
+[完整中英说明 / Full release notes](docs/releases/v0.14.12.md)
+
 ## [0.14.11] - 2026-11-26
 
 ### Fixed / 修复

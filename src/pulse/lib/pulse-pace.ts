@@ -1,6 +1,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { decorateDemoPaceRefresh, subscribeDemoPaceRefresh } from "../../demo/pace-refresh";
 
 export type PaceState = "unavailable" | "sampling" | "stale" | "expired" | "idle" | "slow" | "forecast" | "exhausted";
 export type PaceRisk = "unknown" | "before_reset" | "near_reset" | "after_reset" | "exhausted";
@@ -57,6 +58,8 @@ export type PaceSnapshot = {
   windows: PaceWindow[];
   localUsage?: PaceLocalUsage | null;
   refreshFailed?: boolean;
+  refreshQueued?: boolean;
+  refreshInFlight?: boolean;
   refreshAfterSeconds?: number;
   coachExtras?: PaceCoachExtras;
 };
@@ -136,6 +139,7 @@ export function syntheticCoachSnapshot(scenario: SyntheticCoachScenario = "roomy
   return data;
 }
 let pendingRead: Promise<PaceSnapshot> | null = null;
+let pendingRefresh: Promise<PaceSnapshot> | null = null;
 // An update means a response captured before it can no longer satisfy a local read.
 const invalidatePaceRead = () => { pendingRead = null; };
 export function fetchPulsePace(refresh = false): Promise<PaceSnapshot> {
@@ -145,12 +149,16 @@ export function fetchPulsePace(refresh = false): Promise<PaceSnapshot> {
     if (coachScenarios.includes(coachScenario)) {
       const value = syntheticCoachSnapshot(coachScenario, new Date(), query.get("noticeScenario") as PaceNoticeState["status"]);
       if (value.coachExtras?.resetNotice && demoReadNotices.has(value.coachExtras.resetNotice.id)) value.coachExtras.resetNotice.isUnread = false;
-      return Promise.resolve(value);
+      return Promise.resolve(decorateDemoPaceRefresh(value, refresh));
     }
     const state = (query.get("paceScenario") ?? query.get("paceState")) as PaceState;
-    return Promise.resolve(paceStates.includes(state) ? syntheticPaceSnapshot(state) : syntheticCoachSnapshot("roomy"));
+    const value = paceStates.includes(state) ? syntheticPaceSnapshot(state) : syntheticCoachSnapshot("roomy");
+    return Promise.resolve(decorateDemoPaceRefresh(value, refresh));
   }
-  if (refresh) return invoke<PaceSnapshot>("refresh_pulse_pace");
+  if (refresh) {
+    pendingRefresh ??= invoke<PaceSnapshot>("refresh_pulse_pace").finally(() => { pendingRefresh = null; });
+    return pendingRefresh;
+  }
   if (!pendingRead) {
     const request = invoke<PaceSnapshot>("fetch_pulse_pace").finally(() => {
       // An older request may finish after an update has already started a new one.
@@ -208,14 +216,20 @@ export function usePulsePace() {
     let unlisten: UnlistenFn | undefined;
     // Successful account reads update all companions through a local snapshot read.
     // This event must never issue another account refresh.
-    void listen("pulse-pace-updated", () => {
+    const updated = () => {
       if (!active) return;
       invalidatePaceRead();
       ++requestRevision.current;
       void read();
-    }).then(remove => {
-      if (active) { unlisten = remove; void read(); } else remove();
-    }).catch(() => { if (active) void read(); /* Polling remains available without native events. */ });
+    };
+    if (demo()) {
+      unlisten = subscribeDemoPaceRefresh(updated);
+      void read();
+    } else {
+      void listen("pulse-pace-updated", updated).then(remove => {
+        if (active) { unlisten = remove; void read(); } else remove();
+      }).catch(() => { if (active) void read(); /* Polling remains available without native events. */ });
+    }
     const timer = window.setInterval(() => { if (!document.hidden) void read(); }, 20_000);
     const visible = () => { if (!document.hidden) { invalidatePaceRead(); void read(); } };
     document.addEventListener("visibilitychange", visible);

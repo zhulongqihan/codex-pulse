@@ -127,19 +127,5 @@ html[data-pace-surface=panel][data-theme=dark][data-skin=paper] .pulse-pace-card
 .coach-projection { display: flex; align-items: flex-start; gap: 5px; }
 
 .coach-state { display: flex; align-items: center; gap: 4px; }
-.coach-refresh-clock { font-size: 12px; color: var(--pace-muted); }
-
-.pulse-pace-footer .pace-cooldown-icon {
-  display: grid;
-  place-items: center;
-  flex: none;
-  width: 26px;
-  min-height: 28px;
-  opacity: .5;
-  cursor: default;
-}
-
-.pulse-pace-card.variant-popover .pace-refresh-button:disabled {
-  cursor: default;
-  background: transparent;
-}
+.coach-refresh-clock { font-size: 12px; color: var(--pace-muted, rgb(var(--muted-foreground))); }
+.pace-refresh-button { flex-shrink: 0; }

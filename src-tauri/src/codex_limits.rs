@@ -184,7 +184,7 @@ pub(crate) fn invalidate_scope(revision: u64) {
     if let Ok(mut cached) = LIMITS_SUCCESS.lock() {
         *cached = None;
     }
-    crate::pulse_pace_view::invalidate_scope();
+    crate::pulse_pace_view::invalidate_scope(revision);
     if let Some(app) = LIMITS_PUBLISHER.get() {
         use tauri::Emitter;
         crate::pulse_desktop::invalidate_account_snapshot(app, revision);
@@ -237,11 +237,21 @@ struct SubscriptionInfo {
 }
 
 pub fn fetch_codex_limits() -> Result<CodexLimitsResponse, String> {
-    fetch_codex_limits_with_reuse(true)
+    fetch_codex_limits_with_reuse(true, None)
 }
 
-fn fetch_codex_limits_with_reuse(allow_reuse: bool) -> Result<CodexLimitsResponse, String> {
+pub(crate) fn fetch_codex_limits_for_scope(scope: u64) -> Result<CodexLimitsResponse, String> {
+    fetch_codex_limits_with_reuse(true, Some(scope))
+}
+
+fn fetch_codex_limits_with_reuse(
+    allow_reuse: bool,
+    expected_scope: Option<u64>,
+) -> Result<CodexLimitsResponse, String> {
     if env::var("PULSE_OFFLINE").as_deref() == Ok("1") {
+        if expected_scope.is_some() {
+            return Err("identityChanged".into());
+        }
         crate::pulse_pace::unavailable("offline");
         return Err("Account queries are disabled for this offline launch".into());
     }
@@ -249,15 +259,35 @@ fn fetch_codex_limits_with_reuse(allow_reuse: bool) -> Result<CodexLimitsRespons
     let auth = match load_codex_auth() {
         Ok(auth) => auth,
         Err(error) => {
+            if expected_scope.is_some() {
+                return Err("identityChanged".into());
+            }
             crate::pulse_pace::unavailable("login_required");
             return Err(error);
         }
     };
     if !auth.is_chatgpt {
+        if expected_scope.is_some() {
+            return Err("identityChanged".into());
+        }
         crate::pulse_pace::unavailable("api_key");
         return Err("chatgptLoginRequired".into());
     }
-    let (pace_identity, scope_revision) = crate::pulse_pace::begin_account(&auth, &environment);
+    let (pace_identity, scope_revision) = if let Some(scope) = expected_scope {
+        // Pace already reconciled the queued identity. A stale task must not
+        // reconcile the scope again or activate the account it now finds.
+        if !crate::pulse_pace::transient_scope_identity(&auth, &environment)
+            .is_some_and(|identity| crate::quota_scope::matches_identity(scope, &identity))
+        {
+            return Err("identityChanged".into());
+        }
+        (
+            crate::pulse_pace::stable_identity(&auth, &environment),
+            scope,
+        )
+    } else {
+        crate::pulse_pace::begin_account(&auth, &environment)
+    };
     // A flight can be shared only by the same credentials and selected source.
     use sha2::{Digest, Sha256};
     let identity = format!(
@@ -283,6 +313,9 @@ fn fetch_codex_limits_with_reuse(allow_reuse: bool) -> Result<CodexLimitsRespons
         selected_codex_environment() == environment
             && load_codex_auth().ok().as_ref() == Some(&auth)
     };
+    if expected_scope.is_some() && !credentials_current() {
+        return Err("identityChanged".into());
+    }
     let complete = |generation, result: &mut Result<CodexLimitsResponse, String>| {
         if !credentials_current() {
             return Err("identityChanged".into());
@@ -378,6 +411,7 @@ fn fetch_codex_limits_with_reuse(allow_reuse: bool) -> Result<CodexLimitsRespons
     } else {
         fetch_limits_with_publication(
             &identity,
+            Some(scope_revision),
             || {
                 log::info!("Starting fetch_codex_limits...");
                 let limits = fetch_codex_limits_with(
@@ -409,14 +443,48 @@ fn fetch_codex_limits_with_reuse(allow_reuse: bool) -> Result<CodexLimitsRespons
 
 fn fetch_limits_with_publication(
     identity: &str,
+    scope: Option<u64>,
     fetch: impl FnOnce() -> Result<CodexLimitsResponse, String>,
     publish: impl FnOnce(u64, &mut Result<CodexLimitsResponse, String>) -> Result<(), String>,
 ) -> Result<CodexLimitsResponse, String> {
-    fetch_codex_limits_single_flight(identity, |generation| {
+    fetch_codex_limits_single_flight(identity, scope, |generation| {
+        if let Some(scope) = scope {
+            if crate::quota_scope::with_current(scope, || {
+                crate::pulse_pace_view::account_observation_started(scope, generation)
+            }) != Some(true)
+            {
+                return Err("identityChanged".into());
+            }
+            publish_pace_refresh_state();
+        }
         let mut result = fetch();
-        publish(generation, &mut result)?;
+        let result = publish(generation, &mut result).and(result);
+        if scope.is_some_and(|scope| {
+            crate::pulse_pace_view::account_observation_released(scope, generation)
+        }) {
+            publish_pace_refresh_state();
+        }
         result
     })
+}
+
+fn publish_pace_refresh_state() {
+    if let Some(app) = LIMITS_PUBLISHER.get() {
+        use tauri::Emitter;
+        let _ = app.emit("pulse-pace-updated", ());
+    }
+}
+
+#[cfg(test)]
+#[test]
+fn retired_pace_scope_cannot_enter_the_shared_quota_flight() {
+    let result = fetch_limits_with_publication(
+        "retired synthetic pace scope",
+        Some(u64::MAX),
+        || panic!("retired pace work must not read quota"),
+        |_, _| panic!("retired pace work must not publish"),
+    );
+    assert_eq!(result.unwrap_err(), "identityChanged");
 }
 
 #[cfg(debug_assertions)]
@@ -447,13 +515,14 @@ fn apply_debug_credits(limits: &mut CodexLimitsResponse, value: &str) {
 
 fn fetch_codex_limits_single_flight(
     identity: &str,
+    scope: Option<u64>,
     fetch: impl FnOnce(u64) -> Result<CodexLimitsResponse, String>,
 ) -> Result<CodexLimitsResponse, String> {
-    let (flight, should_fetch) = {
+    let register = || -> Result<_, String> {
         let mut in_flight = LIMITS_FETCH_IN_FLIGHT
             .lock()
             .map_err(|_| "Codex limits fetch lock was poisoned.".to_string())?;
-        match in_flight.as_ref() {
+        Ok(match in_flight.as_ref() {
             Some(flight) if flight.identity == identity => (Arc::clone(flight), false),
             _ => {
                 let flight = Arc::new(LimitsFetchFlight {
@@ -464,7 +533,15 @@ fn fetch_codex_limits_single_flight(
                 *in_flight = Some(Arc::clone(&flight));
                 (flight, true)
             }
-        }
+        })
+    };
+    // Guard registration as well as publication. A retired request must not
+    // replace a newer account's active single-flight slot.
+    let (flight, should_fetch) = if let Some(scope) = scope {
+        crate::quota_scope::with_current(scope, register)
+            .ok_or_else(|| "identityChanged".to_string())??
+    } else {
+        register()?
     };
 
     if !should_fetch {
@@ -528,7 +605,7 @@ pub fn activate_codex_window(marker_path: &Path) -> Result<CodexWindowActivation
     activate_codex_window_with(
         marker_path,
         Utc::now().timestamp(),
-        || fetch_codex_limits_with_reuse(false),
+        || fetch_codex_limits_with_reuse(false, None),
         || run_codex_window_activation(working_directory),
     )
 }
@@ -1699,7 +1776,7 @@ mod tests {
         let (started_tx, started_rx) = mpsc::channel();
         let (release_tx, release_rx) = mpsc::channel();
         let first = thread::spawn(move || {
-            fetch_codex_limits_single_flight("test-account", |_| {
+            fetch_codex_limits_single_flight("test-account", None, |_| {
                 started_tx.send(()).unwrap();
                 release_rx.recv().unwrap();
                 Ok(make_response(
@@ -1718,7 +1795,9 @@ mod tests {
         started_rx.recv().unwrap();
 
         let second = thread::spawn(|| {
-            fetch_codex_limits_single_flight("test-account", |_| Err("duplicate fetch".to_string()))
+            fetch_codex_limits_single_flight("test-account", None, |_| {
+                Err("duplicate fetch".to_string())
+            })
         });
         let deadline = Instant::now() + Duration::from_secs(5);
         while !LIMITS_FETCH_IN_FLIGHT
@@ -1731,8 +1810,10 @@ mod tests {
             thread::yield_now();
         }
         assert_eq!(
-            fetch_codex_limits_single_flight("another-account", |_| Err("isolated result".into()))
-                .unwrap_err(),
+            fetch_codex_limits_single_flight("another-account", None, |_| Err(
+                "isolated result".into()
+            ))
+            .unwrap_err(),
             "isolated result"
         );
         release_tx.send(()).unwrap();
@@ -1742,7 +1823,11 @@ mod tests {
         assert_eq!(first_result.source, "first");
 
         let fresh =
-            fetch_codex_limits_single_flight("test-account", |_| Err("new fetch".to_string()));
+            fetch_codex_limits_single_flight(
+                "test-account",
+                None,
+                |_| Err("new fetch".to_string()),
+            );
         assert_eq!(fresh.unwrap_err(), "new fetch");
     }
 
@@ -1757,6 +1842,7 @@ mod tests {
         let first = thread::spawn(move || {
             fetch_limits_with_publication(
                 "anonymous-publication-flight",
+                None,
                 || {
                     started.send(()).unwrap();
                     released.recv().unwrap();
@@ -1773,6 +1859,7 @@ mod tests {
         let second = thread::spawn(move || {
             fetch_limits_with_publication(
                 "anonymous-publication-flight",
+                None,
                 || panic!("A joined reader must not query the account again"),
                 |_, _| {
                     second_publications.fetch_add(1, Ordering::SeqCst);
@@ -1823,6 +1910,7 @@ mod tests {
         let owner = thread::spawn(move || {
             fetch_limits_with_publication(
                 "anonymous-same-account",
+                None,
                 || {
                     started.send(()).unwrap();
                     released.recv().unwrap();
@@ -1850,6 +1938,7 @@ mod tests {
         let waiter = thread::spawn(|| {
             fetch_limits_with_publication(
                 "anonymous-same-account",
+                None,
                 || panic!("The old waiter must share its original network result"),
                 |_, _| panic!("A waiter must never publish a result"),
             )
@@ -1869,7 +1958,7 @@ mod tests {
         // A credential flight may replace the active slot without changing the
         // stable account. The later read of that same account must win.
         assert!(
-            fetch_codex_limits_single_flight("anonymous-rotated-credential", |_| Err(
+            fetch_codex_limits_single_flight("anonymous-rotated-credential", None, |_| Err(
                 "retired credential".into()
             ))
             .is_err()
@@ -1879,6 +1968,7 @@ mod tests {
         let new_state = state.clone();
         let accepted = fetch_limits_with_publication(
             "anonymous-same-account",
+            None,
             || Ok(newest),
             |generation, result| {
                 let mut state = new_state.lock().unwrap();

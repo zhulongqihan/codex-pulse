@@ -36,6 +36,32 @@ export function PulsePaceBadgeView({ data, failed = false, onToggle, expanded, c
   </button>;
 }
 
+export function PaceRefreshControl({ data, refreshing, language, now, onRefresh, animate = false, children }: {
+  data: PaceSnapshot | null; refreshing: boolean; language: string; now: number;
+  onRefresh: () => void; animate?: boolean; children?: ReactNode;
+}) {
+  const generated = Date.parse(data?.generatedAt ?? "");
+  const cooldown = data?.refreshAfterSeconds;
+  const wait = cooldown && Number.isFinite(generated)
+    ? Math.max(0, Math.ceil(cooldown - Math.max(0, now - generated) / 1_000)) : 0;
+  const queued = data?.refreshQueued === true;
+  const active = data?.refreshInFlight === true || (refreshing && !queued);
+  const seconds = formatCoachNumber(wait, language);
+  const counting = wait > 0 && !active;
+  const status = active ? paceCopy(language, "refreshing")
+    : queued ? paceCopy(language, counting ? "refreshQueued" : "refreshWaiting", { seconds })
+    : counting ? quotaCoachFeedback(language, "cooldownShort", { seconds }) : null;
+  const label = paceCopy(language, "refresh");
+  const title = queued || active ? status ?? label : counting ? quotaCoachFeedback(language, "cooldown", { seconds }) : label;
+  return <>
+    <button type="button" className="pace-refresh-button" onClick={onRefresh} aria-busy={active} aria-label={label} title={title}>
+      <RefreshCw size={16} aria-hidden="true" className={active && animate ? "is-refreshing" : undefined}/>
+    </button>
+    {status ? <span className="coach-refresh-clock" data-testid={counting ? "coach-refresh-wait" : "coach-refresh-status"} role={counting ? "timer" : "status"}>{status}</span> : children}
+    {queued && counting ? <span className="sr-only" role="status">{paceCopy(language, "refreshWaiting")}</span> : null}
+  </>;
+}
+
 export function PulsePaceBadge() {
   const { data, error } = usePulsePace();
   const [actionFailed, setActionFailed] = useState(false);
@@ -128,10 +154,6 @@ export function PulsePaceCard({ data, failed = false, refreshing = false, onRefr
   const remainingRange = coach.remainingAtReset;
   const resetTimezone = localTimeZone();
   const recentRisk = recentDepletionRisk(coach);
-  const generated = Date.parse(data?.generatedAt ?? "");
-  const wait = data?.refreshAfterSeconds && Number.isFinite(generated) ? Math.max(0, Math.ceil(data.refreshAfterSeconds - (now - generated) / 1000)) : 0;
-  const coolingDown = popover && wait > 0;
-  const retryLabel = wait > 0 ? quotaCoachFeedback(language, "cooldownShort", { seconds: wait }) : null;
   const updatedAt = data?.updatedAt;
   const updated = Date.parse(updatedAt ?? "");
   const age = Number.isFinite(updated) ? Math.max(0, Math.floor((now - updated) / 60_000)) : null;
@@ -204,9 +226,9 @@ export function PulsePaceCard({ data, failed = false, refreshing = false, onRefr
       {!compact ? noticeStatus : null}
     </div>
     <footer className="pulse-pace-footer"><div>
-      {coolingDown ? <span className="pace-cooldown-icon" aria-hidden="true"><RefreshCw size={16}/></span>
-        : <button type="button" className="pace-refresh-button" onClick={onRefresh} disabled={refreshing || wait > 0} aria-busy={refreshing} aria-label={paceCopy(language, "refresh")} title={wait > 0 ? quotaCoachFeedback(language, "cooldown", { seconds: wait }) : paceCopy(language, "refresh")}><RefreshCw size={16} className={refreshing && !popover ? "is-refreshing" : undefined}/></button>}
-      {retryLabel && !compact ? <span className="coach-refresh-clock" data-testid="coach-refresh-wait" role={popover ? "timer" : undefined} title={popover ? undefined : quotaCoachFeedback(language, "cooldown", { seconds: wait })}>{retryLabel}</span> : (footerReading || retryLabel) && <time dateTime={age == null ? undefined : updatedAt ?? undefined} title={age == null ? undefined : new Date(updated).toLocaleString(language)}>{footerReading}{retryLabel ? <span data-testid="coach-refresh-wait" title={quotaCoachFeedback(language, "cooldown", { seconds: wait })}>{footerReading ? " · " : null}{retryLabel}</span> : null}</time>}
+      <PaceRefreshControl data={data} refreshing={refreshing} language={language} now={now} onRefresh={onRefresh} animate={!popover}>
+        {footerReading ? <time dateTime={age == null ? undefined : updatedAt ?? undefined} title={age == null ? undefined : new Date(updated).toLocaleString(language)}>{footerReading}</time> : null}
+      </PaceRefreshControl>
     </div>{!compact ? <button type="button" className="pace-details" onClick={onDetails}>{paceCopy(language, "details")}<ArrowUpRight size={14}/></button> : null}</footer>
   </section>;
 }
