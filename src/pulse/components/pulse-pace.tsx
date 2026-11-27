@@ -36,8 +36,8 @@ export function PulsePaceBadgeView({ data, failed = false, onToggle, expanded, c
   </button>;
 }
 
-export function PaceRefreshControl({ data, refreshing, language, now, onRefresh, animate = false, children }: {
-  data: PaceSnapshot | null; refreshing: boolean; language: string; now: number;
+export function PaceRefreshControl({ data, language, now, onRefresh, animate = false, children }: {
+  data: PaceSnapshot | null; language: string; now: number;
   onRefresh: () => void; animate?: boolean; children?: ReactNode;
 }) {
   const generated = Date.parse(data?.generatedAt ?? "");
@@ -45,7 +45,7 @@ export function PaceRefreshControl({ data, refreshing, language, now, onRefresh,
   const wait = cooldown && Number.isFinite(generated)
     ? Math.max(0, Math.ceil(cooldown - Math.max(0, now - generated) / 1_000)) : 0;
   const queued = data?.refreshQueued === true;
-  const active = data?.refreshInFlight === true || (refreshing && !queued);
+  const active = data?.refreshInFlight === true;
   const seconds = formatCoachNumber(wait, language);
   const counting = wait > 0 && !active;
   const status = active ? paceCopy(language, "refreshing")
@@ -125,8 +125,8 @@ function CoachWindowDetails({ coach, data, language, now, failed }: { coach: Quo
 }
 
 export type PulsePaceVariant = "popover" | "workspace" | "widget" | "compact";
-export function PulsePaceCard({ data, failed = false, refreshing = false, onRefresh, onClose, onDetails, onRecover, showCompactNotice = true, variant = "popover", onMarkNoticeRead, noticePending = false, noticeFailed = false }: {
-  data: PaceSnapshot | null; failed?: boolean; refreshing?: boolean; onRefresh: () => void; onClose?: () => void; onDetails: () => void;
+export function PulsePaceCard({ data, failed = false, onRefresh, onClose, onDetails, onRecover, showCompactNotice = true, variant = "popover", onMarkNoticeRead, noticePending = false, noticeFailed = false }: {
+  data: PaceSnapshot | null; failed?: boolean; onRefresh: () => void; onClose?: () => void; onDetails: () => void;
   variant?: PulsePaceVariant; onMarkNoticeRead?: (id: string) => void | Promise<void>; noticePending?: boolean; noticeFailed?: boolean;
   onRecover?: () => void; showCompactNotice?: boolean;
 }) {
@@ -226,7 +226,7 @@ export function PulsePaceCard({ data, failed = false, refreshing = false, onRefr
       {!compact ? noticeStatus : null}
     </div>
     <footer className="pulse-pace-footer"><div>
-      <PaceRefreshControl data={data} refreshing={refreshing} language={language} now={now} onRefresh={onRefresh} animate={!popover}>
+      <PaceRefreshControl data={data} language={language} now={now} onRefresh={onRefresh} animate={!popover}>
         {footerReading ? <time dateTime={age == null ? undefined : updatedAt ?? undefined} title={age == null ? undefined : new Date(updated).toLocaleString(language)}>{footerReading}</time> : null}
       </PaceRefreshControl>
     </div>{!compact ? <button type="button" className="pace-details" onClick={onDetails}>{paceCopy(language, "details")}<ArrowUpRight size={14}/></button> : null}</footer>
@@ -234,9 +234,9 @@ export function PulsePaceCard({ data, failed = false, refreshing = false, onRefr
 }
 
 export function PulsePacePanel() {
-  const { data, error, refreshing, refresh, markNoticeRead, noticePending, noticeError } = usePulsePace();
+  const { data, error, refresh, markNoticeRead, noticePending, noticeError } = usePulsePace();
   const [actionFailed, setActionFailed] = useState(false);
   const { i18n } = useTranslation();
   const action = (value: "close" | "details" | "account") => { setActionFailed(false); void titlebarAction(value).catch(() => setActionFailed(true)); };
-  return <><PulsePaceCard data={data} failed={error} refreshing={refreshing} onRefresh={() => void refresh()} onClose={() => action("close")} onDetails={() => action("details")} onRecover={() => action("account")} onMarkNoticeRead={markNoticeRead} noticePending={noticePending} noticeFailed={noticeError}/>{actionFailed ? <p role="alert" className="pace-action-error">{paceCopy(i18n.resolvedLanguage ?? i18n.language, "actionFailed")}</p> : null}</>;
+  return <><PulsePaceCard data={data} failed={error} onRefresh={() => void refresh()} onClose={() => action("close")} onDetails={() => action("details")} onRecover={() => action("account")} onMarkNoticeRead={markNoticeRead} noticePending={noticePending} noticeFailed={noticeError}/>{actionFailed ? <p role="alert" className="pace-action-error">{paceCopy(i18n.resolvedLanguage ?? i18n.language, "actionFailed")}</p> : null}</>;
 }

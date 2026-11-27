@@ -15,7 +15,7 @@ import "./pulse-pace-summary.css";
 export function PulsePaceSummary({
   paper = false, pacingOnly = false, ...props
 }: ComponentProps<typeof PulsePaceCard> & { paper?: boolean; pacingOnly?: boolean }) {
-  const { data, failed = false, refreshing = false, onRefresh, onRecover } = props;
+  const { data, failed = false, onRefresh, onRecover } = props;
   const { i18n } = useTranslation();
   const language = i18n.resolvedLanguage ?? i18n.language;
   const copy = (key: Parameters<typeof quotaCoachCopy>[1]) => quotaCoachCopy(language, key);
@@ -54,7 +54,7 @@ export function PulsePaceSummary({
           {showUpdated ? <p><time dateTime={updatedDate?.toISOString()}>{updated}</time></p> : null}
         </ReadingInfo> : null}
       </div>
-      <div className="pulse-summary-updated"><PaceRefreshControl data={data} refreshing={refreshing} language={language} now={now} onRefresh={onRefresh}/></div>
+      <div className="pulse-summary-updated"><PaceRefreshControl data={data} language={language} now={now} onRefresh={onRefresh}/></div>
     </header>
     <div className="pulse-summary-readings">
       {!pacingOnly ? <><div>

@@ -164,8 +164,8 @@ describe("queued pace refresh synchronization", () => {
     await act(async () => {
       requests = [left.result.current.refresh(), left.result.current.refresh(), right.result.current.refresh()];
     });
-    expect(left.result.current.refreshing).toBe(true);
-    expect(right.result.current.refreshing).toBe(true);
+    expect(left.result.current.data).toBe(state);
+    expect(right.result.current.data).toBe(state);
     const accountCalls = () => vi.mocked(invoke).mock.calls.filter(([command]) => command === "refresh_pulse_pace");
     expect(accountCalls()).toHaveLength(1);
 

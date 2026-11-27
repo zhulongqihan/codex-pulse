@@ -1,10 +1,10 @@
 // @vitest-environment jsdom
-import { fireEvent, render, screen, within } from "@testing-library/react";
+import { act, fireEvent, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { invoke } from "@tauri-apps/api/core";
 import i18n from "../i18n";
-import { syntheticCoachSnapshot } from "@/lib/pulse-pace";
+import { syntheticCoachSnapshot, type PaceSnapshot } from "@/lib/pulse-pace";
 import { paceSummaryCopy } from "@/lib/pace-summary-copy";
 import { quotaCoachCopy, quotaCoachFeedback } from "@/lib/quota-pace-coach-copy";
 import { PulseCoachOverview } from "./pulse-coach-overview";
@@ -71,4 +71,30 @@ describe("paper workspace pacing", () => {
     expect(screen.queryByRole("button", { name: quotaCoachFeedback("en", "noticeCompact") })).not.toBeInTheDocument();
     expect(invoke).toHaveBeenCalledWith("mark_pulse_notice_read", { id: "synthetic-reset-notice-v3" });
   });
+});
+
+it.each([false, true])("waits for the backend before showing refresh progress (cooldown %s)", async cooling => {
+  const initial = { ...syntheticCoachSnapshot("roomy", new Date(now)), refreshAfterSeconds: cooling ? 30 : undefined };
+  let respond!: (snapshot: PaceSnapshot) => void;
+  const reply = new Promise<PaceSnapshot>(resolve => { respond = resolve; });
+  vi.mocked(invoke).mockImplementation(async command => command === "refresh_pulse_pace" ? reply : initial);
+  render(<PulseCoachOverview {...actions} paper={cooling}/>);
+  await screen.findByTestId("coach-reference");
+
+  const button = screen.getByRole("button", { name: "Refresh account readings" });
+  button.focus();
+  fireEvent.click(button);
+  fireEvent.click(button);
+  expect(vi.mocked(invoke).mock.calls.filter(([command]) => command === "refresh_pulse_pace")).toHaveLength(1);
+  expect(button).toHaveFocus();
+  expect(button).toHaveAttribute("aria-busy", "false");
+  expect(screen.queryByTestId("coach-refresh-status")).not.toBeInTheDocument();
+  if (cooling) expect(screen.getByTestId("coach-refresh-wait")).toHaveTextContent("Cooldown: 30s");
+  else expect(screen.queryByTestId("coach-refresh-wait")).not.toBeInTheDocument();
+
+  await act(async () => { respond({ ...initial, refreshQueued: cooling, refreshInFlight: !cooling }); });
+  expect(button).toHaveFocus();
+  expect(button).toHaveAttribute("aria-busy", String(!cooling));
+  if (cooling) expect(screen.getByTestId("coach-refresh-wait")).toHaveTextContent("Refreshing in 30s");
+  else expect(screen.getByTestId("coach-refresh-status")).toHaveTextContent("Refreshing account readings");
 });

@@ -24,7 +24,7 @@ vi.mock("@/lib/pulse-appearance", () => ({
 vi.mock("@/lib/pulse-pace", async importOriginal => ({
   ...await importOriginal<typeof import("@/lib/pulse-pace")>(),
   titlebarAction: state.details,
-  usePulsePace: () => ({ data: state.data, error: false, refreshing: false, refresh: vi.fn(), markNoticeRead: vi.fn(), noticePending: false, noticeError: false }),
+  usePulsePace: () => ({ data: state.data, error: false, refresh: vi.fn(), markNoticeRead: vi.fn(), noticePending: false, noticeError: false }),
 }));
 
 describe("desktop widget quota pacing", () => {

@@ -368,8 +368,8 @@ describe("shared cycle pace card", () => {
     expect(screen.getByRole("status")).toHaveTextContent(quotaCoachCopy("en", "exhausted"));
   });
 
-  it("preserves keyboard close, details, and a visibly pending refresh in the popover", () => {
-    const handlers = actions(); render(<PulsePaceCard data={cycle()} refreshing {...handlers}/>);
+  it("preserves keyboard close, details, and a confirmed in-flight refresh in the popover", () => {
+    const handlers = actions(); render(<PulsePaceCard data={{ ...cycle(), refreshInFlight: true }} {...handlers}/>);
     expect(screen.getByRole("button", { name: "Close usage rhythm" })).toHaveFocus();
     const refresh = screen.getByRole("button", { name: "Refresh account readings" });
     expect(refresh).toBeEnabled();

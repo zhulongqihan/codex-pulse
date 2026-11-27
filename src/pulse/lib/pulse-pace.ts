@@ -185,7 +185,6 @@ export async function titlebarAction(action: "toggle" | "close" | "showMain" | "
 export function usePulsePace() {
   const [data, setData] = useState<PaceSnapshot | null>(null);
   const [error, setError] = useState(false);
-  const [refreshing, setRefreshing] = useState(false);
   const [noticePending, setNoticePending] = useState(false);
   const [noticeError, setNoticeError] = useState(false);
   const noticeReadPending = useRef(false);
@@ -239,15 +238,11 @@ export function usePulsePace() {
     if (manualPending.current) return;
     manualPending.current = true;
     const ownRevision = ++requestRevision.current;
-    setRefreshing(true);
     try { const value = await fetchPulsePace(true); if (mounted.current && ownRevision === requestRevision.current) accept(value); }
     catch { if (mounted.current && ownRevision === requestRevision.current) setError(true); }
     finally {
       manualPending.current = false;
-      if (mounted.current) {
-        setRefreshing(false);
-        if (queuedRead.current) { queuedRead.current = false; await localRead.current?.(); }
-      }
+      if (mounted.current && queuedRead.current) { queuedRead.current = false; await localRead.current?.(); }
     }
   }, [accept]);
   const markNoticeRead = useCallback(async (id: string) => {
@@ -281,5 +276,5 @@ export function usePulsePace() {
     } catch { if (mounted.current && current.current?.coachExtras?.resetNotice?.id === id && current.current.coachExtras.resetNotice.isUnread) setNoticeError(true); }
     finally { noticeReadPending.current = false; if (mounted.current) setNoticePending(false); }
   }, [accept]);
-  return { data, error, refreshing, refresh, markNoticeRead, noticePending, noticeError };
+  return { data, error, refresh, markNoticeRead, noticePending, noticeError };
 }

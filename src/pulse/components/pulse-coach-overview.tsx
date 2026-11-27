@@ -7,11 +7,11 @@ import { PulsePaceSummary } from "./pulse-pace-summary";
 export function PulseCoachOverview({ onDetails, onRecover, summary = false, paper = false, pacingOnly = false }: {
   onDetails: () => void; onRecover: () => void; summary?: boolean; paper?: boolean; pacingOnly?: boolean;
 }) {
-  const { data, error, refreshing, refresh, markNoticeRead, noticePending, noticeError } = usePulsePace();
+  const { data, error, refresh, markNoticeRead, noticePending, noticeError } = usePulsePace();
   const copy = useShellCopy();
 
   const props = {
-    variant: "workspace" as const, data, failed: error, refreshing, onDetails, onRecover,
+    variant: "workspace" as const, data, failed: error, onDetails, onRecover,
     onRefresh: () => void refresh(), onMarkNoticeRead: markNoticeRead, noticePending, noticeFailed: noticeError,
   };
   return <section id="pulse-pace-details" className="pulse-coach-overview" data-testid="pulse-coach-overview" tabIndex={-1} aria-label={copy("paceDetails")}>
