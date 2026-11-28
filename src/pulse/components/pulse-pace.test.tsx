@@ -44,7 +44,7 @@ describe("shared cycle pace card", () => {
     fireEvent.click(timeInfo());
     expect(screen.getByRole("tooltip")).toHaveTextContent("61% of quota used");
   });
-  it("keeps the title-bar refresh action and focus through cooldown, queue and active refresh", () => {
+  it("keeps the title-bar refresh action and focus through service throttling, scheduling and active refresh", () => {
     vi.useFakeTimers();
     try {
       vi.setSystemTime(now);
@@ -54,20 +54,20 @@ describe("shared cycle pace card", () => {
       const { rerender } = render(<PulsePaceCard data={data} {...handlers}/>);
       const timer = screen.getByRole("timer");
       const button = screen.getByRole("button", { name: paceCopy("en", "refresh") });
-      expect(timer).toHaveTextContent("Cooldown: 3s");
+      expect(timer).toHaveTextContent("Rate limited · retry in 3s");
       expect(timer).not.toHaveAttribute("title");
       expect(button).toBeEnabled();
-      expect(button).toHaveAttribute("title", "Click to queue a refresh in 3s");
+      expect(button).toHaveAttribute("title", "Click to schedule a refresh after the rate limit");
       button.focus();
       fireEvent.click(button);
       expect(handlers.onRefresh).toHaveBeenCalledOnce();
       rerender(<PulsePaceCard data={{ ...data, refreshQueued: true }} {...handlers}/>);
-      expect(timer).toHaveTextContent("Refreshing in 3s");
+      expect(timer).toHaveTextContent("Refresh scheduled in 3s");
       expect(button).toHaveFocus();
       expect(button).toHaveAttribute("aria-busy", "false");
       act(() => { vi.advanceTimersByTime(3000); });
       expect(screen.queryByRole("timer")).not.toBeInTheDocument();
-      expect(screen.getByTestId("coach-refresh-status")).toHaveTextContent("Waiting to refresh");
+      expect(screen.getByTestId("coach-refresh-status")).toHaveTextContent("Refresh scheduled");
       rerender(<PulsePaceCard data={{ ...data, refreshInFlight: true }} {...handlers}/>);
       expect(screen.getByTestId("coach-refresh-status")).toHaveTextContent("Refreshing account readings");
       expect(button).toHaveFocus();
@@ -216,13 +216,13 @@ describe("shared cycle pace card", () => {
     rerender(<PulsePaceCard data={cycle(0)} variant="compact" {...actions()}/>);
     expect(screen.getByTestId("coach-remaining")).toHaveTextContent("0%");
   });
-  it("offers the same queue action during compact cooldown", () => {
+  it("offers the same schedule action during service throttling in the compact card", () => {
     const data = { ...cycle(), generatedAt: iso(0), refreshAfterSeconds: 25 };
     const handlers = actions();
     render(<PulsePaceCard data={data} variant="compact" {...handlers}/>);
     const wait = screen.getByTestId("coach-refresh-wait");
     expect(wait.tagName).toBe("SPAN");
-    expect(wait).toHaveTextContent("Cooldown: 25s");
+    expect(wait).toHaveTextContent("Rate limited · retry in 25s");
     const button = screen.getByRole("button", { name: "Refresh account readings" });
     expect(button).toBeEnabled();
     fireEvent.click(button);
@@ -237,14 +237,14 @@ describe("shared cycle pace card", () => {
     fireEvent.click(screen.getByRole("button", { name: "Refresh account readings" }));
     expect(handlers.onRefresh).toHaveBeenCalledOnce();
   });
-  it("explains workspace cooldown while keeping refresh reachable", () => {
+  it("explains the workspace service limit while keeping refresh reachable", () => {
     vi.useFakeTimers();
     try {
       vi.setSystemTime(now); vi.spyOn(Date, "now").mockImplementation(() => new Date().getTime());
       const data = { ...cycle(), generatedAt: iso(0), refreshAfterSeconds: 2 };
       render(<PulsePaceCard data={data} variant="workspace" {...actions()}/>);
       expect(screen.getByRole("button", { name: "Refresh account readings" })).toBeEnabled();
-      expect(screen.getByTestId("coach-refresh-wait")).toHaveTextContent("Cooldown: 2s");
+      expect(screen.getByTestId("coach-refresh-wait")).toHaveTextContent("Rate limited · retry in 2s");
       expect(screen.getByTestId("coach-refresh-wait").tagName).toBe("SPAN");
       expect(screen.queryByText(/^Updated /)).not.toBeInTheDocument();
       fireEvent.click(timeInfo());

@@ -4,6 +4,15 @@ User-facing changes are grouped by release, following [Keep a Changelog](https:/
 
 ## [Unreleased]
 
+## [0.14.13] - 2026-11-28
+
+### Fixed / 修复
+
+- Run manual quota refreshes immediately during the normal background interval, and wait if the server is rate limiting.
+- 配额手动刷新立即执行。后台采样间隔独立计算，服务端限流时继续显示等待状态。
+
+[完整中英说明 / Full release notes](docs/releases/v0.14.13.md)
+
 ## [0.14.12] - 2026-11-28
 
 ### Fixed / 修复

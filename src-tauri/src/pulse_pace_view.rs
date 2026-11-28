@@ -58,7 +58,7 @@ fn presentation(directory: &Path, widget: Option<Value>) -> Result<Value, String
             pace,
             (
                 gate.failed,
-                gate.wait_seconds(Instant::now()),
+                gate.manual_wait_seconds(Instant::now()),
                 gate.queued,
                 gate.in_flight(),
             ),
@@ -128,11 +128,14 @@ struct PollLease {
     scope: u64,
     started_at: Instant,
     outcome_before: u64,
+    manual: bool,
 }
 
 #[derive(Debug)]
 struct PollGate {
+    // Ordinary successes and transient failures only defer routine sampling.
     next: Instant,
+    rate_limit_until: Option<Instant>,
     failures: u32,
     poll_started_at: Option<Instant>,
     account_generation: Option<u64>,
@@ -145,6 +148,7 @@ impl PollGate {
     fn new(now: Instant) -> Self {
         Self {
             next: now,
+            rate_limit_until: None,
             failures: 0,
             poll_started_at: None,
             account_generation: None,
@@ -158,28 +162,37 @@ impl PollGate {
         self.poll_started_at.is_some() || self.account_generation.is_some()
     }
     fn due(&self, now: Instant) -> bool {
-        !self.in_flight() && now >= self.next
+        !self.in_flight()
+            && if self.queued {
+                self.manual_wait_seconds(now) == 0
+            } else {
+                now >= self.next
+            }
     }
     fn start(&mut self, now: Instant) -> Option<PollLease> {
-        if !self.due(now) {
-            return None;
-        }
+        self.due(now).then(|| self.claim(now, self.queued))
+    }
+    fn claim(&mut self, now: Instant, manual: bool) -> PollLease {
         self.queued = false;
         self.poll_started_at = Some(now);
-        self.next = now + Duration::from_secs(60);
-        Some(PollLease {
+        self.next = self.next.max(now + Duration::from_secs(60));
+        PollLease {
             scope: self.scope,
             started_at: now,
             outcome_before: self.outcome_revision,
-        })
+            manual,
+        }
     }
     fn request(&mut self, now: Instant) -> (Option<PollLease>, bool) {
-        if self.in_flight() || self.queued {
+        if self.in_flight() {
             return (None, false);
         }
-        let poll = self.start(now);
-        self.queued = poll.is_none();
-        (poll, true)
+        if self.manual_wait_seconds(now) > 0 {
+            let changed = !self.queued;
+            self.queued = true;
+            return (None, changed);
+        }
+        (Some(self.claim(now, true)), true)
     }
     fn start_scheduled(
         &mut self,
@@ -215,10 +228,11 @@ impl PollGate {
     fn finish(&mut self, now: Instant, error: Option<&str>) {
         self.outcome_revision = self.outcome_revision.wrapping_add(1);
         self.failed = error.is_some();
-        let delay = if let Some(error) = error {
+        let rate_limited = error.is_some_and(crate::codex_limits::is_usage_rate_limited);
+        let delay = if error.is_some() {
             self.failures = (self.failures + 1).min(5);
             let ordinary = (60_u64 * (1_u64 << self.failures)).min(900);
-            if error.contains("429") || error.to_ascii_lowercase().contains("rate limit") {
+            if rate_limited {
                 ordinary.max(300)
             } else {
                 ordinary
@@ -227,7 +241,11 @@ impl PollGate {
             self.failures = 0;
             60
         };
-        self.next = self.next.max(now + Duration::from_secs(delay));
+        let next = now + Duration::from_secs(delay);
+        self.next = self.next.max(next);
+        if rate_limited {
+            self.rate_limit_until = Some(self.rate_limit_until.map_or(next, |old| old.max(next)));
+        }
     }
     fn release(&mut self, now: Instant) {
         self.poll_started_at = None;
@@ -250,14 +268,18 @@ impl PollGate {
     fn invalidate(&mut self, scope: u64) {
         self.scope = scope;
         self.queued = false;
+        self.rate_limit_until = None;
         self.poll_started_at = None;
         self.account_generation = None;
         self.failed = false;
         self.failures = 0;
         self.outcome_revision = self.outcome_revision.wrapping_add(1);
     }
-    fn wait_seconds(&self, now: Instant) -> u64 {
-        let wait = self.next.saturating_duration_since(now);
+    fn manual_wait_seconds(&self, now: Instant) -> u64 {
+        let Some(deadline) = self.rate_limit_until else {
+            return 0;
+        };
+        let wait = deadline.saturating_duration_since(now);
         wait.as_secs()
             .saturating_add(u64::from(wait.subsec_nanos() > 0))
     }
@@ -291,7 +313,7 @@ pub(crate) fn account_observation_released(scope: u64, generation: u64) -> bool 
         .release_account(scope, generation)
 }
 fn run_observation(app: &tauri::AppHandle, poll: PollLease) {
-    let result = crate::codex_limits::fetch_codex_limits_for_scope(poll.scope);
+    let result = crate::codex_limits::fetch_codex_limits_for_scope(poll.scope, poll.manual);
     // Only the shared owner commits an outcome. A retired or delayed caller must
     // not mark a newer account observation failed when releasing its own lease.
     let completed = POLL_GATE
@@ -330,7 +352,7 @@ fn needs_observations(titlebar: bool, widget: bool, main: bool, recording: bool)
     titlebar || widget || main || recording
 }
 
-/// All new pace refreshes share one cooldown. Identity checks never make a network request.
+/// Routine sampling shares the quota flight, while a queued manual read follows only its service deadline.
 pub fn start_sampler(app: tauri::AppHandle) {
     POLL_GATE
         .lock()
@@ -459,10 +481,11 @@ mod tests {
         assert_eq!(local_usage(Some(&value), now())["projects"], json!([]));
     }
     #[test]
-    fn manual_and_scheduled_refreshes_cannot_bypass_cooldown_or_in_flight_request() {
+    fn background_respects_cadence_and_manual_refresh_shares_in_flight_work() {
         let now = Instant::now();
         let mut gate = PollGate::new(now);
-        assert!(gate.start(now).is_some());
+        assert!(!gate.start(now).unwrap().manual);
+        assert!(!gate.request(now + Duration::from_secs(120)).1);
         assert!(gate.start(now + Duration::from_secs(120)).is_none());
         gate.finish(now, None);
         gate.release(now);
@@ -470,10 +493,28 @@ mod tests {
         assert!(gate.start(now + Duration::from_secs(60)).is_some());
     }
     #[test]
+    fn manual_refresh_starts_immediately_during_background_cadence_and_failure_backoff() {
+        let now = Instant::now();
+        let mut gate = PollGate::new(now);
+        gate.finish(now, None);
+        let after_success = now + Duration::from_secs(1);
+        assert!(!gate.due(after_success));
+        assert_eq!(gate.manual_wait_seconds(after_success), 0);
+        let (poll, changed) = gate.request(after_success);
+        assert!(changed && poll.unwrap().manual && !gate.queued);
+        assert!(!gate.request(after_success).1);
+        gate.finish(after_success, Some("network timeout"));
+        gate.release(after_success);
+        let next_click = after_success + Duration::from_secs(1);
+        assert!(!gate.due(next_click));
+        assert_eq!(gate.manual_wait_seconds(next_click), 0);
+        assert!(gate.request(next_click).0.unwrap().manual);
+    }
+    #[test]
     fn rate_limits_keep_the_deadline_then_success_recovers_normal_cadence() {
         let now = Instant::now();
         let mut gate = PollGate::new(now);
-        gate.finish(now, Some("quota response 429"));
+        gate.finish(now, Some("Codex usage API returned 429 Too Many Requests"));
         assert!(gate.failed);
         assert!(gate.start(now + Duration::from_secs(299)).is_none());
         assert!(gate.start(now + Duration::from_secs(300)).is_some());
@@ -496,7 +537,7 @@ mod tests {
     fn quota_refresh_independent_success_keeps_existing_rate_limit_deadline() {
         let now = Instant::now();
         let mut gate = PollGate::new(now);
-        gate.finish(now, Some("quota response 429"));
+        gate.finish(now, Some("Codex usage API returned 429 Too Many Requests"));
         let deadline = gate.next;
         gate.finish(now + Duration::from_secs(5), None);
         assert!(
@@ -508,6 +549,7 @@ mod tests {
             gate.next, deadline,
             "A success must not shorten the 429 cooldown"
         );
+        assert_eq!(gate.manual_wait_seconds(now + Duration::from_secs(5)), 295);
     }
     #[test]
     fn quota_refresh_published_success_does_not_release_a_running_pace_read() {
@@ -602,20 +644,21 @@ mod tests {
     fn a_cooldown_click_is_consumed_once_at_the_backoff_deadline() {
         let now = Instant::now();
         let mut gate = PollGate::new(now);
-        gate.finish(now, Some("synthetic 429"));
+        gate.finish(now, Some("Codex usage API returned 429 Too Many Requests"));
         let (poll, changed) = gate.request(now + Duration::from_secs(1));
         assert!(poll.is_none() && changed && gate.queued);
-        assert_eq!(gate.wait_seconds(now + Duration::from_secs(1)), 299);
+        assert_eq!(gate.manual_wait_seconds(now + Duration::from_secs(1)), 299);
         assert!(!gate.request(now + Duration::from_secs(2)).1);
         assert!(gate.start(now + Duration::from_secs(299)).is_none() && gate.queued);
 
         let due = now + Duration::from_secs(300);
         let poll = gate.start(due).unwrap();
+        assert!(poll.manual);
         assert!(!gate.queued && gate.in_flight());
         assert!(!gate.request(due).1);
         gate.complete(due, poll, Some("synthetic timeout"));
         assert!(gate.failed && !gate.queued && !gate.in_flight());
-        assert_eq!(gate.wait_seconds(due), 240);
+        assert_eq!(gate.manual_wait_seconds(due), 0);
         assert!(!gate.due(due + Duration::from_secs(239)));
     }
 
@@ -624,7 +667,7 @@ mod tests {
         let now = Instant::now();
         let mut gate = PollGate::new(now);
         gate.invalidate(4);
-        gate.finish(now, None);
+        gate.finish(now, Some("rateLimited"));
         assert!(gate.request(now).1 && gate.queued);
         assert!(gate.start_account(4, 11));
         assert!(gate.in_flight() && !gate.queued);
@@ -641,10 +684,11 @@ mod tests {
         let now = Instant::now();
         let mut gate = PollGate::new(now);
         gate.invalidate(7);
-        gate.finish(now, None);
+        gate.finish(now, Some("rateLimited"));
         assert!(gate.request(now).1 && gate.queued);
         gate.invalidate(8);
         assert!(!gate.queued);
+        assert_eq!(gate.manual_wait_seconds(now), 0);
         assert!(!gate.start_account(7, 12));
         assert!(gate.start_account(8, 13));
         assert!(!gate.release_account(7, 12));
@@ -659,15 +703,32 @@ mod tests {
         let mut gate = PollGate::new(now);
         gate.invalidate(1);
         assert!(gate.start_scheduled(now, 1, false).is_none());
-        gate.finish(now, None);
+        gate.finish(now, Some("rateLimited"));
         assert!(gate.request(now).1);
         assert!(gate
-            .start_scheduled(now + Duration::from_secs(60), 2, true)
+            .start_scheduled(now + Duration::from_secs(300), 2, true)
             .is_none());
         assert!(gate.queued);
-        assert!(gate
-            .start_scheduled(now + Duration::from_secs(60), 1, false)
-            .is_some());
+        assert!(
+            gate.start_scheduled(now + Duration::from_secs(300), 1, false)
+                .unwrap()
+                .manual
+        );
         assert!(!gate.queued);
+    }
+
+    #[test]
+    fn a_new_click_can_claim_a_queued_read_when_the_service_deadline_expires() {
+        let now = Instant::now();
+        let mut gate = PollGate::new(now);
+        gate.finish(now, Some("rateLimited"));
+        assert!(gate.request(now).1);
+        // A longer ordinary background backoff must not defer this manual read.
+        let due = now + Duration::from_secs(300);
+        gate.finish(due - Duration::from_secs(1), Some("timeout"));
+        assert!(gate.next > due);
+        assert!(gate.request(due).0.unwrap().manual);
+        assert!(!gate.queued);
+        assert!(gate.start_scheduled(due, 0, true).is_none());
     }
 }

@@ -1,8 +1,9 @@
 // @vitest-environment jsdom
-import { act, fireEvent, render, screen, within } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { invoke } from "@tauri-apps/api/core";
+import { listen } from "@tauri-apps/api/event";
 import i18n from "../i18n";
 import { syntheticCoachSnapshot, type PaceSnapshot } from "@/lib/pulse-pace";
 import { paceSummaryCopy } from "@/lib/pace-summary-copy";
@@ -73,12 +74,12 @@ describe("paper workspace pacing", () => {
   });
 });
 
-it.each([false, true])("waits for the backend before showing refresh progress (cooldown %s)", async cooling => {
-  const initial = { ...syntheticCoachSnapshot("roomy", new Date(now)), refreshAfterSeconds: cooling ? 30 : undefined };
+it.each([false, true])("waits for the backend before showing refresh progress (rate limited %s)", async rateLimited => {
+  const initial = { ...syntheticCoachSnapshot("roomy", new Date(now)), refreshAfterSeconds: rateLimited ? 30 : undefined };
   let respond!: (snapshot: PaceSnapshot) => void;
   const reply = new Promise<PaceSnapshot>(resolve => { respond = resolve; });
   vi.mocked(invoke).mockImplementation(async command => command === "refresh_pulse_pace" ? reply : initial);
-  render(<PulseCoachOverview {...actions} paper={cooling}/>);
+  render(<PulseCoachOverview {...actions} paper={rateLimited}/>);
   await screen.findByTestId("coach-reference");
 
   const button = screen.getByRole("button", { name: "Refresh account readings" });
@@ -89,12 +90,44 @@ it.each([false, true])("waits for the backend before showing refresh progress (c
   expect(button).toHaveFocus();
   expect(button).toHaveAttribute("aria-busy", "false");
   expect(screen.queryByTestId("coach-refresh-status")).not.toBeInTheDocument();
-  if (cooling) expect(screen.getByTestId("coach-refresh-wait")).toHaveTextContent("Cooldown: 30s");
+  if (rateLimited) expect(screen.getByTestId("coach-refresh-wait")).toHaveTextContent("Rate limited · retry in 30s");
   else expect(screen.queryByTestId("coach-refresh-wait")).not.toBeInTheDocument();
 
-  await act(async () => { respond({ ...initial, refreshQueued: cooling, refreshInFlight: !cooling }); });
+  await act(async () => { respond({ ...initial, refreshQueued: rateLimited, refreshInFlight: !rateLimited }); });
   expect(button).toHaveFocus();
-  expect(button).toHaveAttribute("aria-busy", String(!cooling));
-  if (cooling) expect(screen.getByTestId("coach-refresh-wait")).toHaveTextContent("Refreshing in 30s");
+  expect(button).toHaveAttribute("aria-busy", String(!rateLimited));
+  if (rateLimited) expect(screen.getByTestId("coach-refresh-wait")).toHaveTextContent("Refresh scheduled in 30s");
   else expect(screen.getByTestId("coach-refresh-status")).toHaveTextContent("Refreshing account readings");
+});
+
+it.each([false, true])("allows another immediate manual check after the previous check finishes (failed %s)", async failed => {
+  const initial = syntheticCoachSnapshot("roomy", new Date(now));
+  let snapshot: PaceSnapshot = initial;
+  let update!: () => void;
+  vi.mocked(listen).mockImplementationOnce(async (_event, handler) => {
+    update = handler as () => void;
+    return () => {};
+  });
+  vi.mocked(invoke).mockImplementation(async command => {
+    if (command === "refresh_pulse_pace") snapshot = { ...snapshot, refreshInFlight: true };
+    return snapshot;
+  });
+  render(<PulseCoachOverview {...actions}/>);
+  await screen.findByTestId("coach-reference");
+  const button = screen.getByRole("button", { name: "Refresh account readings" });
+
+  button.focus();
+  fireEvent.click(button);
+  await waitFor(() => expect(button).toHaveAttribute("aria-busy", "true"));
+  snapshot = { ...initial, refreshFailed: failed };
+  await act(async () => { update(); });
+  expect(button).toHaveAttribute("aria-busy", "false");
+  expect(button).toHaveFocus();
+  expect(screen.queryByRole("timer")).not.toBeInTheDocument();
+  if (failed) expect(screen.getByRole("status")).toHaveTextContent("Could not refresh");
+
+  fireEvent.click(button);
+  await waitFor(() => expect(button).toHaveAttribute("aria-busy", "true"));
+  expect(vi.mocked(invoke).mock.calls.filter(([command]) => command === "refresh_pulse_pace")).toHaveLength(2);
+  expect(screen.queryByRole("timer")).not.toBeInTheDocument();
 });

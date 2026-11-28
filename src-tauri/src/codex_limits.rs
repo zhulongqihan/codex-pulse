@@ -240,8 +240,21 @@ pub fn fetch_codex_limits() -> Result<CodexLimitsResponse, String> {
     fetch_codex_limits_with_reuse(true, None)
 }
 
-pub(crate) fn fetch_codex_limits_for_scope(scope: u64) -> Result<CodexLimitsResponse, String> {
-    fetch_codex_limits_with_reuse(true, Some(scope))
+pub(crate) fn fetch_codex_limits_for_scope(
+    scope: u64,
+    manual: bool,
+) -> Result<CodexLimitsResponse, String> {
+    fetch_codex_limits_with_reuse(!manual, Some(scope))
+}
+
+pub(crate) fn is_usage_rate_limited(error: &str) -> bool {
+    error
+        .strip_prefix("Codex usage API returned ")
+        .and_then(|status| status.split_whitespace().next())
+        == Some("429")
+        || error.eq_ignore_ascii_case("rateLimited")
+        || error.eq_ignore_ascii_case("rate limit")
+        || error.eq_ignore_ascii_case("rate limit exceeded")
 }
 
 fn fetch_codex_limits_with_reuse(
@@ -458,13 +471,7 @@ fn fetch_limits_with_publication(
             publish_pace_refresh_state();
         }
         let mut result = fetch();
-        let result = publish(generation, &mut result).and(result);
-        if scope.is_some_and(|scope| {
-            crate::pulse_pace_view::account_observation_released(scope, generation)
-        }) {
-            publish_pace_refresh_state();
-        }
-        result
+        publish(generation, &mut result).and(result)
     })
 }
 
@@ -485,6 +492,27 @@ fn retired_pace_scope_cannot_enter_the_shared_quota_flight() {
         |_, _| panic!("retired pace work must not publish"),
     );
     assert_eq!(result.unwrap_err(), "identityChanged");
+}
+
+#[cfg(test)]
+#[test]
+fn only_recognized_quota_rate_limit_errors_throttle_manual_reads() {
+    for error in [
+        "Codex usage API returned 429 Too Many Requests",
+        "rateLimited",
+        "Rate Limit Exceeded",
+    ] {
+        assert!(is_usage_rate_limited(error), "{error}");
+    }
+    for error in [
+        "Codex usage API returned 4290",
+        "Codex usage API returned 500 Internal Server Error",
+        "Network timeout 429ms",
+        "Codex usage API response was missing rate_limit.",
+        "Invalid rate limit response",
+    ] {
+        assert!(!is_usage_rate_limited(error), "{error}");
+    }
 }
 
 #[cfg(debug_assertions)]
@@ -575,6 +603,13 @@ fn fetch_codex_limits_single_flight(
         .is_some_and(|current| Arc::ptr_eq(current, &flight))
     {
         *in_flight = None;
+    }
+    drop(in_flight);
+    // Advertise readiness only after the old flight can no longer be joined.
+    if scope.is_some_and(|scope| {
+        crate::pulse_pace_view::account_observation_released(scope, flight.generation)
+    }) {
+        publish_pace_refresh_state();
     }
     result
 }
@@ -818,15 +853,14 @@ fn fetch_oauth_limits(auth: &CodexAuth) -> Result<LimitsSnapshot, String> {
         format!("Failed to fetch Codex usage API: {error}")
     })?;
     let status = response.status();
-    let body = response
-        .text()
-        .map_err(|error| format!("Failed to read Codex usage API response: {error}"))?;
-
     if !status.is_success() {
         log::error!("Codex API error status: {status}");
         return Err(format!("Codex usage API returned {status}"));
     }
 
+    let body = response
+        .text()
+        .map_err(|error| format!("Failed to read Codex usage API response: {error}"))?;
     let usage = serde_json::from_str::<OAuthUsageResponse>(&body)
         .map_err(|_| "Codex usage API returned an unsupported response format".to_string())?;
     let reset_credits = fetch_oauth_reset_credits(&client, &auth);

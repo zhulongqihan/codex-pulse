@@ -60,6 +60,7 @@ export type PaceSnapshot = {
   refreshFailed?: boolean;
   refreshQueued?: boolean;
   refreshInFlight?: boolean;
+  /** A positive delay represents a service rate limit on manual refresh. */
   refreshAfterSeconds?: number;
   coachExtras?: PaceCoachExtras;
 };

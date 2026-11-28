@@ -1,7 +1,7 @@
 import { getLanguage, type Language } from "./languages";
 
 const en = {
-  refreshQueued: "Refreshing in {seconds}s", refreshWaiting: "Waiting to refresh", refreshing: "Refreshing account readings",
+  refreshQueued: "Refresh scheduled in {seconds}s", refreshWaiting: "Refresh scheduled", refreshing: "Refreshing account readings",
   idleHeadline: "Quota reading unchanged", slowHeadline: "Quota change too small to predict", nextReset: "Next quota reset", resetUnknown: "Reset time not returned", resetPending: "Reset time reached; awaiting a new reading", resetDays: "{days}d {hours}h", resetHours: "{hours}h {minutes}m", resetMinutes: "{minutes}m", sessionMissing: "Short-window quota was not returned", weeklyMissing: "Weekly quota was not returned", tokensUnknown: "Today’s local token total is unavailable", todayLocalTokens: "Today’s local tokens: {tokens}",
   sourceStale: "Awaiting update", measured: "Observed", projected: "Projected", title: "Usage rhythm", estimate: "Estimated from recent account observations", about: "About", hours: "hours", minutes: "minutes",
   sampling: "Sampling", unavailable: "No data", stale: "Refresh needed", expired: "Window ended", idle: "Reading unchanged", slow: "Small change", exhausted: "At limit", resetFirst: "Reset first",
@@ -16,7 +16,7 @@ export type PaceCopyKey = keyof typeof en;
 const messages: Record<Language, Record<PaceCopyKey, string>> = {
   en,
   zh: {
-    refreshQueued: "将在 {seconds} 秒后刷新", refreshWaiting: "正在等待刷新", refreshing: "正在刷新账号读数",
+    refreshQueued: "已安排，{seconds} 秒后刷新", refreshWaiting: "已安排，等待刷新", refreshing: "正在刷新账号读数",
     idleHeadline: "额度读数未变化", slowHeadline: "额度变化不足以预测", nextReset: "距下次额度重置", resetUnknown: "未返回重置时间", resetPending: "已到给定重置时间，等待新读数", resetDays: "{days}天{hours}小时", resetHours: "{hours}小时{minutes}分钟", resetMinutes: "{minutes}分钟", sessionMissing: "未返回短周期额度", weeklyMissing: "未返回周额度", tokensUnknown: "今日本机 Token 总量未知", todayLocalTokens: "今日本机 Token：{tokens}",
     sourceStale: "待更新", measured: "实测", projected: "预测", title: "使用节奏", estimate: "按近期账号观测估算", about: "约", hours: "小时", minutes: "分钟",
     sampling: "采样中", unavailable: "暂无数据", stale: "待刷新", expired: "窗口已到期", idle: "读数未变", slow: "变化不足", exhausted: "已触顶", resetFirst: "预计先重置",
@@ -28,7 +28,7 @@ const messages: Record<Language, Record<PaceCopyKey, string>> = {
     settingTitle: "Codex 右上角用量伴侣", settingDescription: "在 Codex 旁查看剩余额度、个人重置时间与配速建议。", settingLabel: "显示右上角提示", settingNote: "仅在 Pulse 运行且支持的 Codex 窗口位于前台时显示；打开 Codex 不会自动启动 Pulse。", manageStartup: "管理登录启动", saveFailed: "设置保存失败，请重试。", demo: "合成演示", noEstimate: "暂无可靠估算",
   },
   "zh-Hant": {
-    refreshQueued: "將在 {seconds} 秒後更新", refreshWaiting: "正在等待更新", refreshing: "正在更新帳號讀數",
+    refreshQueued: "已排程，{seconds} 秒後更新", refreshWaiting: "已排程，等待更新", refreshing: "正在更新帳號讀數",
     idleHeadline: "額度讀數未變化", slowHeadline: "額度變化不足以預測", nextReset: "距下次額度重置", resetUnknown: "未傳回重置時間", resetPending: "已到指定重置時間，等待新讀數", resetDays: "{days}天{hours}小時", resetHours: "{hours}小時{minutes}分鐘", resetMinutes: "{minutes}分鐘", sessionMissing: "未傳回短週期額度", weeklyMissing: "未傳回每週額度", tokensUnknown: "今日本機 Token 總量未知", todayLocalTokens: "今日本機 Token：{tokens}",
     sourceStale: "待更新", measured: "實測", projected: "預測", title: "使用節奏", estimate: "依近期帳號觀測估算", about: "約", hours: "小時", minutes: "分鐘",
     sampling: "取樣中", unavailable: "暫無資料", stale: "待更新", expired: "視窗已到期", idle: "讀數未變", slow: "變化不足", exhausted: "已達上限", resetFirst: "預計先重置",
@@ -40,7 +40,7 @@ const messages: Record<Language, Record<PaceCopyKey, string>> = {
     settingTitle: "Codex 右上角用量伴侶", settingDescription: "在 Codex 旁查看剩餘額度、個人重置時間與配速建議。", settingLabel: "顯示右上角提示", settingNote: "僅在 Pulse 執行且支援的 Codex 視窗位於前景時顯示；開啟 Codex 不會自動啟動 Pulse。", manageStartup: "管理登入啟動", saveFailed: "設定儲存失敗，請重試。", demo: "合成示範", noEstimate: "暫無可靠估算",
   },
   ja: {
-    refreshQueued: "{seconds} 秒後に更新します", refreshWaiting: "更新を待機中", refreshing: "アカウント観測を更新中",
+    refreshQueued: "{seconds} 秒後の更新を予約済み", refreshWaiting: "更新を予約済み", refreshing: "アカウント観測を更新中",
     idleHeadline: "上限の観測値は未変化", slowHeadline: "変化が小さく予測できません", nextReset: "次の上限リセットまで", resetUnknown: "リセット時刻は未取得", resetPending: "指定時刻を経過。新しい観測を待機中", resetDays: "{days}日{hours}時間", resetHours: "{hours}時間{minutes}分", resetMinutes: "{minutes}分", sessionMissing: "短期間の上限は返されていません", weeklyMissing: "週間上限は返されていません", tokensUnknown: "今日のローカルトークン合計は不明", todayLocalTokens: "今日のローカルトークン：{tokens}",
     sourceStale: "更新待ち", measured: "実測", projected: "予測", title: "使用ペース", estimate: "最近のアカウント観測から推定", about: "約", hours: "時間", minutes: "分",
     sampling: "観測中", unavailable: "データなし", stale: "要更新", expired: "期間終了", idle: "観測値は同じ", slow: "変化不足", exhausted: "上限到達", resetFirst: "リセット先行",
@@ -52,7 +52,7 @@ const messages: Record<Language, Record<PaceCopyKey, string>> = {
     settingTitle: "Codex タイトルバー伴侶", settingDescription: "Codex の横で残りの上限、個人のリセット時刻、消費ペースを確認できます。", settingLabel: "右上のヒントを表示", settingNote: "Pulse の実行中、対応する Codex ウィンドウが前面のときに表示されます。Codex を開いても Pulse は起動しません。", manageStartup: "サインイン時の起動を管理", saveFailed: "設定を保存できません。再試行してください。", demo: "合成デモ", noEstimate: "推定の準備中",
   },
   ko: {
-    refreshQueued: "{seconds}초 후 갱신합니다", refreshWaiting: "갱신 대기 중", refreshing: "계정 관측 갱신 중",
+    refreshQueued: "{seconds}초 후 갱신 예약됨", refreshWaiting: "갱신 예약됨", refreshing: "계정 관측 갱신 중",
     idleHeadline: "한도 관측값이 변하지 않음", slowHeadline: "예측하기에 한도 변화가 부족함", nextReset: "다음 한도 초기화까지", resetUnknown: "초기화 시간이 반환되지 않음", resetPending: "지정 시간이 지남. 새 관측 대기 중", resetDays: "{days}일 {hours}시간", resetHours: "{hours}시간 {minutes}분", resetMinutes: "{minutes}분", sessionMissing: "단기 한도가 반환되지 않았습니다", weeklyMissing: "주간 한도가 반환되지 않았습니다", tokensUnknown: "오늘 로컬 토큰 합계는 알 수 없음", todayLocalTokens: "오늘 로컬 토큰: {tokens}",
     sourceStale: "갱신 대기", measured: "실측", projected: "예측", title: "사용 속도", estimate: "최근 계정 관측으로 추정", about: "약", hours: "시간", minutes: "분",
     sampling: "수집 중", unavailable: "데이터 없음", stale: "갱신 필요", expired: "기간 종료", idle: "수치 그대로", slow: "변화 부족", exhausted: "한도 도달", resetFirst: "초기화 먼저",
@@ -64,7 +64,7 @@ const messages: Record<Language, Record<PaceCopyKey, string>> = {
     settingTitle: "Codex 제목 표시줄 도우미", settingDescription: "Codex 옆에서 남은 한도, 개인 초기화 시간과 소비 페이스를 확인합니다.", settingLabel: "오른쪽 위 표시 사용", settingNote: "Pulse가 실행 중이고 지원되는 Codex 창이 앞에 있을 때 표시됩니다. Codex를 열어도 Pulse가 시작되지는 않습니다.", manageStartup: "로그인 시작 설정 관리", saveFailed: "설정을 저장하지 못했습니다. 다시 시도하세요.", demo: "합성 데모", noEstimate: "추정 준비 중",
   },
   de: {
-    refreshQueued: "Aktualisierung in {seconds}s", refreshWaiting: "Warte auf Aktualisierung", refreshing: "Kontomessung wird aktualisiert",
+    refreshQueued: "Aktualisierung in {seconds}s geplant", refreshWaiting: "Aktualisierung eingeplant", refreshing: "Kontomessung wird aktualisiert",
     idleHeadline: "Kontingentwert unverändert", slowHeadline: "Zu wenig Änderung für eine Prognose", nextReset: "Bis zum nächsten Reset", resetUnknown: "Reset-Zeit nicht übermittelt", resetPending: "Reset-Zeit erreicht; neue Messung abwarten", resetDays: "{days} T. {hours} Std.", resetHours: "{hours} Std. {minutes} Min.", resetMinutes: "{minutes} Min.", sessionMissing: "Kurzzeitkontingent nicht übermittelt", weeklyMissing: "Wochenkontingent nicht übermittelt", tokensUnknown: "Heutige lokale Token-Summe unbekannt", todayLocalTokens: "Heutige lokale Tokens: {tokens}",
     sourceStale: "Update ausstehend", measured: "Gemessen", projected: "Prognose", title: "Nutzungstempo", estimate: "Aus aktuellen Konto-Beobachtungen geschätzt", about: "Etwa", hours: "Stunden", minutes: "Minuten",
     sampling: "Sammelt", unavailable: "Keine Daten", stale: "Veraltet", expired: "Abgelaufen", idle: "Wert gleich", slow: "Wenig Änderung", exhausted: "Am Limit", resetFirst: "Reset zuerst",

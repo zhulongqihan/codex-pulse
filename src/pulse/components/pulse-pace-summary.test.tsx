@@ -110,7 +110,7 @@ describe("dashboard quota summary", () => {
     fireEvent.click(button);
     expect(handlers.onRefresh).toHaveBeenCalledOnce();
     rerender(<PulsePaceSummary data={{ ...data, refreshAfterSeconds: 300, refreshQueued: true }} {...handlers}/>);
-    expect(screen.getByRole("timer")).toHaveTextContent("Refreshing in 300s");
+    expect(screen.getByRole("timer")).toHaveTextContent("Refresh scheduled in 300s");
   });
   it("keeps a valid unread notice visible and preserves the mark-read action in details", () => {
     const mark = vi.fn();

@@ -31,7 +31,7 @@ A quiet quota-pacing companion for Codex on Windows: view remaining quota and re
 - **Exports and updates:** XLSX/Markdown contain range summary, daily, model and project statistics. Pulse updates verify the release signature, product, platform and package digest, preserving data and restoring the previous executable if startup fails.
 - **Help and feedback:** find usage guidance, experience discussions and bug reporting in settings. Preview a minimal summary of visible environment and selected options before copying it; account data, logs and conversations are not uploaded automatically.
 
-Paper tabs follow the left and right pages and switch to one sheet in narrow or short windows. In 0.14.12, you can click the pace refresh button during the cooldown and Pulse will run the refresh as soon as it can. [Release notes](docs/releases/v0.14.12.md#english).
+Paper tabs follow the left and right pages and switch to one sheet in narrow or short windows. In 0.14.13, a manual pace refresh checks quota immediately. Checks already running for the same account are shared, and server rate limits still delay the next check. [Release notes](docs/releases/v0.14.13.md#english).
 
 Paper companion views with synthetic data: [pacing details](docs/screenshots/paper-0.14.6-pace-panel.png) · [system tray](docs/screenshots/paper-0.13.2-tray.png) · [Codex panel styling](docs/screenshots/paper-0.14.3-mcp.png).
 

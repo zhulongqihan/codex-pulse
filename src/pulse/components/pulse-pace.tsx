@@ -41,18 +41,18 @@ export function PaceRefreshControl({ data, language, now, onRefresh, animate = f
   onRefresh: () => void; animate?: boolean; children?: ReactNode;
 }) {
   const generated = Date.parse(data?.generatedAt ?? "");
-  const cooldown = data?.refreshAfterSeconds;
-  const wait = cooldown && Number.isFinite(generated)
-    ? Math.max(0, Math.ceil(cooldown - Math.max(0, now - generated) / 1_000)) : 0;
+  const retryAfter = data?.refreshAfterSeconds ?? 0;
+  const wait = retryAfter > 0 && Number.isFinite(generated)
+    ? Math.max(0, Math.ceil(retryAfter - Math.max(0, now - generated) / 1_000)) : 0;
   const queued = data?.refreshQueued === true;
   const active = data?.refreshInFlight === true;
   const seconds = formatCoachNumber(wait, language);
   const counting = wait > 0 && !active;
   const status = active ? paceCopy(language, "refreshing")
     : queued ? paceCopy(language, counting ? "refreshQueued" : "refreshWaiting", { seconds })
-    : counting ? quotaCoachFeedback(language, "cooldownShort", { seconds }) : null;
+    : counting ? quotaCoachFeedback(language, "rateLimitWait", { seconds }) : null;
   const label = paceCopy(language, "refresh");
-  const title = queued || active ? status ?? label : counting ? quotaCoachFeedback(language, "cooldown", { seconds }) : label;
+  const title = queued || active ? status ?? label : counting ? quotaCoachFeedback(language, "rateLimitSchedule") : label;
   return <>
     <button type="button" className="pace-refresh-button" onClick={onRefresh} aria-busy={active} aria-label={label} title={title}>
       <RefreshCw size={16} aria-hidden="true" className={active && animate ? "is-refreshing" : undefined}/>
